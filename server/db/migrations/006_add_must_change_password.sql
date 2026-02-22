@@ -1,0 +1,2 @@
+ALTER TABLE auth_principals
+ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;

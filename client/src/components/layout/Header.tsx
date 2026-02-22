@@ -1,6 +1,6 @@
 import React from 'react';
 import { Menu, Bell, LogOut } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { Button } from '../ui/Button';
 export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
   const { user, logout } = useAuth();
@@ -23,6 +23,12 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
         </button>
 
         <div className="h-6 w-px bg-slate-200 mx-2" />
+
+        {user ?
+        <span className="hidden md:inline text-sm text-slate-600">
+            {user.name}
+          </span> :
+        null}
 
         <Button
           variant="ghost"

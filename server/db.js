@@ -1,17 +1,22 @@
-// db.js
-import { Client } from 'pg';
+import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
-// Load environment variables from .env file
 dotenv.config();
 
-// PostgreSQL client setup
-const client = new Client({
-  connectionString: process.env.DATABASE_URL, // This is where your DB connection string will go
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  console.warn('DATABASE_URL is not configured.');
+}
+
+const pool = new Pool({
+  connectionString
 });
 
-client.connect()
-  .then(() => console.log('Connected to PostgreSQL'))
-  .catch(err => console.error('Error connecting to PostgreSQL', err.stack));
+pool.on('error', (error) => {
+  console.error('Unexpected PostgreSQL pool error:', error);
+});
 
-export default client;
+export const query = (text, params) => pool.query(text, params);
+export const getClient = () => pool.connect();
+export default pool;

@@ -1,111 +1,140 @@
-// server/controllers/superAdminController.js
 import bcrypt from 'bcryptjs';
-import client from '../db.js';  // Ensure db.js exists and is correctly set up
+import { query } from '../db.js';
+import { ALL_ROLES, ROLES } from '../constants/roles.js';
+import { sendError } from '../utils/http.js';
+import { logAudit } from '../utils/audit.js';
 
-// Define valid roles for users
-const validRoles = ['supervisor', 'learning admin', 'super admin'];
+const createPrincipal = async ({ email, password, role, name, principalType = 'USER' }) => {
+  const passwordHash = await bcrypt.hash(password, 10);
+  const result = await query(
+    `
+      INSERT INTO auth_principals (email, password_hash, role, name, principal_type)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, email, role, name, principal_type, created_at
+    `,
+    [email, passwordHash, role, name, principalType]
+  );
 
-// Create a new user (Super Admin only)
+  return result.rows[0];
+};
+
 export const createUser = async (req, res) => {
-  const { email, password, role } = req.body;
+  const { email, password, role, name } = req.body;
 
-  // Check if the role is valid
-  if (!validRoles.includes(role.toLowerCase())) {
-    return res.status(400).json({ message: 'Invalid role. Valid roles are: supervisor, learning admin, super admin.' });
+  if (!ALL_ROLES.includes(role)) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid role.', {
+      allowedRoles: ALL_ROLES
+    });
   }
 
-  // Only Super Admin can create users
-  if (req.user.role !== 'Super Admin') {
-    return res.status(403).json({ message: 'Permission denied. Only Super Admin can create users.' });
+  if (role === ROLES.EMPLOYEE) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Use /api/employees to create employee accounts.');
   }
 
-  try {
-    // Hash the password before saving
-    const hashedPassword = await bcrypt.hash(password, 10);
+  const created = await createPrincipal({
+    email,
+    password,
+    role,
+    name: name || email.split('@')[0]
+  });
 
-    // Insert the new user into the database
-    const result = await client.query(
-      'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING *',
-      [email, hashedPassword, role]
-    );
+  await logAudit({
+    actorPrincipalId: req.user.id,
+    action: 'CREATE_USER',
+    resourceType: 'AUTH_PRINCIPAL',
+    resourceId: created.id,
+    metadata: { role: created.role, email: created.email }
+  });
 
-    // Return the created user
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error creating user' });
-  }
+  return res.status(201).json({ user: created });
 };
 
-// Get all users (Super Admin only)
-export const getAllUsers = async (req, res) => {
-  try {
-    const result = await client.query('SELECT * FROM users');
-    res.status(200).json(result.rows);  // Return all users
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error retrieving users' });
-  }
+export const getAllUsers = async (_req, res) => {
+  const result = await query(
+    `
+      SELECT id, email, role, name, principal_type, is_active, created_at
+      FROM auth_principals
+      ORDER BY created_at DESC
+    `
+  );
+
+  return res.status(200).json({ users: result.rows });
 };
 
-// Delete a user (Super Admin only)
 export const deleteUser = async (req, res) => {
-  const { id } = req.params;  // Get the user ID from the URL parameter
-
-  try {
-    // Ensure only Super Admin can delete a user
-    if (req.user.role !== 'Super Admin') {
-      return res.status(403).json({ message: 'Permission denied. Only Super Admin can delete users.' });
-    }
-
-    // Delete the user from the database
-    const result = await client.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
-
-    // If no user is found, return an error
-    if (result.rowCount === 0) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Return the deleted user data (optional, or just return a success message)
-    res.status(200).json({ message: 'User deleted successfully', user: result.rows[0] });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error deleting user' });
+  const { id } = req.params;
+  if (id === req.user.id) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'You cannot deactivate your own account.');
   }
+
+  const result = await query(
+    `
+      UPDATE auth_principals
+      SET is_active = FALSE, updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, email, role, name, principal_type, is_active, updated_at
+    `,
+    [id]
+  );
+
+  if (result.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'User not found.');
+  }
+
+  await logAudit({
+    actorPrincipalId: req.user.id,
+    action: 'DEACTIVATE_USER',
+    resourceType: 'AUTH_PRINCIPAL',
+    resourceId: result.rows[0].id
+  });
+
+  return res.status(200).json({ user: result.rows[0] });
 };
 
-
-// Create a new employee (Super Admin only)
 export const createEmployee = async (req, res) => {
-  const { employeeNumber, email, password, designation, gradeName } = req.body;
+  const { employeeNumber, email, password, designation, gradeName, name, supervisorId } = req.body;
 
-  // Validate required fields
-  if (!employeeNumber || !email || !password || !designation || !gradeName) {
-    return res.status(400).json({ message: 'Missing required fields' });
+  const existingEmployee = await query(
+    `
+      SELECT id
+      FROM employees
+      WHERE employee_number = $1
+      LIMIT 1
+    `,
+    [employeeNumber]
+  );
+
+  if (existingEmployee.rowCount > 0) {
+    return sendError(res, 409, 'CONFLICT', 'Employee number already exists.');
   }
 
-  try {
-    // Check if the employee number or email already exists in the database
-    const existingEmployee = await client.query('SELECT * FROM employees WHERE employee_number = $1 OR email = $2', [employeeNumber, email]);
+  const principal = await createPrincipal({
+    email,
+    password,
+    role: ROLES.EMPLOYEE,
+    name: name || email.split('@')[0],
+    principalType: 'EMPLOYEE'
+  });
 
-    if (existingEmployee.rows.length > 0) {
-      return res.status(400).json({ message: 'Employee number or email already exists' });
-    }
+  const employeeResult = await query(
+    `
+      INSERT INTO employees (principal_id, employee_number, designation, grade_name, supervisor_id)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, principal_id, employee_number, designation, grade_name, supervisor_id, created_at
+    `,
+    [principal.id, employeeNumber, designation, gradeName, supervisorId || null]
+  );
 
-    // Hash the password before saving (using bcrypt for secure password storage)
-    const hashedPassword = await bcrypt.hash(password, 10);
+  await logAudit({
+    actorPrincipalId: req.user.id,
+    action: 'CREATE_EMPLOYEE',
+    resourceType: 'EMPLOYEE',
+    resourceId: employeeResult.rows[0].id,
+    metadata: { principalId: principal.id }
+  });
 
-    // Insert the employee into the database
-    const result = await client.query(
-      'INSERT INTO employees (employee_number, email, password_hash, designation, grade_name) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [employeeNumber, email, hashedPassword, designation, gradeName]
-    );
-
-    // Return the created employee
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    // Log the actual error message
-    console.error('Error creating employee:', error);  // This will log the error to the console for debugging
-    res.status(500).json({ message: 'Error creating employee', error: error.message });  // Include the error message in the response for better debugging
-  }
+  return res.status(201).json({
+    user: principal,
+    employee: employeeResult.rows[0]
+  });
 };

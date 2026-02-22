@@ -1,29 +1,49 @@
-// server/middlewares/authMiddleware.js
-import jwt from 'jsonwebtoken';
+import { verifyToken } from '../utils/auth.js';
+import { sendError } from '../utils/http.js';
 
-const protect = (req, res, next) => {
-  let token = req.header('Authorization');
-  if (!token) {
-    return res.status(401).json({ message: 'No token, authorization denied' });
+const parseBearerToken = (authorizationHeader) => {
+  if (!authorizationHeader) {
+    return null;
   }
 
-  token = token.split(' ')[1]; // Extract token
+  const [scheme, token] = authorizationHeader.split(' ');
+  if (!scheme || scheme.toLowerCase() !== 'bearer' || !token) {
+    return null;
+  }
+
+  return token;
+};
+
+export const protect = (req, res, next) => {
+  const rawAuthorization = req.header('Authorization');
+  const token = parseBearerToken(rawAuthorization);
+
+  if (!token) {
+    return sendError(res, 401, 'AUTH_REQUIRED', 'Authorization token is required.');
+  }
 
   try {
-    const decoded = jwt.verify(token, process.env.SECRET_KEY); // Verify the token
-    req.user = decoded; // Attach the user to the request object
-    next(); // Proceed to the next middleware or route handler
-  } catch (err) {
-    res.status(401).json({ message: 'Token is not valid' });
+    const decoded = verifyToken(token);
+    req.user = {
+      id: decoded.sub,
+      email: decoded.email,
+      role: decoded.role,
+      principalType: decoded.principalType
+    };
+    return next();
+  } catch {
+    return sendError(res, 401, 'INVALID_TOKEN', 'Token is invalid or expired.');
   }
 };
 
-const admin = (req, res, next) => {
-  if (req.user && req.user.role === 'Super Admin') {
-    next(); // If user is Super Admin, proceed to the next step
-  } else {
-    res.status(403).json({ message: 'Permission denied' }); // If not, deny access
+export const requireRole = (roles) => (req, res, next) => {
+  if (!req.user) {
+    return sendError(res, 401, 'AUTH_REQUIRED', 'Authentication is required.');
   }
-};
 
-export { protect, admin };
+  if (!roles.includes(req.user.role)) {
+    return sendError(res, 403, 'FORBIDDEN', 'You do not have permission to access this resource.');
+  }
+
+  return next();
+};

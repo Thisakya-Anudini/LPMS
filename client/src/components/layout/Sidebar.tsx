@@ -1,14 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import {
   LayoutDashboard,
   Users,
   BookOpen,
   GraduationCap,
-  BarChart3,
-  Settings,
-  FileText,
   Shield } from
 'lucide-react';
 export function Sidebar({
@@ -30,14 +27,9 @@ export function Sidebar({
           label: 'Dashboard'
         },
         {
-          to: '/admin/users',
+          to: '/admin',
           icon: Users,
-          label: 'User Management'
-        },
-        {
-          to: '/admin/settings',
-          icon: Settings,
-          label: 'System Settings'
+          label: 'User Access'
         }];
 
       case 'LEARNING_ADMIN':
@@ -51,16 +43,6 @@ export function Sidebar({
           to: '/learning-admin/paths',
           icon: BookOpen,
           label: 'Learning Paths'
-        },
-        {
-          to: '/learning-admin/enrollments',
-          icon: Users,
-          label: 'Enrollments'
-        },
-        {
-          to: '/learning-admin/reports',
-          icon: BarChart3,
-          label: 'Reports & Analytics'
         }];
 
       case 'SUPERVISOR':
@@ -69,11 +51,6 @@ export function Sidebar({
           to: '/supervisor',
           icon: LayoutDashboard,
           label: 'Dashboard'
-        },
-        {
-          to: '/supervisor/team',
-          icon: Users,
-          label: 'Team Progress'
         }];
 
       case 'EMPLOYEE':
@@ -87,11 +64,6 @@ export function Sidebar({
           to: '/employee/my-paths',
           icon: GraduationCap,
           label: 'My Learning'
-        },
-        {
-          to: '/employee/catalog',
-          icon: BookOpen,
-          label: 'Course Catalog'
         }];
 
       default:
@@ -132,7 +104,7 @@ export function Sidebar({
           <nav className="space-y-1">
             {links.map((link) =>
             <NavLink
-              key={link.to}
+              key={`${link.to}-${link.label}`}
               to={link.to}
               onClick={() => window.innerWidth < 1024 && onClose()}
               className={({ isActive }) => `

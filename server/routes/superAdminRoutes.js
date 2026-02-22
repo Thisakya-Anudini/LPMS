@@ -1,20 +1,20 @@
 // server/routes/superAdminRoutes.js
 import express from 'express';
-import { createUser, getAllUsers, deleteUser, createEmployee } from '../controllers/superAdminController.js';
-import { protect, admin } from '../middlewares/authMiddleware.js';  // Middleware to protect routes
+import { createUser, getAllUsers, deleteUser } from '../controllers/superAdminController.js';
+import { protect, requireRole } from '../middlewares/authMiddleware.js';
+import { requireFields } from '../middlewares/validationMiddleware.js';
+import { ROLES } from '../constants/roles.js';
 
 const router = express.Router();
 
-// Route to create a new user (Super Admin only)
-router.post('/', protect, admin, createUser);
-
-// Route to get all users (Super Admin only)
-router.get('/', protect, admin, getAllUsers);
-
-// Route to delete a user (Super Admin only)
-router.delete('/:id', protect, admin, deleteUser); 
-
-// Route to create an employee (Super Admin only)
-router.post('/employees', protect, admin, createEmployee);
+router.post(
+  '/',
+  protect,
+  requireRole([ROLES.SUPER_ADMIN]),
+  requireFields(['email', 'password', 'role']),
+  createUser
+);
+router.get('/', protect, requireRole([ROLES.SUPER_ADMIN]), getAllUsers);
+router.delete('/:id', protect, requireRole([ROLES.SUPER_ADMIN]), deleteUser);
 
 export default router;

@@ -5,9 +5,8 @@ export type User = {
   name: string;
   email: string;
   role: Role;
-  avatar?: string;
-  designation?: string;
-  department?: string;
+  principalType: 'USER' | 'EMPLOYEE';
+  mustChangePassword: boolean;
 };
 
 export type Course = {
@@ -47,21 +46,26 @@ export type EnrollmentStatus =
 
 export type Enrollment = {
   id: string;
-  userId: string;
+  principalId: string;
   learningPathId: string;
   status: EnrollmentStatus;
   progress: number; // 0-100
   enrolledAt: string;
   completedAt?: string;
-  currentStageId?: string;
 };
 
 export type Notification = {
   id: string;
-  userId: string;
+  principalId: string;
   title: string;
   message: string;
   type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
-  read: boolean;
+  isRead: boolean;
   createdAt: string;
+};
+
+export type AuthResponse = {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
 };

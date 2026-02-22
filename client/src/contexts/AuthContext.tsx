@@ -1,52 +1,114 @@
-import React, { useEffect, useState, createContext, useContext } from 'react';
-import { User, Role } from '../types';
-import { MOCK_USERS } from '../utils/mockData';
-interface AuthContextType {
-  user: User | null;
-  login: (role: Role) => void;
-  logout: () => void;
-  isAuthenticated: boolean;
-}
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-export function AuthProvider({ children }: {children: React.ReactNode;}) {
-  const [user, setUser] = useState<User | null>(null);
-  // Simulate session persistence
-  useEffect(() => {
-    const storedUserId = localStorage.getItem('lpms_user_id');
-    if (storedUserId) {
-      const foundUser = MOCK_USERS.find((u) => u.id === storedUserId);
-      if (foundUser) setUser(foundUser);
-    }
-  }, []);
-  const login = (role: Role) => {
-    // For demo purposes, we just pick the first user with that role
-    const mockUser = MOCK_USERS.find((u) => u.role === role);
-    if (mockUser) {
-      setUser(mockUser);
-      localStorage.setItem('lpms_user_id', mockUser.id);
-    }
-  };
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('lpms_user_id');
-  };
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        login,
-        logout,
-        isAuthenticated: !!user
-      }}>
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { authApi } from '../api/lpmsApi';
+import { User } from '../types';
+import { AuthContext } from './AuthContextStore';
 
-      {children}
-    </AuthContext.Provider>);
+const REFRESH_TOKEN_KEY = 'lpms_refresh_token';
 
-}
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+const getStoredRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
+
+const setStoredRefreshToken = (token: string | null) => {
+  if (token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, token);
+    return;
   }
-  return context;
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
+
+  const clearSession = useCallback(() => {
+    setUser(null);
+    setAccessToken(null);
+    setStoredRefreshToken(null);
+  }, []);
+
+  const refreshAccessToken = useCallback(async () => {
+    const refreshToken = getStoredRefreshToken();
+    if (!refreshToken) {
+      clearSession();
+      return null;
+    }
+
+    const refreshed = await authApi.refresh(refreshToken);
+    setAccessToken(refreshed.accessToken);
+    const me = await authApi.me(refreshed.accessToken);
+    setUser(me.user);
+    return refreshed.accessToken;
+  }, [clearSession]);
+
+  useEffect(() => {
+    const bootstrap = async () => {
+      try {
+        await refreshAccessToken();
+      } catch {
+        clearSession();
+      } finally {
+        setIsBootstrapping(false);
+      }
+    };
+    bootstrap();
+  }, [clearSession, refreshAccessToken]);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const response = await authApi.login(email, password);
+    setAccessToken(response.accessToken);
+    setStoredRefreshToken(response.refreshToken);
+    setUser(response.user);
+    return response.user;
+  }, []);
+
+  const changePassword = useCallback(async (oldPassword: string, newPassword: string) => {
+    const token = accessToken || (await refreshAccessToken());
+    if (!token) {
+      throw new Error('Session expired. Please login again.');
+    }
+
+    const response = await authApi.changePassword(token, oldPassword, newPassword);
+    setUser(response.user);
+    return response.user;
+  }, [accessToken, refreshAccessToken]);
+
+  const logout = useCallback(async () => {
+    const refreshToken = getStoredRefreshToken();
+    try {
+      if (refreshToken) {
+        await authApi.logout(refreshToken);
+      }
+    } finally {
+      clearSession();
+    }
+  }, [clearSession]);
+
+  const getAccessToken = useCallback(async () => {
+    if (accessToken) {
+      return accessToken;
+    }
+
+    try {
+      return await refreshAccessToken();
+    } catch {
+      clearSession();
+      return null;
+    }
+  }, [accessToken, clearSession, refreshAccessToken]);
+
+  const value = useMemo(
+    () => ({
+      user,
+      accessToken,
+      isAuthenticated: Boolean(user),
+      isBootstrapping,
+      login,
+      changePassword,
+      logout,
+      getAccessToken
+    }),
+    [accessToken, changePassword, getAccessToken, isBootstrapping, login, logout, user]
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
