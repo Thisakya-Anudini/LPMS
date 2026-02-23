@@ -56,10 +56,14 @@ export function SupervisorDashboard() {
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [enrollLoading, setEnrollLoading] = useState(false);
 
+  // 🔍 Email filter (ONLY for Team Progress)
+  const [emailFilter, setEmailFilter] = useState('');
+
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
       const token = await getAccessToken();
       if (!token) {
         setError('Session expired. Please login again.');
@@ -71,6 +75,7 @@ export function SupervisorDashboard() {
         supervisorApi.getApprovals(token),
         supervisorApi.getSupervisorPaths(token)
       ]);
+
       setRows(progressResponse.progress);
       setApprovals(approvalResponse.approvals);
       setPaths(pathResponse.learningPaths);
@@ -85,6 +90,7 @@ export function SupervisorDashboard() {
     load();
   }, [load]);
 
+  // ✅ Stats (UNFILTERED)
   const stats = useMemo(() => {
     const memberCount = rows.length;
     const avgProgress = memberCount
@@ -94,12 +100,20 @@ export function SupervisorDashboard() {
     return { memberCount, avgProgress, completed };
   }, [rows]);
 
-  const pendingApprovals = approvals.filter((approval) => approval.approval_status === 'PENDING');
+  const pendingApprovals = approvals.filter(
+    (approval) => approval.approval_status === 'PENDING'
+  );
+
   const teamMembers: TeamMember[] = rows.map((row) => ({
     principal_id: row.principal_id,
     name: row.name,
     email: row.email
   }));
+
+  // ✅ Filtered rows ONLY for Team Progress card
+  const filteredRows = rows.filter((row) =>
+    row.email.toLowerCase().includes(emailFilter.toLowerCase())
+  );
 
   const toggleTeamMember = (principalId: string) => {
     setSelectedTeamIds((prev) =>
@@ -113,6 +127,7 @@ export function SupervisorDashboard() {
     setActionLoadingId(enrollmentId);
     setError(null);
     setMessage(null);
+
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -140,6 +155,7 @@ export function SupervisorDashboard() {
     setEnrollLoading(true);
     setError(null);
     setMessage(null);
+
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -151,6 +167,7 @@ export function SupervisorDashboard() {
         learningPathId: selectedPathId,
         employeePrincipalIds: selectedTeamIds
       });
+
       setMessage('Team members enrolled successfully.');
       setSelectedTeamIds([]);
       setSelectedPathId('');
@@ -164,29 +181,41 @@ export function SupervisorDashboard() {
 
   return (
     <div className="space-y-6">
+
+      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Team Overview</h1>
-        <p className="text-slate-500">Track progress and manage semi-restricted enrollments.</p>
+        <p className="text-slate-500">
+          Track progress and manage semi-restricted enrollments.
+        </p>
       </div>
 
-      {error ? <Card className="text-red-600">{error}</Card> : null}
-      {message ? <Card className="text-green-700">{message}</Card> : null}
+      {error && <Card className="text-red-600">{error}</Card>}
+      {message && <Card className="text-green-700">{message}</Card>}
 
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">
           <p className="text-sm text-slate-500">Team Members</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.memberCount}</p>
+          <p className="text-2xl font-bold text-slate-900">
+            {loading ? '...' : stats.memberCount}
+          </p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-slate-500">Average Progress</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : `${stats.avgProgress}%`}</p>
+          <p className="text-2xl font-bold text-slate-900">
+            {loading ? '...' : `${stats.avgProgress}%`}
+          </p>
         </Card>
         <Card className="p-4">
           <p className="text-sm text-slate-500">Completed Enrollments</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.completed}</p>
+          <p className="text-2xl font-bold text-slate-900">
+            {loading ? '...' : stats.completed}
+          </p>
         </Card>
       </div>
 
+      {/* Enroll Team Card */}
       <Card title="Enroll Team (Semi-Restricted Paths)">
         <div className="space-y-4">
           <Select
@@ -198,24 +227,30 @@ export function SupervisorDashboard() {
               ...paths.map((path) => ({ value: path.id, label: path.title }))
             ]}
           />
+
           <div className="max-h-56 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
             {teamMembers.map((member) => (
-              <label key={member.principal_id} className="flex items-start gap-3 p-2 rounded hover:bg-slate-50">
+              <label
+                key={member.principal_id}
+                className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+              >
                 <input
                   type="checkbox"
                   checked={selectedTeamIds.includes(member.principal_id)}
                   onChange={() => toggleTeamMember(member.principal_id)}
                 />
                 <span>
-                  <span className="block text-sm font-medium text-slate-900">{member.name}</span>
-                  <span className="block text-xs text-slate-500">{member.email}</span>
+                  <span className="block text-sm font-medium text-slate-900">
+                    {member.name}
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    {member.email}
+                  </span>
                 </span>
               </label>
             ))}
-            {teamMembers.length === 0 ? (
-              <p className="text-sm text-slate-500 p-2">No team members found.</p>
-            ) : null}
           </div>
+
           <Button
             onClick={handleEnrollTeam}
             isLoading={enrollLoading}
@@ -226,6 +261,7 @@ export function SupervisorDashboard() {
         </div>
       </Card>
 
+      {/* Pending Approvals Card */}
       <Card title="Pending Approvals">
         <div className="space-y-3">
           {pendingApprovals.length === 0 ? (
@@ -237,7 +273,9 @@ export function SupervisorDashboard() {
                 className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
               >
                 <div>
-                  <p className="font-medium text-slate-900">{approval.learning_path_title}</p>
+                  <p className="font-medium text-slate-900">
+                    {approval.learning_path_title}
+                  </p>
                   <p className="text-xs text-slate-500">
                     {approval.name} ({approval.email}) | Progress {approval.progress}%
                   </p>
@@ -265,25 +303,45 @@ export function SupervisorDashboard() {
         </div>
       </Card>
 
+      {/* Team Progress Card (FILTERED ONLY HERE) */}
       <Card title="Team Progress">
         <div className="space-y-5">
-          {rows.map((row) => (
+
+          <input
+            type="text"
+            placeholder="Filter by employee email..."
+            value={emailFilter}
+            onChange={(e) => setEmailFilter(e.target.value)}
+            className="w-full md:w-1/3 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+
+          {filteredRows.map((row) => (
             <div key={row.principal_id}>
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <p className="font-medium text-slate-900">{row.name}</p>
                   <p className="text-xs text-slate-500">{row.email}</p>
                 </div>
-                <p className="text-xs text-slate-500">{row.completed_count} completed</p>
+                <p className="text-xs text-slate-500">
+                  {row.completed_count} completed
+                </p>
               </div>
-              <ProgressBar progress={Number(row.avg_progress)} showLabel size="sm" />
+              <ProgressBar
+                progress={Number(row.avg_progress)}
+                showLabel
+                size="sm"
+              />
             </div>
           ))}
-          {!loading && rows.length === 0 ? (
-            <p className="text-sm text-slate-500">No team progress records found.</p>
-          ) : null}
+
+          {!loading && filteredRows.length === 0 && (
+            <p className="text-sm text-slate-500">
+              No matching employees found.
+            </p>
+          )}
         </div>
       </Card>
+
     </div>
   );
 }

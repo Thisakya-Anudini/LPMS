@@ -23,7 +23,7 @@ export function Card({
       <div className="p-6 border-b border-slate-100 flex justify-between items-start">
           <div>
             {title &&
-          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-blue-800">{title}</h3>
           }
             {description &&
           <p className="text-sm text-slate-500 mt-1">{description}</p>
