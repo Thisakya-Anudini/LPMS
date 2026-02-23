@@ -18,9 +18,9 @@ export function Button({
   'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
   const variants = {
     primary:
-    'bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-600',
+    'bg-[#0563bb] text-white hover:bg-[#0454a0] focus-visible:ring-[#0563bb]',
     secondary:
-    'bg-slate-100 text-slate-900 hover:bg-slate-200 focus-visible:ring-slate-500',
+    'bg-white text-[#0563bb] border border-[#0563bb] hover:bg-[#57c84d]/10 focus-visible:ring-[#0563bb]',
     outline:
     'border border-slate-200 bg-transparent hover:bg-slate-100 text-slate-900',
     ghost: 'hover:bg-slate-100 text-slate-700',

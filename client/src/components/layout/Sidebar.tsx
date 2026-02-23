@@ -27,7 +27,7 @@ export function Sidebar({
           label: 'Dashboard'
         },
         {
-          to: '/admin',
+          to: '/admin/user-access',
           icon: Users,
           label: 'User Access'
         }];
@@ -84,13 +84,13 @@ export function Sidebar({
       {/* Sidebar */}
       <aside
         className={`
-        fixed top-0 left-0 z-50 h-screen w-64 bg-slate-900 text-white transition-transform duration-300 ease-in-out
+        fixed top-0 left-0 z-50 h-screen w-64 bg-[#034c96] text-white transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
 
-        <div className="flex h-16 items-center px-6 border-b border-slate-800">
+        <div className="flex h-16 items-center px-6 border-b border-white/20">
           <div className="flex items-center space-x-2">
-            <div className="bg-blue-600 p-1.5 rounded-lg">
+            <div className="bg-[#57c84d] p-1.5 rounded-lg">
               <Shield className="h-5 w-5 text-white" />
             </div>
             <span className="text-lg font-bold tracking-tight">LPMS</span>
@@ -106,10 +106,11 @@ export function Sidebar({
             <NavLink
               key={`${link.to}-${link.label}`}
               to={link.to}
+              end
               onClick={() => window.innerWidth < 1024 && onClose()}
               className={({ isActive }) => `
                   flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                  ${isActive ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}
+                  ${isActive ? 'bg-slate-200 text-slate-900' : 'text-white hover:bg-white/15'}
                 `}>
 
                 <link.icon className="mr-3 h-5 w-5" />
@@ -119,9 +120,9 @@ export function Sidebar({
           </nav>
         </div>
 
-        <div className="absolute bottom-0 left-0 w-full p-4 border-t border-slate-800">
+        <div className="absolute bottom-0 left-0 w-full p-4 border-t border-white/20">
           <div className="flex items-center px-2">
-            <div className="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold">
+            <div className="h-8 w-8 rounded-full bg-[#57c84d] text-[#034c96] flex items-center justify-center text-sm font-bold">
               {user.name.charAt(0)}
             </div>
             <div className="ml-3">

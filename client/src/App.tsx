@@ -86,6 +86,14 @@ export function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="admin/user-access"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="learning-admin"
