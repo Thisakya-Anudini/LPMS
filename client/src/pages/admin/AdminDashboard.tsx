@@ -16,6 +16,43 @@ type UserRow = {
   is_active: boolean;
 };
 
+const roleSections: {
+  key: UserRow['role'];
+  label: string;
+  panelClass: string;
+  headingClass: string;
+  headRowClass: string;
+}[] = [
+  {
+    key: 'EMPLOYEE',
+    label: 'Employees',
+    panelClass: 'border-blue-200 bg-blue-50/40',
+    headingClass: 'text-blue-800',
+    headRowClass: 'bg-blue-100/80 text-blue-900'
+  },
+  {
+    key: 'SUPER_ADMIN',
+    label: 'Super Admins',
+    panelClass: 'border-blue-200 bg-blue-50/40',
+    headingClass: 'text-blue-800',
+    headRowClass: 'bg-blue-100/80 text-blue-900'
+  },
+  {
+    key: 'LEARNING_ADMIN',
+    label: 'Learning Admins',
+    panelClass: 'border-blue-200 bg-blue-50/40',
+    headingClass: 'text-blue-800',
+    headRowClass: 'bg-blue-100/80 text-blue-900'
+  },
+  {
+    key: 'SUPERVISOR',
+    label: 'Supervisors',
+    panelClass: 'border-blue-200 bg-blue-50/40',
+    headingClass: 'text-blue-800',
+    headRowClass: 'bg-blue-100/80 text-blue-900'
+  }
+];
+
 const initialUserForm = {
   name: '',
   email: '',
@@ -73,6 +110,14 @@ export function AdminDashboard() {
   const employeeUsers = users.filter((user) => user.role === 'EMPLOYEE').length;
   const supervisors = useMemo(
     () => users.filter((user) => user.role === 'SUPERVISOR' && user.is_active),
+    [users]
+  );
+  const usersByRole = useMemo(
+    () =>
+      roleSections.map((section) => ({
+        ...section,
+        users: users.filter((user) => user.role === section.key)
+      })),
     [users]
   );
 
@@ -290,31 +335,49 @@ export function AdminDashboard() {
       </Card>
 
       <Card title="Recent Users">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200">
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Email</th>
-                <th className="py-2 pr-4">Role</th>
-                <th className="py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.slice(0, 15).map((user) => (
-                <tr key={user.id} className="border-b border-slate-100">
-                  <td className="py-2 pr-4 font-medium">{user.name}</td>
-                  <td className="py-2 pr-4 text-slate-600">{user.email}</td>
-                  <td className="py-2 pr-4 text-slate-600">{user.role.replace('_', ' ')}</td>
-                  <td className="py-2">
-                    <span className={user.is_active ? 'text-green-700' : 'text-red-700'}>
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-8">
+          {usersByRole.map((section) => (
+            <div key={section.key} className={`rounded-lg border p-4 md:p-5 space-y-3 ${section.panelClass}`}>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className={`text-base md:text-lg font-bold tracking-wide ${section.headingClass}`}>
+                  {section.label}
+                </h3>
+                <span className="text-xs md:text-sm font-medium text-slate-600">{section.users.length} users</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm table-fixed">
+                  <thead>
+                    <tr className={`text-left border-b border-slate-200 ${section.headRowClass}`}>
+                      <th className="py-2.5 px-3 w-1/4 font-semibold">Name</th>
+                      <th className="py-2.5 px-3 w-2/5 font-semibold">Email</th>
+                      <th className="py-2.5 px-3 w-1/5 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.users.length ? (
+                      section.users.map((user) => (
+                        <tr key={user.id} className="border-b border-slate-100">
+                          <td className="py-2.5 px-3 font-medium text-slate-900">{user.name}</td>
+                          <td className="py-2.5 px-3 text-slate-700 break-words">{user.email}</td>
+                          <td className="py-2.5 px-3">
+                            <span className={user.is_active ? 'text-green-700' : 'text-red-700'}>
+                              {user.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td className="py-3 px-3 text-slate-500" colSpan={3}>
+                          No users found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
         </div>
       </Card>
     </div>

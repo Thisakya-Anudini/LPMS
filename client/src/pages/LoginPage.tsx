@@ -44,7 +44,7 @@ export function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center">
-        <div className="mx-auto bg-blue-600 h-12 w-12 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-blue-600/20">
+        <div className="mx-auto bg-gradient-to-br from-[#034c96] via-[#0563bb] to-[#57c84d] h-12 w-12 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-[#0563bb]/30">
           <Shield className="h-7 w-7 text-white" />
         </div>
         <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome to LPMS</h1>
