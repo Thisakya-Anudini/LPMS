@@ -42,43 +42,56 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-      <div className="mb-8 text-center">
-        <div className="mx-auto bg-gradient-to-br from-[#034c96] via-[#0563bb] to-[#57c84d] h-12 w-12 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-[#0563bb]/30">
-          <Shield className="h-7 w-7 text-white" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-100 p-4">
+
+      <div className="relative w-full max-w-md">
+        <div className="mb-12 text-center">
+          <img
+            src="/assets/slt-mobitel-logo.png"
+            alt="SLT Mobitel"
+            className="mx-auto h-20 w-auto"
+          />
         </div>
-        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome to LPMS</h1>
-        <p className="text-slate-600 mt-2">Learning Path Management System</p>
+
+        <Card className="w-full border-white/50 bg-white/80 shadow-xl shadow-[#034c96]/10 backdrop-blur-md">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#034c96_0%,#0563bb_55%,#3faa45_100%)] shadow-lg shadow-[#0563bb]/30">
+              <Shield className="h-7 w-7 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Welcome to LPMS</h1>
+            <p className="mt-2 text-slate-700">Learning Path Management System</p>
+          </div>
+
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <Input
+              label="Email"
+              type="email"
+              name="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="border-slate-200/90 bg-slate-50/90 transition-colors focus:bg-white"
+              required
+            />
+            <Input
+              label="Password"
+              type="password"
+              name="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className="border-slate-200/90 bg-slate-50/90 transition-colors focus:bg-white"
+              required
+            />
+
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+            <Button type="submit" className="w-full" isLoading={isSubmitting}>
+              Sign in
+            </Button>
+          </form>
+        </Card>
       </div>
-
-      <Card className="w-full max-w-md">
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <Input
-            label="Email"
-            type="email"
-            name="email"
-            placeholder="you@company.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-          <Input
-            label="Password"
-            type="password"
-            name="password"
-            placeholder="Enter password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-          <Button type="submit" className="w-full" isLoading={isSubmitting}>
-            Sign in
-          </Button>
-        </form>
-      </Card>
     </div>
   );
 }
