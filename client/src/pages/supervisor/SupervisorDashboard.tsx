@@ -10,6 +10,7 @@ type TeamProgressRow = {
   principal_id: string;
   name: string;
   email: string;
+  employee_number: string;
   total_enrollments: string;
   avg_progress: string;
   completed_count: string;
@@ -112,7 +113,7 @@ export function SupervisorDashboard() {
 
   // ✅ Filtered rows ONLY for Team Progress card
   const filteredRows = rows.filter((row) =>
-    row.email.toLowerCase().includes(emailFilter.toLowerCase())
+    row.employee_number.toLowerCase().includes(emailFilter.toLowerCase())
   );
 
   const toggleTeamMember = (principalId: string) => {
@@ -309,7 +310,7 @@ export function SupervisorDashboard() {
 
           <input
             type="text"
-            placeholder="Filter by employee email..."
+            placeholder="Filter by employee number..."
             value={emailFilter}
             onChange={(e) => setEmailFilter(e.target.value)}
             className="w-full md:w-1/3 px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -320,7 +321,7 @@ export function SupervisorDashboard() {
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <p className="font-medium text-slate-900">{row.name}</p>
-                  <p className="text-xs text-slate-500">{row.email}</p>
+                  <p className="text-xs text-slate-500">Employee No: {row.employee_number} | {row.name}</p>
                 </div>
                 <p className="text-xs text-slate-500">
                   {row.completed_count} completed

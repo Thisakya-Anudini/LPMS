@@ -1,8 +1,8 @@
-const DEFAULT_ERP_SUBORDINATES_URL =
-  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeSubordinatesDetailsList';
+const DEFAULT_ERP_EMPLOYEE_DETAILS_URL =
+  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeDetailsForServiceNo';
 
 const getEprConfig = () => {
-  const url = process.env.ERP_SUBORDINATES_URL || DEFAULT_ERP_SUBORDINATES_URL;
+  const url = process.env.ERP_EMPLOYEE_DETAILS_URL || DEFAULT_ERP_EMPLOYEE_DETAILS_URL;
   const username = process.env.ERP_USERNAME;
   const password = process.env.ERP_PASSWORD;
 

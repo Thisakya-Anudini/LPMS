@@ -173,7 +173,7 @@ export const learningApi = {
 
 export const supervisorApi = {
   getTeamProgress(token: string) {
-    return request<{ progress: Array<{ principal_id: string; name: string; email: string; total_enrollments: string; avg_progress: string; completed_count: string }> }>('/supervisor/team/progress', { token });
+    return request<{ progress: Array<{ principal_id: string; name: string; email: string; employee_number: string; total_enrollments: string; avg_progress: string; completed_count: string }> }>('/supervisor/team/progress', { token });
   },
   getApprovals(token: string) {
     return request<{

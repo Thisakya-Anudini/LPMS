@@ -20,15 +20,19 @@ export const getTeam = async (req, res) => {
 export const getTeamProgress = async (req, res) => {
   const result = await query(
     `
-      SELECT ap.id AS principal_id, ap.name, ap.email,
-             COUNT(en.id) AS total_enrollments,
-             COALESCE(AVG(en.progress), 0)::numeric(5,2) AS avg_progress,
-             COUNT(*) FILTER (WHERE en.status = 'COMPLETED') AS completed_count
+      SELECT 
+        ap.id AS principal_id,
+        ap.name,
+        ap.email,
+        e.employee_number,
+        COUNT(en.id) AS total_enrollments,
+        COALESCE(AVG(en.progress), 0)::numeric(5,2) AS avg_progress,
+        COUNT(*) FILTER (WHERE en.status = 'COMPLETED') AS completed_count
       FROM employees e
       JOIN auth_principals ap ON ap.id = e.principal_id
       LEFT JOIN enrollments en ON en.principal_id = ap.id
       WHERE e.supervisor_id = $1
-      GROUP BY ap.id, ap.name, ap.email
+      GROUP BY ap.id, ap.name, ap.email, e.employee_number
       ORDER BY ap.name ASC
     `,
     [req.user.id]
