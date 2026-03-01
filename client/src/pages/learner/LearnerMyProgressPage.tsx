@@ -1,0 +1,303 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
+import { learnerApi } from '../../api/lpmsApi';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { ProgressBar } from '../../components/ui/ProgressBar';
+import { useAuth } from '../../contexts/useAuth';
+import { useToast } from '../../contexts/useToast';
+
+type AssignedLearningPath = {
+  enrollmentId: string;
+  learningPathId: string;
+  title: string;
+  progress: number;
+  status: string;
+};
+
+type PathCourse = {
+  courseId: string;
+  title: string;
+  order: number;
+  isCompleted: boolean;
+  videoUrl: string | null;
+};
+
+export function LearnerMyProgressPage() {
+  const { getAccessToken, user } = useAuth();
+  const { showToast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [courseUpdateLoadingId, setCourseUpdateLoadingId] = useState<string | null>(null);
+  const [isSupervisor, setIsSupervisor] = useState(Boolean(user?.isSupervisor));
+  const [learnerName, setLearnerName] = useState(user?.name || 'Learner');
+  const [assignedLearningPaths, setAssignedLearningPaths] = useState<AssignedLearningPath[]>([]);
+  const [selectedPathCourses, setSelectedPathCourses] = useState<PathCourse[]>([]);
+  const [selectedPathMeta, setSelectedPathMeta] = useState<{
+    enrollmentId: string;
+    learningPathTitle: string;
+    progress: number;
+    status: string;
+    totalCourses: number;
+    completedCourses: number;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const [profileResponse, dashboardResponse, teamResponse] = await Promise.all([
+        learnerApi.getProfile(token),
+        learnerApi.getDashboard(token),
+        learnerApi.getTeam(token)
+      ]);
+
+      const profile = profileResponse.profile || {};
+      const profileName =
+        (typeof profile.employeeName === 'string' && profile.employeeName.trim()) ||
+        user?.name ||
+        'Learner';
+
+      setLearnerName(profileName);
+      setIsSupervisor(teamResponse.isSupervisor);
+      setAssignedLearningPaths(dashboardResponse.assignedLearningPaths);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load learner progress.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [getAccessToken, showToast, user?.name]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const summary = useMemo(() => {
+    const totalLearningPaths = assignedLearningPaths.length;
+    const completedLearningPaths = assignedLearningPaths.filter((row) => row.status === 'COMPLETED').length;
+    const averageProgress =
+      totalLearningPaths > 0
+        ? Math.round(
+          assignedLearningPaths.reduce((sum, row) => sum + Number(row.progress), 0) / totalLearningPaths
+        )
+        : 0;
+    return { totalLearningPaths, completedLearningPaths, averageProgress };
+  }, [assignedLearningPaths]);
+
+  const openLearningPathModal = async (enrollmentId: string) => {
+    try {
+      setModalLoading(true);
+      setSelectedEnrollmentId(enrollmentId);
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const response = await learnerApi.getMyPathCourses(token, enrollmentId);
+      setSelectedPathMeta({
+        enrollmentId: response.enrollment.id,
+        learningPathTitle: response.enrollment.learningPathTitle,
+        progress: response.enrollment.progress,
+        status: response.enrollment.status,
+        totalCourses: response.enrollment.totalCourses,
+        completedCourses: response.enrollment.completedCourses
+      });
+      setSelectedPathCourses(response.courses);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load learning path courses.', 'error');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedEnrollmentId(null);
+    setSelectedPathCourses([]);
+    setSelectedPathMeta(null);
+  };
+
+  const handleToggleCourse = async (course: PathCourse, completed: boolean) => {
+    if (!selectedEnrollmentId) {
+      return;
+    }
+
+    try {
+      setCourseUpdateLoadingId(course.courseId);
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const response = await learnerApi.updateCourseCompletion(
+        token,
+        selectedEnrollmentId,
+        course.courseId,
+        completed
+      );
+
+      setSelectedPathMeta({
+        enrollmentId: response.enrollment.id,
+        learningPathTitle: response.enrollment.learningPathTitle,
+        progress: response.enrollment.progress,
+        status: response.enrollment.status,
+        totalCourses: response.enrollment.totalCourses,
+        completedCourses: response.enrollment.completedCourses
+      });
+      setSelectedPathCourses(response.courses);
+      setAssignedLearningPaths((prev) =>
+        prev.map((path) =>
+          path.enrollmentId === response.enrollment.id
+            ? { ...path, progress: response.enrollment.progress, status: response.enrollment.status }
+            : path
+        )
+      );
+      if (response.enrollment.progress >= 100) {
+        window.dispatchEvent(new Event('notifications:updated'));
+        showToast('Learning path completed. Certificate generated.', 'success');
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update course completion.', 'error');
+    } finally {
+      setCourseUpdateLoadingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Welcome {learnerName}</h1>
+        <p className="text-slate-500">
+          My learning progress
+          {isSupervisor ? ' | You also have Supervisor Dashboard access from the sidebar.' : ''}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="p-4">
+          <p className="text-sm text-slate-500">Assigned Learning Paths</p>
+          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.totalLearningPaths}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-slate-500">Completed Learning Paths</p>
+          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.completedLearningPaths}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-sm text-slate-500">Average Progress</p>
+          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : `${summary.averageProgress}%`}</p>
+        </Card>
+      </div>
+
+      <Card title="My Learning Progress">
+        <div className="space-y-4">
+          {assignedLearningPaths.map((path) => (
+            <button
+              key={path.enrollmentId}
+              type="button"
+              onClick={() => openLearningPathModal(path.enrollmentId)}
+              className="w-full text-left p-2 rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-medium text-slate-900">{path.title}</p>
+                <span className="text-xs text-slate-500">{path.status.replace('_', ' ')}</span>
+              </div>
+              <ProgressBar progress={path.progress} showLabel size="sm" />
+            </button>
+          ))}
+          {!loading && assignedLearningPaths.length === 0 ? (
+            <p className="text-sm text-slate-500">No assigned learning paths yet.</p>
+          ) : null}
+        </div>
+      </Card>
+
+      {selectedEnrollmentId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+              <h2 className="text-lg font-semibold text-slate-900">Learning Path Details</h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4">
+              {modalLoading ? (
+                <p className="text-sm text-slate-500">Loading course details...</p>
+              ) : selectedPathMeta ? (
+                <div className="space-y-4">
+                  <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                    <p className="font-semibold text-slate-900">{selectedPathMeta.learningPathTitle}</p>
+                    <p className="text-xs text-slate-600 mt-1">
+                      {selectedPathMeta.completedCourses}/{selectedPathMeta.totalCourses} courses completed
+                      {' | '}
+                      {selectedPathMeta.status.replace('_', ' ')}
+                    </p>
+                    <div className="mt-2">
+                      <ProgressBar progress={selectedPathMeta.progress} showLabel size="sm" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {selectedPathCourses.map((course) => (
+                      <div
+                        key={course.courseId}
+                        className="flex items-start gap-3 p-3 rounded border border-slate-200 bg-white hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={course.isCompleted}
+                          disabled={courseUpdateLoadingId === course.courseId}
+                          onChange={(event) => handleToggleCourse(course, event.target.checked)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <span className="block text-sm font-medium text-slate-900">
+                            {course.order}. {course.title}
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            {course.isCompleted ? 'Completed' : 'Pending'}
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => course.videoUrl && window.open(course.videoUrl, '_blank', 'noopener,noreferrer')}
+                          disabled={!course.videoUrl}
+                        >
+                          Learn Now
+                        </Button>
+                      </div>
+                    ))}
+                    {selectedPathCourses.length === 0 ? (
+                      <p className="text-sm text-slate-500">No courses configured for this learning path.</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">Select a learning path to view courses.</p>
+              )}
+            </div>
+
+            <div className="border-t border-slate-200 px-4 py-3 flex justify-end">
+              <Button type="button" variant="outline" onClick={closeModal}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}

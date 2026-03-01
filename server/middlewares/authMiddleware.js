@@ -28,7 +28,12 @@ export const protect = (req, res, next) => {
       id: decoded.sub,
       email: decoded.email,
       role: decoded.role,
-      principalType: decoded.principalType
+      principalType: decoded.principalType,
+      name: decoded.name,
+      mustChangePassword: decoded.mustChangePassword,
+      authSource: decoded.authSource,
+      employeeNo: decoded.employeeNo,
+      isSupervisor: decoded.isSupervisor
     };
     return next();
   } catch {

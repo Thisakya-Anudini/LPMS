@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pencil, Search, Trash2 } from 'lucide-react';
-import { learningApi } from '../../api/lpmsApi';
+import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from 'lucide-react';
+import { courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -8,6 +8,7 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Tabs } from '../../components/ui/Tabs';
 import { useAuth } from '../../contexts/useAuth';
+import { useToast } from '../../contexts/useToast';
 
 type Category = 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
 type PathStatus = 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
@@ -21,7 +22,7 @@ type LearningPathRow = {
   status: PathStatus;
 };
 
-type AssignableEmployee = {
+type AssignableLearner = {
   id: string;
   name: string;
   email: string;
@@ -30,27 +31,35 @@ type AssignableEmployee = {
   grade_name: string;
 };
 
+type CourseItem = {
+  id: string;
+  title: string;
+  description: string;
+  durationHours: number;
+};
+
 const initialPathForm = {
   title: '',
   description: '',
   category: 'PUBLIC' as Category,
-  totalDuration: ''
+  totalDuration: '',
+  selectedCourseIds: [] as string[]
 };
 
 const initialAssignForm = {
   learningPathId: '',
-  selectedEmployeeIds: [] as string[]
+  selectedLearnerIds: [] as string[]
 };
 
 export function LearningPathManagement() {
   const { getAccessToken } = useAuth();
+  const { showToast } = useToast();
 
   const [paths, setPaths] = useState<LearningPathRow[]>([]);
-  const [employees, setEmployees] = useState<AssignableEmployee[]>([]);
+  const [learners, setLearners] = useState<AssignableLearner[]>([]);
+  const [courses, setCourses] = useState<CourseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [pageMessage, setPageMessage] = useState<string | null>(null);
-  const [pageError, setPageError] = useState<string | null>(null);
 
   const [pathForm, setPathForm] = useState(initialPathForm);
   const [pathFormLoading, setPathFormLoading] = useState(false);
@@ -61,7 +70,8 @@ export function LearningPathManagement() {
     description: '',
     category: 'PUBLIC' as Category,
     totalDuration: '',
-    status: 'ACTIVE' as PathStatus
+    status: 'ACTIVE' as PathStatus,
+    selectedCourseIds: [] as string[]
   });
   const [editLoading, setEditLoading] = useState(false);
 
@@ -70,27 +80,28 @@ export function LearningPathManagement() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    setPageError(null);
     try {
       const token = await getAccessToken();
       if (!token) {
-        setPageError('Session expired. Please login again.');
+        showToast('Session expired. Please login again.', 'error');
         return;
       }
 
-      const [pathsResponse, employeesResponse] = await Promise.all([
+      const [pathsResponse, learnersResponse, coursesResponse] = await Promise.all([
         learningApi.getLearningPaths(token),
-        learningApi.getAssignableEmployees(token)
+        learningApi.getAssignableEmployees(token),
+        courseApi.getAllCourses(token)
       ]);
 
       setPaths(pathsResponse.learningPaths as LearningPathRow[]);
-      setEmployees(employeesResponse.employees);
+      setLearners(learnersResponse.employees);
+      setCourses(coursesResponse.courses);
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : 'Failed to load data.');
+      showToast(err instanceof Error ? err.message : 'Failed to load data.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [getAccessToken]);
+  }, [getAccessToken, showToast]);
 
   useEffect(() => {
     loadData();
@@ -101,44 +112,79 @@ export function LearningPathManagement() {
     if (!normalized) {
       return paths;
     }
-    return paths.filter((path) =>
-      path.title.toLowerCase().includes(normalized) ||
-      path.description.toLowerCase().includes(normalized)
+    return paths.filter(
+      (path) =>
+        path.title.toLowerCase().includes(normalized) ||
+        path.description.toLowerCase().includes(normalized)
     );
   }, [paths, query]);
+
+  const toStages = (selectedCourseIds: string[]) =>
+    selectedCourseIds.map((courseId, index) => {
+      const course = courses.find((item) => item.id === courseId);
+      return {
+        title: course?.title || courseId,
+        order: index + 1
+      };
+    });
 
   const handleCreatePath = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPathFormLoading(true);
-    setPageError(null);
-    setPageMessage(null);
     try {
       const token = await getAccessToken();
       if (!token) {
-        setPageError('Session expired. Please login again.');
+        showToast('Session expired. Please login again.', 'error');
         return;
       }
 
-      await learningApi.createLearningPath(token, pathForm);
+      await learningApi.createLearningPath(token, {
+        title: pathForm.title,
+        description: pathForm.description,
+        category: pathForm.category,
+        totalDuration: pathForm.totalDuration,
+        stages: toStages(pathForm.selectedCourseIds)
+      });
       setPathForm(initialPathForm);
-      setPageMessage('Learning path created successfully.');
+      showToast('Learning path created successfully.', 'success');
       await loadData();
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : 'Failed to create learning path.');
+      showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
     } finally {
       setPathFormLoading(false);
     }
   };
 
-  const startEdit = (path: LearningPathRow) => {
-    setEditPathId(path.id);
-    setEditForm({
-      title: path.title,
-      description: path.description,
-      category: path.category,
-      totalDuration: path.total_duration,
-      status: path.status
-    });
+  const startEdit = async (path: LearningPathRow) => {
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const detailResponse = await learningApi.getLearningPathById(token, path.id);
+      const stageTitles =
+        detailResponse.learningPath.stages
+          ?.sort((a, b) => a.stage_order - b.stage_order)
+          .map((stage) => stage.title) || [];
+
+      const selectedCourseIds = stageTitles
+        .map((title) => courses.find((course) => course.title === title)?.id)
+        .filter((value): value is string => Boolean(value));
+
+      setEditPathId(path.id);
+      setEditForm({
+        title: path.title,
+        description: path.description,
+        category: path.category,
+        totalDuration: path.total_duration,
+        status: path.status,
+        selectedCourseIds
+      });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load learning path details.', 'error');
+    }
   };
 
   const handleUpdatePath = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -147,21 +193,26 @@ export function LearningPathManagement() {
       return;
     }
     setEditLoading(true);
-    setPageError(null);
-    setPageMessage(null);
     try {
       const token = await getAccessToken();
       if (!token) {
-        setPageError('Session expired. Please login again.');
+        showToast('Session expired. Please login again.', 'error');
         return;
       }
 
-      await learningApi.updateLearningPath(token, editPathId, editForm);
-      setPageMessage('Learning path updated successfully.');
+      await learningApi.updateLearningPath(token, editPathId, {
+        title: editForm.title,
+        description: editForm.description,
+        category: editForm.category,
+        totalDuration: editForm.totalDuration,
+        status: editForm.status,
+        stages: toStages(editForm.selectedCourseIds)
+      });
+      showToast('Learning path updated successfully.', 'success');
       setEditPathId(null);
       await loadData();
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : 'Failed to update learning path.');
+      showToast(err instanceof Error ? err.message : 'Failed to update learning path.', 'error');
     } finally {
       setEditLoading(false);
     }
@@ -172,55 +223,157 @@ export function LearningPathManagement() {
     if (!confirmed) {
       return;
     }
-    setPageError(null);
-    setPageMessage(null);
     try {
       const token = await getAccessToken();
       if (!token) {
-        setPageError('Session expired. Please login again.');
+        showToast('Session expired. Please login again.', 'error');
         return;
       }
       await learningApi.deleteLearningPath(token, id);
-      setPageMessage('Learning path deleted successfully.');
+      showToast('Learning path deleted successfully.', 'success');
       await loadData();
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : 'Failed to delete learning path.');
+      showToast(err instanceof Error ? err.message : 'Failed to delete learning path.', 'error');
     }
   };
 
-  const toggleEmployeeSelection = (employeeId: string) => {
+  const toggleLearnerSelection = (learnerId: string) => {
     setAssignForm((prev) => {
-      const exists = prev.selectedEmployeeIds.includes(employeeId);
+      const exists = prev.selectedLearnerIds.includes(learnerId);
       return {
         ...prev,
-        selectedEmployeeIds: exists
-          ? prev.selectedEmployeeIds.filter((id) => id !== employeeId)
-          : [...prev.selectedEmployeeIds, employeeId]
+        selectedLearnerIds: exists
+          ? prev.selectedLearnerIds.filter((id) => id !== learnerId)
+          : [...prev.selectedLearnerIds, learnerId]
       };
     });
   };
 
+  const toggleCourse = (
+    selectedCourseIds: string[],
+    courseId: string,
+    mode: 'create' | 'edit'
+  ) => {
+    const exists = selectedCourseIds.includes(courseId);
+    if (mode === 'create') {
+      setPathForm((prev) => ({
+        ...prev,
+        selectedCourseIds: exists
+          ? prev.selectedCourseIds.filter((id) => id !== courseId)
+          : [...prev.selectedCourseIds, courseId]
+      }));
+      return;
+    }
+    setEditForm((prev) => ({
+      ...prev,
+      selectedCourseIds: exists
+        ? prev.selectedCourseIds.filter((id) => id !== courseId)
+        : [...prev.selectedCourseIds, courseId]
+    }));
+  };
+
+  const moveCourse = (
+    selectedCourseIds: string[],
+    index: number,
+    direction: 'up' | 'down',
+    mode: 'create' | 'edit'
+  ) => {
+    const next = [...selectedCourseIds];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= next.length) {
+      return;
+    }
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+
+    if (mode === 'create') {
+      setPathForm((prev) => ({ ...prev, selectedCourseIds: next }));
+      return;
+    }
+    setEditForm((prev) => ({ ...prev, selectedCourseIds: next }));
+  };
+
+  const renderCourseSelector = (
+    selectedCourseIds: string[],
+    mode: 'create' | 'edit'
+  ) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <p className="text-sm font-medium text-slate-700 mb-2">Select Courses</p>
+        <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+          {courses.map((course) => (
+            <label key={`${course.id}-${mode}`} className="flex items-start gap-3 p-2 rounded hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={selectedCourseIds.includes(course.id)}
+                onChange={() => toggleCourse(selectedCourseIds, course.id, mode)}
+              />
+              <span className="text-sm">
+                <span className="block font-medium text-slate-900">{course.title}</span>
+                <span className="block text-xs text-slate-500">{course.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-sm font-medium text-slate-700 mb-2">Course Order</p>
+        <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+          {selectedCourseIds.length === 0 ? (
+            <p className="text-sm text-slate-500 p-2">Select courses to define order.</p>
+          ) : (
+            selectedCourseIds.map((courseId, index) => {
+              const course = courses.find((item) => item.id === courseId);
+              return (
+                <div key={`${courseId}-${mode}-order`} className="p-2 rounded border border-slate-200 bg-white">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-slate-900">
+                      {index + 1}. {course?.title || courseId}
+                    </p>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        className="p-1 rounded hover:bg-slate-100"
+                        onClick={() => moveCourse(selectedCourseIds, index, 'up', mode)}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="p-1 rounded hover:bg-slate-100"
+                        onClick={() => moveCourse(selectedCourseIds, index, 'down', mode)}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   const handleAssign = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAssignLoading(true);
-    setPageError(null);
-    setPageMessage(null);
     try {
       const token = await getAccessToken();
       if (!token) {
-        setPageError('Session expired. Please login again.');
+        showToast('Session expired. Please login again.', 'error');
         return;
       }
 
       await learningApi.createEnrollments(token, {
         learningPathId: assignForm.learningPathId,
-        employeePrincipalIds: assignForm.selectedEmployeeIds
+        employeePrincipalIds: assignForm.selectedLearnerIds
       });
 
-      setPageMessage('Enrollments assigned successfully.');
+      showToast('Enrollments assigned successfully.', 'success');
       setAssignForm(initialAssignForm);
     } catch (err) {
-      setPageError(err instanceof Error ? err.message : 'Failed to assign enrollments.');
+      showToast(err instanceof Error ? err.message : 'Failed to assign enrollments.', 'error');
     } finally {
       setAssignLoading(false);
     }
@@ -232,9 +385,6 @@ export function LearningPathManagement() {
         <h1 className="text-2xl font-bold text-slate-900">Learning Path Management</h1>
         <p className="text-slate-500">Create, update, and assign learning paths.</p>
       </div>
-
-      {pageError ? <Card className="text-red-600">{pageError}</Card> : null}
-      {pageMessage ? <Card className="text-green-700">{pageMessage}</Card> : null}
 
       <Tabs
         defaultTab="paths"
@@ -283,6 +433,9 @@ export function LearningPathManagement() {
                         required
                       />
                     </div>
+
+                    {renderCourseSelector(pathForm.selectedCourseIds, 'create')}
+
                     <Button type="submit" isLoading={pathFormLoading}>
                       Create Path
                     </Button>
@@ -425,6 +578,9 @@ export function LearningPathManagement() {
                           required
                         />
                       </div>
+
+                      {renderCourseSelector(editForm.selectedCourseIds, 'edit')}
+
                       <div className="flex gap-2">
                         <Button type="submit" isLoading={editLoading}>
                           Save Changes
@@ -443,7 +599,7 @@ export function LearningPathManagement() {
             id: 'enrollments',
             label: 'Assign Enrollments',
             content: (
-              <Card title="Assign Learning Path to Employees">
+              <Card title="Assign Learning Path to Learners">
                 <form className="space-y-4" onSubmit={handleAssign}>
                   <Select
                     label="Learning Path"
@@ -459,23 +615,23 @@ export function LearningPathManagement() {
                   />
 
                   <div>
-                    <p className="text-sm font-medium text-slate-700 mb-2">Select Employees</p>
+                    <p className="text-sm font-medium text-slate-700 mb-2">Select Learners</p>
                     <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-                      {employees.length === 0 ? (
-                        <p className="text-sm text-slate-500 p-2">No employees available.</p>
+                      {learners.length === 0 ? (
+                        <p className="text-sm text-slate-500 p-2">No learners available.</p>
                       ) : (
-                        employees.map((employee) => (
-                          <label key={employee.id} className="flex items-start gap-3 p-2 rounded hover:bg-slate-50">
+                        learners.map((learner) => (
+                          <label key={learner.id} className="flex items-start gap-3 p-2 rounded hover:bg-slate-50">
                             <input
                               type="checkbox"
-                              checked={assignForm.selectedEmployeeIds.includes(employee.id)}
-                              onChange={() => toggleEmployeeSelection(employee.id)}
+                              checked={assignForm.selectedLearnerIds.includes(learner.id)}
+                              onChange={() => toggleLearnerSelection(learner.id)}
                               className="mt-1"
                             />
                             <span>
-                              <span className="block text-sm font-medium text-slate-900">{employee.name}</span>
+                              <span className="block text-sm font-medium text-slate-900">{learner.name}</span>
                               <span className="block text-xs text-slate-500">
-                                {employee.email} | {employee.employee_number} | {employee.designation}
+                                {learner.email} | {learner.employee_number} | {learner.designation}
                               </span>
                             </span>
                           </label>
@@ -487,7 +643,7 @@ export function LearningPathManagement() {
                   <Button
                     type="submit"
                     isLoading={assignLoading}
-                    disabled={!assignForm.learningPathId || assignForm.selectedEmployeeIds.length === 0}
+                    disabled={!assignForm.learningPathId || assignForm.selectedLearnerIds.length === 0}
                   >
                     Assign Enrollments
                   </Button>

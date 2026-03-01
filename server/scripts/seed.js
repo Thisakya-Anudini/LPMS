@@ -36,13 +36,6 @@ const run = async () => {
     password: 'Admin@123'
   });
 
-  const supervisorId = await createPrincipal({
-    email: 'supervisor@lpms.com',
-    role: ROLES.SUPERVISOR,
-    name: 'Supervisor',
-    password: 'Admin@123'
-  });
-
   const employeePrincipalId = await createPrincipal({
     email: 'employee@lpms.com',
     role: ROLES.EMPLOYEE,
@@ -54,10 +47,10 @@ const run = async () => {
   await query(
     `
       INSERT INTO employees (principal_id, employee_number, designation, grade_name, supervisor_id)
-      VALUES ($1, 'EMP0001', 'Software Engineer', 'G5', $2)
+      VALUES ($1, 'EMP0001', 'Software Engineer', 'G5', NULL)
       ON CONFLICT (employee_number) DO NOTHING
     `,
-    [employeePrincipalId, supervisorId]
+    [employeePrincipalId]
   );
 
   const pathResult = await query(

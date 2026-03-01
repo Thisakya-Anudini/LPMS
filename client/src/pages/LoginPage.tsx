@@ -10,7 +10,7 @@ import { getDefaultRouteForRole } from '../utils/navigation';
 export function LoginPage() {
   const { login, user, isBootstrapping } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -28,7 +28,7 @@ export function LoginPage() {
     setError(null);
 
     try {
-      const loggedInUser = await login(email, password);
+      const loggedInUser = await login(username, password);
       if (loggedInUser.mustChangePassword) {
         navigate('/change-password', { replace: true });
         return;
@@ -64,12 +64,12 @@ export function LoginPage() {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <Input
-              label="Email"
-              type="email"
-              name="email"
-              placeholder="you@company.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              label="Username (Email or Employee ID)"
+              type="text"
+              name="username"
+              placeholder="user@lpms.com or 12345"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
               className="border-slate-200/90 bg-slate-50/90 transition-colors focus:bg-white"
               required
             />
