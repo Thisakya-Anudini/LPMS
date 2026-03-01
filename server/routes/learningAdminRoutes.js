@@ -22,8 +22,8 @@ router.post(
   requireFields(['title', 'description', 'category', 'totalDuration']),
   createLearningPath
 );
-router.get('/learning-paths', protect, requireRole([ROLES.LEARNING_ADMIN]), getLearningPaths);
-router.get('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), getLearningPathById);
+router.get('/learning-paths', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPaths);
+router.get('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPathById);
 router.put('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), updateLearningPath);
 router.delete('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), deleteLearningPath);
 

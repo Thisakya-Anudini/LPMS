@@ -20,7 +20,7 @@ export function Tabs({ tabs, defaultTab }: TabsProps) {
             onClick={() => setActiveTab(tab.id)}
             className={`
                 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
-                ${activeTab === tab.id ? 'border-blue-500 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}
+                ${activeTab === tab.id ? 'border-[#0563bb] text-[#0563bb]' : 'border-transparent text-slate-500 hover:text-[#0563bb] hover:border-[#57c84d]'}
               `}>
 
               {tab.label}

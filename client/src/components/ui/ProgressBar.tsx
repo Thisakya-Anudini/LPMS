@@ -20,8 +20,8 @@ export function ProgressBar({
     lg: 'h-4'
   };
   const colors = {
-    default: 'bg-blue-600',
-    success: 'bg-green-600'
+    default: 'bg-[#0563bb]',
+    success: 'bg-[#57c84d]'
   };
   return (
     <div className={`w-full ${className}`}>

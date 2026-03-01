@@ -4,15 +4,19 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/useAuth';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { EmployeeDashboard } from './pages/employee/EmployeeDashboard';
-import { MyLearningPaths } from './pages/employee/MyLearningPaths';
+import { AdminLearnersPage } from './pages/admin/AdminLearnersPage';
+import { AdminLearningPathsPage } from './pages/admin/AdminLearningPathsPage';
 import { LearningAdminDashboard } from './pages/learning-admin/LearningAdminDashboard';
 import { LearningPathManagement } from './pages/learning-admin/LearningPathManagement';
 import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
-import { SupervisorDashboard } from './pages/supervisor/SupervisorDashboard';
 import { Role } from './types';
 import { getDefaultRouteForRole } from './utils/navigation';
+import { NotificationsPage } from './pages/NotificationsPage';
+import { SupervisorDashboard } from './pages/supervisor/SupervisorDashboard';
+import { LearnerMyProgressPage } from './pages/learner/LearnerMyProgressPage';
+import { LearnerPublicPathsPage } from './pages/learner/LearnerPublicPathsPage';
+import { LearnerCertificatesPage } from './pages/learner/LearnerCertificatesPage';
 
 function ProtectedRoute({
   children,
@@ -60,6 +64,14 @@ function RootRedirect() {
   return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
 }
 
+function SupervisorOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user || user.role !== 'EMPLOYEE' || !user.isSupervisor) {
+    return <Navigate to="/learner" replace />;
+  }
+  return <>{children}</>;
+}
+
 export function App() {
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -82,7 +94,31 @@ export function App() {
               path="admin"
               element={
                 <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <Navigate to="/admin/learners" replace />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/learners"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminLearnersPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/accounts"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
                   <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/learning-paths"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminLearningPathsPage />
                 </ProtectedRoute>
               }
             />
@@ -105,27 +141,60 @@ export function App() {
             />
 
             <Route
-              path="supervisor"
+              path="learner"
               element={
-                <ProtectedRoute allowedRoles={['SUPERVISOR']}>
-                  <SupervisorDashboard />
+                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                  <Navigate to="/learner/my-progress" replace />
                 </ProtectedRoute>
               }
             />
-
+            <Route
+              path="learner/my-progress"
+              element={
+                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                  <LearnerMyProgressPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learner/public-paths"
+              element={
+                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                  <LearnerPublicPathsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learner/certificates"
+              element={
+                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                  <LearnerCertificatesPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="employee"
               element={
                 <ProtectedRoute allowedRoles={['EMPLOYEE']}>
-                  <EmployeeDashboard />
+                  <Navigate to="/learner/my-progress" replace />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="employee/my-paths"
+              path="supervisor"
               element={
                 <ProtectedRoute allowedRoles={['EMPLOYEE']}>
-                  <MyLearningPaths />
+                  <SupervisorOnlyRoute>
+                    <SupervisorDashboard />
+                  </SupervisorOnlyRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="notifications"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'LEARNING_ADMIN', 'EMPLOYEE', 'SUPERVISOR']}>
+                  <NotificationsPage />
                 </ProtectedRoute>
               }
             />
