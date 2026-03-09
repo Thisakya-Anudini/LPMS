@@ -55,7 +55,7 @@ export function LoginPage() {
 
         <Card className="w-full border-white/50 bg-white/80 shadow-xl shadow-[#034c96]/10 backdrop-blur-md">
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#034c96_0%,#0563bb_55%,#3faa45_100%)] shadow-lg shadow-[#0563bb]/30">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[#0563bb] shadow-lg shadow-[#0563bb]/30">
               <Shield className="h-7 w-7 text-white" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Welcome to LPMS</h1>
