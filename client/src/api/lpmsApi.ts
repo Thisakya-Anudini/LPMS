@@ -49,10 +49,10 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
 };
 
 export const authApi = {
-  login(email: string, password: string) {
+  login(username: string, password: string) {
     return request<AuthResponse>('/auth/login', {
       method: 'POST',
-      body: { email, password }
+      body: { email: username, password }
     });
   },
   refresh(refreshToken: string) {
@@ -85,30 +85,9 @@ export const userApi = {
   },
   createUser(
     token: string,
-    payload: { name: string; email: string; password: string; role: Exclude<Role, 'EMPLOYEE'> }
+    payload: { name: string; email: string; password: string; role: 'SUPER_ADMIN' | 'LEARNING_ADMIN' }
   ) {
     return request<{ user: { id: string; name: string; email: string; role: Role; is_active: boolean } }>('/users', {
-      method: 'POST',
-      token,
-      body: payload
-    });
-  },
-  createEmployee(
-    token: string,
-    payload: {
-      name: string;
-      email: string;
-      password: string;
-      employeeNumber: string;
-      designation: string;
-      gradeName: string;
-      supervisorId?: string;
-    }
-  ) {
-    return request<{
-      user: { id: string; name: string; email: string; role: Role };
-      employee: { id: string; employee_number: string };
-    }>('/employees', {
       method: 'POST',
       token,
       body: payload
@@ -116,13 +95,47 @@ export const userApi = {
   }
 };
 
+const requestBlob = async (path: string, token: string) => {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'GET',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseApiError(response));
+  }
+
+  return response.blob();
+};
+
 export const learningApi = {
   getLearningPaths(token: string) {
     return request<{ learningPaths: Array<{ id: string; title: string; description: string; category: string; total_duration: string; status: string }> }>('/learning-paths', { token });
   },
+  getLearningPathById(token: string, id: string) {
+    return request<{
+      learningPath: {
+        id: string;
+        title: string;
+        description: string;
+        category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+        total_duration: string;
+        status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+        stages: Array<{ id: string; title: string; stage_order: number }>;
+      };
+    }>(`/learning-paths/${id}`, { token });
+  },
   createLearningPath(
     token: string,
-    payload: { title: string; description: string; category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC'; totalDuration: string }
+    payload: {
+      title: string;
+      description: string;
+      category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+      totalDuration: string;
+      stages?: Array<{ title: string; order: number }>;
+    }
   ) {
     return request<{ learningPath: { id: string } }>('/learning-paths', {
       method: 'POST',
@@ -133,7 +146,14 @@ export const learningApi = {
   updateLearningPath(
     token: string,
     id: string,
-    payload: { title: string; description: string; category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC'; totalDuration: string; status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED' }
+    payload: {
+      title: string;
+      description: string;
+      category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+      totalDuration: string;
+      status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+      stages?: Array<{ title: string; order: number }>;
+    }
   ) {
     return request<{ learningPath: { id: string } }>(`/learning-paths/${id}`, {
       method: 'PUT',
@@ -271,8 +291,34 @@ export const employeeApi = {
 };
 
 export const integrationApi = {
+  getErpLearnerDetails(token: string, employeeNo: string) {
+    return request<{
+      success: boolean;
+      message: string;
+      data: Array<Record<string, unknown>>;
+    }>('/integrations/erp/learner-details', {
+      method: 'POST',
+      token,
+      body: { employeeNo }
+    });
+  },
   getErpSubordinates(token: string, employeeNo: string) {
-    return request<{ source: 'ERP'; employeeNo: string; data: unknown }>('/integrations/erp/subordinates', {
+    return request<{
+      success: boolean;
+      message: string;
+      data: Array<Record<string, unknown>>;
+    }>('/integrations/erp/subordinates', {
+      method: 'POST',
+      token,
+      body: { employeeNo }
+    });
+  },
+  getErpHierarchy(token: string, employeeNo: string) {
+    return request<{
+      success: boolean;
+      message: string;
+      data: Array<Record<string, unknown>>;
+    }>('/integrations/erp/hierarchy', {
       method: 'POST',
       token,
       body: { employeeNo }
@@ -303,6 +349,227 @@ export const integrationApi = {
       method: 'POST',
       token,
       body: payload
+    });
+  }
+};
+
+export const courseApi = {
+  getAllCourses(token: string) {
+    return request<{
+      courses: Array<{ id: string; title: string; description: string; durationHours: number }>;
+    }>('/courses', { token });
+  }
+};
+
+export const learnerApi = {
+  getProfile(token: string) {
+    return request<{
+      profile: Record<string, unknown> | null;
+      isSupervisor: boolean;
+    }>('/learner/profile', { token });
+  },
+  getDashboard(token: string) {
+    return request<{
+      assignedLearningPaths: Array<{
+        enrollmentId: string;
+        learningPathId: string;
+        title: string;
+        progress: number;
+        status: string;
+      }>;
+      summary: { totalLearningPaths: number; completedLearningPaths: number; averageProgress: number };
+      notifications: Array<{ id: string; title: string; message: string; type: string }>;
+    }>('/learner/dashboard', { token });
+  },
+  getMyPathCourses(token: string, enrollmentId: string) {
+    return request<{
+      enrollment: {
+        id: string;
+        learningPathId: string;
+        learningPathTitle: string;
+        progress: number;
+        status: string;
+        totalCourses: number;
+        completedCourses: number;
+      };
+      courses: Array<{
+        courseId: string;
+        title: string;
+        order: number;
+        isCompleted: boolean;
+        videoUrl: string | null;
+      }>;
+    }>(`/learner/my-paths/${enrollmentId}/courses`, { token });
+  },
+  updateCourseCompletion(
+    token: string,
+    enrollmentId: string,
+    courseId: string,
+    completed: boolean
+  ) {
+    return request<{
+      enrollment: {
+        id: string;
+        learningPathId: string;
+        learningPathTitle: string;
+        progress: number;
+        status: string;
+        totalCourses: number;
+        completedCourses: number;
+      };
+      courses: Array<{
+        courseId: string;
+        title: string;
+        order: number;
+        isCompleted: boolean;
+        videoUrl: string | null;
+      }>;
+    }>(`/learner/my-paths/${enrollmentId}/courses/${courseId}`, {
+      method: 'PUT',
+      token,
+      body: { completed }
+    });
+  },
+  getCertificates(token: string) {
+    return request<{
+      certificates: Array<{
+        id: string;
+        scope: 'STAGE' | 'FULL';
+        issued_at: string;
+        learning_path_id: string;
+        learning_path_title: string;
+        learning_path_description: string;
+        learning_path_duration: string;
+        learner_name: string;
+        learner_email: string;
+        completed_at: string | null;
+      }>;
+    }>('/learner/certificates', { token });
+  },
+  downloadCertificate(token: string, certificateId: string) {
+    return requestBlob(`/learner/certificates/${certificateId}/download`, token);
+  },
+  getTeam(token: string) {
+    return request<{
+      employeeNo: string;
+      isSupervisor: boolean;
+      team: Array<Record<string, unknown>>;
+    }>('/learner/team', { token });
+  },
+  getLearningPaths(token: string) {
+    return request<{
+      learningPaths: Array<{
+        id: string;
+        title: string;
+        description: string;
+      }>;
+    }>('/learner/learning-paths', { token });
+  },
+  getPublicPaths(token: string) {
+    return request<{
+      learningPaths: Array<{
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        total_duration: string;
+        status: string;
+        already_enrolled: boolean;
+      }>;
+    }>('/learner/public-paths', { token });
+  },
+  selfEnroll(token: string, learningPathId: string) {
+    return request<{ enrollment: { id: string } }>('/learner/self-enroll', {
+      method: 'POST',
+      token,
+      body: { learningPathId }
+    });
+  },
+  enrollTeam(
+    token: string,
+    payload: { employeeNumbers: string[]; learningPathIds: string[] }
+  ) {
+    return request<{
+      success: boolean;
+      supervisorEmployeeNo: string;
+      assignedCount: number;
+      assignments: Array<{
+        employeeNo: string;
+        assignedLearningPathIds: string[];
+      }>;
+    }>('/learner/team/enroll', {
+      method: 'POST',
+      token,
+      body: payload
+    });
+  },
+  deleteUser(token: string, userId: string) {
+    return request<{ user: { id: string; name: string; email: string; role: Role; is_active: boolean } }>(`/users/${userId}`, {
+      method: 'DELETE',
+      token
+    });
+  }
+};
+
+export const superAdminApi = {
+  getLearners(token: string) {
+    return request<{
+      learners: Array<{
+        principal_id: string;
+        name: string;
+        email: string;
+        is_active: boolean;
+        employee_number: string;
+        designation: string;
+        grade_name: string;
+        total_learning_paths: number;
+        completed_learning_paths: number;
+        average_progress: string;
+      }>;
+    }>('/users/learners', { token });
+  },
+  getLearnerLearningPaths(token: string, principalId: string) {
+    return request<{
+      learner: { id: string; name: string; email: string };
+      learningPaths: Array<{
+        enrollment_id: string;
+        status: string;
+        progress: number;
+        enrolled_at: string;
+        completed_at?: string;
+        learning_path_id: string;
+        title: string;
+        description: string;
+        category: string;
+        total_duration: string;
+      }>;
+    }>(`/users/learners/${principalId}/learning-paths`, { token });
+  }
+};
+
+export const notificationsApi = {
+  getMyNotifications(token: string) {
+    return request<{
+      notifications: Array<{
+        id: string;
+        title: string;
+        message: string;
+        type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+        is_read: boolean;
+        created_at: string;
+      }>;
+    }>('/notifications', { token });
+  },
+  markAsRead(token: string, notificationId: string) {
+    return request<{ notification: { id: string; is_read: boolean } }>(`/notifications/${notificationId}/read`, {
+      method: 'PATCH',
+      token
+    });
+  },
+  markAllAsRead(token: string) {
+    return request<{ success: boolean; updatedCount: number }>('/notifications/read-all', {
+      method: 'PATCH',
+      token
     });
   }
 };

@@ -3,10 +3,11 @@ import express from 'express';
 import authRoutes from './routes/authRoutes.js';
 import superAdminRoutes from './routes/superAdminRoutes.js';
 import learningAdminRoutes from './routes/learningAdminRoutes.js';
-import supervisorRoutes from './routes/supervisorRoutes.js';
 import employeeRoutes from './routes/employeeRoutes.js';
-import adminEmployeeRoutes from './routes/adminEmployeeRoutes.js';
 import integrationRoutes from './routes/integrationRoutes.js';
+import learnerRoutes from './routes/learnerRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 import { errorHandler, notFoundHandler } from './middlewares/errorMiddleware.js';
 
 export const createApp = () => {
@@ -27,10 +28,11 @@ export const createApp = () => {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/users', superAdminRoutes);
-  app.use('/api/employees', adminEmployeeRoutes);
   app.use('/api', learningAdminRoutes);
-  app.use('/api/supervisor', supervisorRoutes);
   app.use('/api/employee', employeeRoutes);
+  app.use('/api/learner', learnerRoutes);
+  app.use('/api/courses', courseRoutes);
+  app.use('/api/notifications', notificationRoutes);
   app.use('/api/integrations', integrationRoutes);
 
   app.use(notFoundHandler);

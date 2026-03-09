@@ -98,7 +98,7 @@ export const getLearningPathById = async (req, res) => {
 
 export const updateLearningPath = async (req, res) => {
   const { id } = req.params;
-  const { title, description, category, totalDuration, status } = req.body;
+  const { title, description, category, totalDuration, status, stages } = req.body;
 
   const result = await query(
     `
@@ -117,6 +117,20 @@ export const updateLearningPath = async (req, res) => {
 
   if (result.rowCount === 0) {
     return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+  }
+
+  if (Array.isArray(stages)) {
+    await query('DELETE FROM learning_path_stages WHERE learning_path_id = $1', [id]);
+
+    for (const stage of stages) {
+      await query(
+        `
+          INSERT INTO learning_path_stages (learning_path_id, title, stage_order)
+          VALUES ($1, $2, $3)
+        `,
+        [id, stage.title, stage.order]
+      );
+    }
   }
 
   await logAudit({
