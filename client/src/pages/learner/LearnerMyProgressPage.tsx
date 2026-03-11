@@ -85,13 +85,8 @@ export function LearnerMyProgressPage() {
   const summary = useMemo(() => {
     const totalLearningPaths = assignedLearningPaths.length;
     const completedLearningPaths = assignedLearningPaths.filter((row) => row.status === 'COMPLETED').length;
-    const averageProgress =
-      totalLearningPaths > 0
-        ? Math.round(
-          assignedLearningPaths.reduce((sum, row) => sum + Number(row.progress), 0) / totalLearningPaths
-        )
-        : 0;
-    return { totalLearningPaths, completedLearningPaths, averageProgress };
+    const remainingLearningPaths = Math.max(totalLearningPaths - completedLearningPaths, 0);
+    return { totalLearningPaths, completedLearningPaths, remainingLearningPaths };
   }, [assignedLearningPaths]);
 
   const groupedCoursesByStage = useMemo(() => {
@@ -225,8 +220,8 @@ export function LearnerMyProgressPage() {
           <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.completedLearningPaths}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-slate-500">Average Progress</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : `${summary.averageProgress}%`}</p>
+          <p className="text-sm text-slate-500">Pending Learning Paths</p>
+          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.remainingLearningPaths}</p>
         </Card>
       </div>
 

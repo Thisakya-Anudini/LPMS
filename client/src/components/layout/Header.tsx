@@ -144,14 +144,6 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
     return String(unreadCount);
   }, [unreadCount]);
 
-  const roleLabel = user?.role
-    ? user.role
-        .toLowerCase()
-        .split('_')
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ')
-    : '';
-  const displayRoleLabel = roleLabel === 'Employee' ? 'Learner' : roleLabel;
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] px-4 lg:px-8 shadow-md">
       <div className="flex items-center">
@@ -165,12 +157,6 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
       </div>
 
       <div className="flex items-center gap-5 relative">
-        {user ? (
-          <span className="hidden md:inline-flex items-center rounded-md border border-white/35 bg-white/10 px-3 py-1 text-sm font-semibold tracking-wide text-white">
-            {displayRoleLabel}
-          </span>
-        ) : null}
-
         <button
           ref={bellRef}
           onClick={togglePopup}

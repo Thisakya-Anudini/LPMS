@@ -213,9 +213,6 @@ export function Sidebar({
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-white">{user.name}</p>
-              <p className="text-xs text-slate-400 capitalize">
-                {user.role === 'EMPLOYEE' ? 'learner' : user.role.replace('_', ' ').toLowerCase()}
-              </p>
             </div>
           </div>
         </div>

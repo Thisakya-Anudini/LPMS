@@ -542,6 +542,83 @@ export const getPublicLearningPaths = async (req, res) => {
   return res.status(200).json({ learningPaths: result.rows });
 };
 
+export const getPublicLearningPathById = async (req, res) => {
+  const { id } = req.params;
+
+  const pathResult = await query(
+    `
+      SELECT id, title, description, category, total_duration, status, created_at
+      FROM learning_paths
+      WHERE id = $1
+        AND is_deleted = FALSE
+        AND status = 'ACTIVE'
+        AND category = 'PUBLIC'
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  const learningPath = pathResult.rows[0];
+  if (!learningPath) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+  }
+
+  const stageResult = await query(
+    `
+      SELECT id, title, stage_order
+      FROM learning_path_stages
+      WHERE learning_path_id = $1
+      ORDER BY stage_order ASC
+    `,
+    [id]
+  );
+
+  const stageCourseResult = await query(
+    `
+      SELECT
+        lps.id AS stage_id,
+        c.id AS course_id,
+        c.title AS course_title,
+        sc.course_order,
+        CASE
+          WHEN c.type = 'ONLINE' THEN 'ONLINE'
+          ELSE 'PHYSICAL'
+        END AS delivery_mode
+      FROM learning_path_stages lps
+      JOIN stage_courses sc ON sc.stage_id = lps.id
+      JOIN courses c ON c.id = sc.course_id
+      WHERE lps.learning_path_id = $1
+      ORDER BY lps.stage_order ASC, sc.course_order ASC
+    `,
+    [id]
+  );
+
+  const stageCoursesByStageId = new Map();
+  for (const row of stageCourseResult.rows) {
+    if (!stageCoursesByStageId.has(row.stage_id)) {
+      stageCoursesByStageId.set(row.stage_id, []);
+    }
+    stageCoursesByStageId.get(row.stage_id).push({
+      course_id: row.course_id,
+      title: row.course_title,
+      course_order: Number(row.course_order),
+      delivery_mode: row.delivery_mode
+    });
+  }
+
+  const structuredStages = stageResult.rows.map((stageRow) => ({
+    ...stageRow,
+    courses: stageCoursesByStageId.get(stageRow.id) || []
+  }));
+
+  return res.status(200).json({
+    learningPath: {
+      ...learningPath,
+      stages: structuredStages
+    }
+  });
+};
+
 export const selfEnrollPublicLearningPath = async (req, res) => {
   const employeeNo = normalizeEmployeeNo(req.user, req.body);
   if (!employeeNo) {

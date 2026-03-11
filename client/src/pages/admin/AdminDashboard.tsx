@@ -82,8 +82,9 @@ export function AdminDashboard() {
     loadUsers();
   }, [loadUsers]);
 
-  const activeUsers = users.filter((user) => user.is_active).length;
+  const superAdminCount = users.filter((user) => user.role === 'SUPER_ADMIN').length;
   const assignedLearningAdmins = learners.filter((learner) => learner.is_learning_admin).length;
+  const totalUsers = learners.length + superAdminCount;
   const usersByRole = useMemo(
     () =>
       roleSections.map((section) => ({
@@ -161,13 +162,13 @@ export function AdminDashboard() {
         <p className="text-slate-500">Create and manage Super Admin and Learning Admin accounts.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <Users className="h-5 w-5 text-blue-600" />
             <div>
               <p className="text-sm text-slate-500">Total Users</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : users.length}</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : totalUsers}</p>
             </div>
           </div>
         </Card>
@@ -175,8 +176,8 @@ export function AdminDashboard() {
           <div className="flex items-center gap-3">
             <UserCheck className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-sm text-slate-500">Active Accounts</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : activeUsers}</p>
+              <p className="text-sm text-slate-500">Super Admins</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : superAdminCount}</p>
             </div>
           </div>
         </Card>
@@ -184,8 +185,8 @@ export function AdminDashboard() {
           <div className="flex items-center gap-3">
             <ShieldCheck className="h-5 w-5 text-amber-600" />
             <div>
-              <p className="text-sm text-slate-500">Learners (ERP/AD)</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : learners.length}</p>
+              <p className="text-sm text-slate-500">Learning Admins</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : assignedLearningAdmins}</p>
             </div>
           </div>
         </Card>
@@ -193,8 +194,8 @@ export function AdminDashboard() {
           <div className="flex items-center gap-3">
             <ShieldCheck className="h-5 w-5 text-indigo-600" />
             <div>
-              <p className="text-sm text-slate-500">Assigned Learning Admins</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : assignedLearningAdmins}</p>
+              <p className="text-sm text-slate-500">Learners</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : learners.length}</p>
             </div>
           </div>
         </Card>

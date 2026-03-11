@@ -126,6 +126,7 @@ export const learningApi = {
         category: string;
         total_duration: string;
         status: string;
+        created_at: string;
         certificate_signer_name?: string | null;
         certificate_signer_title?: string | null;
       }>;
@@ -140,6 +141,7 @@ export const learningApi = {
         category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
         total_duration: string;
         status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+        created_at: string;
         certificate_signer_name?: string | null;
         certificate_signer_title?: string | null;
         stages: Array<{
@@ -560,6 +562,30 @@ export const learnerApi = {
         already_enrolled: boolean;
       }>;
     }>('/learner/public-paths', { token });
+  },
+  getPublicPathById(token: string, id: string) {
+    return request<{
+      learningPath: {
+        id: string;
+        title: string;
+        description: string;
+        category: 'PUBLIC';
+        total_duration: string;
+        status: string;
+        created_at: string;
+        stages: Array<{
+          id: string;
+          title: string;
+          stage_order: number;
+          courses?: Array<{
+            course_id: string;
+            title: string;
+            course_order: number;
+            delivery_mode?: 'ONLINE' | 'PHYSICAL';
+          }>;
+        }>;
+      };
+    }>(`/learner/public-paths/${id}`, { token });
   },
   selfEnroll(token: string, learningPathId: string) {
     return request<{ enrollment: { id: string } }>('/learner/self-enroll', {

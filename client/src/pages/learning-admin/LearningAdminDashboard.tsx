@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, CheckCircle, Layers } from 'lucide-react';
+import { BookOpen, Globe2, Layers, ShieldCheck } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { useAuth } from '../../contexts/useAuth';
@@ -59,10 +59,14 @@ export function LearningAdminDashboard() {
 
   const stats = useMemo(() => {
     const active = paths.filter((path) => path.status === 'ACTIVE').length;
+    const publicCount = paths.filter((path) => path.category === 'PUBLIC').length;
+    const semiRestricted = paths.filter((path) => path.category === 'SEMI_RESTRICTED').length;
     const restricted = paths.filter((path) => path.category === 'RESTRICTED').length;
     return {
       total: paths.length,
       active,
+      publicCount,
+      semiRestricted,
       restricted
     };
   }, [paths]);
@@ -81,17 +85,17 @@ export function LearningAdminDashboard() {
           <div className="flex items-center gap-3">
             <BookOpen className="h-5 w-5 text-blue-600" />
             <div>
-              <p className="text-sm text-slate-500">Total Learning Paths</p>
+              <p className="text-sm text-slate-500">Total LPs</p>
               <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary?.totalPaths ?? stats.total}</p>
             </div>
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <CheckCircle className="h-5 w-5 text-green-600" />
+            <Globe2 className="h-5 w-5 text-green-600" />
             <div>
-              <p className="text-sm text-slate-500">Active Paths</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary?.activePaths ?? stats.active}</p>
+              <p className="text-sm text-slate-500">Public LPs</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.publicCount}</p>
             </div>
           </div>
         </Card>
@@ -99,19 +103,17 @@ export function LearningAdminDashboard() {
           <div className="flex items-center gap-3">
             <Layers className="h-5 w-5 text-amber-600" />
             <div>
-              <p className="text-sm text-slate-500">Restricted Paths</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.restricted}</p>
+              <p className="text-sm text-slate-500">Semi-restricted LPs</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.semiRestricted}</p>
             </div>
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-3">
-            <CheckCircle className="h-5 w-5 text-emerald-600" />
+            <ShieldCheck className="h-5 w-5 text-emerald-600" />
             <div>
-              <p className="text-sm text-slate-500">Completion Rate</p>
-              <p className="text-2xl font-bold text-slate-900">
-                {loading ? '...' : `${summary?.completionRate ?? 0}%`}
-              </p>
+              <p className="text-sm text-slate-500">Restricted LPs</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.restricted}</p>
             </div>
           </div>
         </Card>

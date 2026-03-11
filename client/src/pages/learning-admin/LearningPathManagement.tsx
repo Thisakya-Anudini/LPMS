@@ -57,7 +57,8 @@ const initialPathForm = {
   description: '',
   category: 'PUBLIC' as Category,
   totalDuration: '',
-  stages: [createStageForm(0)] as StageForm[]
+  stages: [] as StageForm[],
+  draftStage: createStageForm(0) as StageForm
 };
 
 const initialAssignForm = {
@@ -189,6 +190,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         }))
       }));
 
+  const getCreateStagesPayload = () => {
+    const combined = [...pathForm.stages];
+    if (pathForm.draftStage.selectedCourseIds.length > 0) {
+      combined.push(pathForm.draftStage);
+    }
+    return toStages(combined);
+  };
+
   const handleCreatePath = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPathFormLoading(true);
@@ -204,7 +213,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         description: pathForm.description,
         category: pathForm.category,
         totalDuration: pathForm.totalDuration,
-        stages: toStages(pathForm.stages)
+        stages: getCreateStagesPayload()
       });
       setPathForm(initialPathForm);
       showToast('Learning path created successfully.', 'success');
@@ -322,9 +331,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     if (mode === 'create') {
       setPathForm((prev) => ({
         ...prev,
-        stages: prev.stages.map((stage, index) =>
-          index === stageIndex ? { ...stage, selectedCourseIds: updater(stage.selectedCourseIds) } : stage
-        )
+        draftStage: {
+          ...prev.draftStage,
+          selectedCourseIds: updater(prev.draftStage.selectedCourseIds)
+        }
       }));
       return;
     }
@@ -351,7 +361,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     mode: 'create' | 'edit'
   ) => {
     const selectedCourseIds =
-      mode === 'create' ? pathForm.stages[stageIndex]?.selectedCourseIds || [] : editForm.stages[stageIndex]?.selectedCourseIds || [];
+      mode === 'create'
+        ? pathForm.draftStage.selectedCourseIds || []
+        : editForm.stages[stageIndex]?.selectedCourseIds || [];
     const next = [...selectedCourseIds];
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= next.length) {
@@ -365,7 +377,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     if (mode === 'create') {
       setPathForm((prev) => ({
         ...prev,
-        stages: prev.stages.map((stage, index) => (index === stageIndex ? { ...stage, title } : stage))
+        draftStage: { ...prev.draftStage, title }
       }));
       return;
     }
@@ -377,7 +389,18 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
   const addStage = (mode: 'create' | 'edit') => {
     if (mode === 'create') {
-      setPathForm((prev) => ({ ...prev, stages: [...prev.stages, createStageForm(prev.stages.length)] }));
+      setPathForm((prev) => {
+        if (prev.draftStage.selectedCourseIds.length === 0) {
+          showToast('Select at least one course before adding a stage.', 'error');
+          return prev;
+        }
+        const nextStages = [...prev.stages, prev.draftStage];
+        return {
+          ...prev,
+          stages: nextStages,
+          draftStage: createStageForm(nextStages.length)
+        };
+      });
       return;
     }
     setEditForm((prev) => ({ ...prev, stages: [...prev.stages, createStageForm(prev.stages.length)] }));
@@ -385,10 +408,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
   const removeStage = (mode: 'create' | 'edit', stageIndex: number) => {
     if (mode === 'create') {
-      setPathForm((prev) => {
-        const next = prev.stages.filter((_, index) => index !== stageIndex);
-        return { ...prev, stages: next.length > 0 ? next : [createStageForm(0)] };
-      });
+      setPathForm((prev) => ({
+        ...prev,
+        draftStage: createStageForm(prev.stages.length)
+      }));
       return;
     }
     setEditForm((prev) => {
@@ -485,6 +508,99 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     </div>
   );
 
+  const renderCreateStageBuilder = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
+        <div className="flex items-end gap-2">
+          <Input
+            label="Stage Name"
+            value={pathForm.draftStage.title}
+            onChange={(event) => updateStageTitle('create', 0, event.target.value)}
+            required
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            onClick={() => addStage('create')}
+            className="self-end border-slate-400 text-slate-900 hover:bg-slate-200"
+          >
+            Add Stage
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-medium text-slate-700 mb-2">Select Courses</p>
+            <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+              {courses.map((course) => (
+                <label
+                  key={`${course.id}-create-${pathForm.draftStage.stageId}`}
+                  className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={pathForm.draftStage.selectedCourseIds.includes(course.id)}
+                    onChange={() => toggleCourse(0, course.id, 'create')}
+                  />
+                  <span className="text-sm">
+                    <span className="block font-medium text-slate-900">{course.title}</span>
+                    <span className="block text-xs text-slate-500">{course.description}</span>
+                    <span className="block text-xs text-slate-600">
+                      {course.deliveryMode === 'ONLINE'
+                        ? `Online${course.videoUrl ? ' | Video available' : ''}`
+                        : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-slate-700 mb-2">Course Order in Stage</p>
+            <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+              {pathForm.draftStage.selectedCourseIds.length === 0 ? (
+                <p className="text-sm text-slate-500 p-2">Select courses to define order for this stage.</p>
+              ) : (
+                pathForm.draftStage.selectedCourseIds.map((courseId, courseIndex) => {
+                  const course = courses.find((item) => item.id === courseId);
+                  return (
+                    <div
+                      key={`${courseId}-create-${pathForm.draftStage.stageId}-order`}
+                      className="p-2 rounded border border-slate-200 bg-white"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-slate-900">
+                          {courseIndex + 1}. {course?.title || courseId}
+                        </p>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            className="p-1 rounded hover:bg-slate-100"
+                            onClick={() => moveCourse(0, courseIndex, 'up', 'create')}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="p-1 rounded hover:bg-slate-100"
+                            onClick={() => moveCourse(0, courseIndex, 'down', 'create')}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const handleAssign = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setAssignLoading(true);
@@ -534,53 +650,104 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       </div>
 
       {section === 'create' ? (
-        <Card title="Create Learning Path">
-          <form className="space-y-4" onSubmit={handleCreatePath}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Title"
-                value={pathForm.title}
-                onChange={(event) => setPathForm((prev) => ({ ...prev, title: event.target.value }))}
-                required
-              />
-              <Select
-                label="Category"
-                value={pathForm.category}
-                onChange={(event) =>
-                  setPathForm((prev) => ({ ...prev, category: event.target.value as Category }))
-                }
-                options={[
-                  { value: 'PUBLIC', label: 'Public' },
-                  { value: 'SEMI_RESTRICTED', label: 'Semi Restricted' },
-                  { value: 'RESTRICTED', label: 'Restricted' }
-                ]}
-              />
-              <Input
-                label="Total Duration"
-                value={pathForm.totalDuration}
-                onChange={(event) =>
-                  setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }))
-                }
-                placeholder="e.g. 4yr"
-                required
-              />
-              <Input
-                label="Description"
-                value={pathForm.description}
-                onChange={(event) =>
-                  setPathForm((prev) => ({ ...prev, description: event.target.value }))
-                }
-                required
-              />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <Card title="Learning Path Preview">
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
+                <p className="font-semibold text-slate-900">
+                  {pathForm.title.trim() || 'Untitled Learning Path'}
+                </p>
+                <p className="text-sm text-slate-600 mt-1">
+                  {pathForm.description.trim() || 'Add a description to preview details.'}
+                </p>
+                <p className="text-xs text-slate-500 mt-2">
+                  {pathForm.category.replace('_', ' ')} | {pathForm.totalDuration || 'Duration not set'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800 mb-2">Stages & Courses</p>
+                <div className="space-y-2">
+                  {pathForm.stages.length === 0 ? (
+                    <p className="text-sm text-slate-500">No stages added yet.</p>
+                  ) : (
+                    pathForm.stages.map((stage, stageIndex) => (
+                      <div
+                        key={`preview-${stage.stageId}`}
+                        className="p-2 rounded border border-slate-200 bg-white text-sm text-slate-800"
+                      >
+                        <p className="font-semibold text-slate-900">
+                          Stage {stageIndex + 1}: {stage.title || `Stage ${stageIndex + 1}`}
+                        </p>
+                        <div className="mt-1 space-y-1">
+                          {stage.selectedCourseIds.length === 0 ? (
+                            <p className="text-xs text-slate-500">No courses selected.</p>
+                          ) : (
+                            stage.selectedCourseIds.map((courseId, courseIndex) => {
+                              const course = courses.find((item) => item.id === courseId);
+                              return (
+                                <p key={`preview-${stage.stageId}-${courseId}`} className="text-slate-700">
+                                  {courseIndex + 1}. {course?.title || courseId}
+                                </p>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
+          </Card>
 
-            {renderCourseSelector(pathForm.stages, 'create')}
+          <Card title="Create Learning Path">
+            <form className="space-y-4" onSubmit={handleCreatePath}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Title"
+                  value={pathForm.title}
+                  onChange={(event) => setPathForm((prev) => ({ ...prev, title: event.target.value }))}
+                  required
+                />
+                <Select
+                  label="Category"
+                  value={pathForm.category}
+                  onChange={(event) =>
+                    setPathForm((prev) => ({ ...prev, category: event.target.value as Category }))
+                  }
+                  options={[
+                    { value: 'PUBLIC', label: 'Public' },
+                    { value: 'SEMI_RESTRICTED', label: 'Semi Restricted' },
+                    { value: 'RESTRICTED', label: 'Restricted' }
+                  ]}
+                />
+                <Input
+                  label="Total Duration"
+                  value={pathForm.totalDuration}
+                  onChange={(event) =>
+                    setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }))
+                  }
+                  placeholder="e.g. 4yr"
+                  required
+                />
+                <Input
+                  label="Description"
+                  value={pathForm.description}
+                  onChange={(event) =>
+                    setPathForm((prev) => ({ ...prev, description: event.target.value }))
+                  }
+                  required
+                />
+              </div>
 
-            <Button type="submit" isLoading={pathFormLoading}>
-              Create Path
-            </Button>
-          </form>
-        </Card>
+              {renderCreateStageBuilder()}
+
+              <Button type="submit" isLoading={pathFormLoading}>
+                Create Path
+              </Button>
+            </form>
+          </Card>
+        </div>
       ) : null}
 
       {section === 'assign' ? (

@@ -5,7 +5,9 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/useAuth';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminLearnersPage } from './pages/admin/AdminLearnersPage';
+import { AdminLearnerDetailsPage } from './pages/admin/AdminLearnerDetailsPage';
 import { AdminLearningPathsPage } from './pages/admin/AdminLearningPathsPage';
+import { AdminLearningPathDetailsPage } from './pages/admin/AdminLearningPathDetailsPage';
 import { LearningAdminDashboard } from './pages/learning-admin/LearningAdminDashboard';
 import { LearningPathManagement } from './pages/learning-admin/LearningPathManagement';
 import { CertificateCustomizationPage } from './pages/learning-admin/CertificateCustomizationPage';
@@ -124,6 +126,14 @@ export function App() {
               }
             />
             <Route
+              path="admin/learners/:principalId"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminLearnerDetailsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="admin/accounts"
               element={
                 <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
@@ -136,6 +146,14 @@ export function App() {
               element={
                 <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
                   <AdminLearningPathsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/learning-paths/:id"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminLearningPathDetailsPage />
                 </ProtectedRoute>
               }
             />
