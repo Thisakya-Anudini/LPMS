@@ -46,16 +46,41 @@ export function Sidebar({
           label: 'Dashboard'
         },
         {
-          to: '/learning-admin/paths',
+          isHeader: true,
+          label: 'Learning Paths',
+        
+        },
+        {
+          to: '/learning-admin/paths/create',
+          icon: ChevronRight,
+          label: 'Create LP',
+          isSubmenu: true
+        },
+        {
+          to: '/learning-admin/paths/assign',
+          icon: ChevronRight,
+          label: 'Assign Enrollments',
+          isSubmenu: true
+        },
+        {
+          to: '/learning-admin/paths/manage',
           icon: BookOpen,
-          label: 'Learning Paths'
+          label: 'Manage LPs',
+          isSubmenu: true
+        },
+        {
+          to: '/learning-admin/certificates',
+          icon: ChevronRight,
+          label: 'Certificate Customization',
+          isSubmenu: true
         }];
 
       case 'EMPLOYEE':
         return [
           {
-            isHeader: true,
-            label: 'Learning Dashboard',
+            to: '/learner',
+                icon: UserCog,
+                label: 'Learner Dashboard'
           
           },
           {
@@ -76,6 +101,40 @@ export function Sidebar({
             label: 'Certificates',
             isSubmenu: true
           },
+          ...(user.isLearningAdmin
+            ? [
+              {
+                to: '/learning-admin',
+                icon: UserCog,
+                label: 'Learning Admin Dashboard'
+              },
+              
+              {
+                to: '/learning-admin/paths/create',
+                icon: ChevronRight,
+                label: 'Create LP',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/paths/assign',
+                icon: ChevronRight,
+                label: 'Assign Enrollments',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/paths/manage',
+                icon: ChevronRight,
+                label: 'Manage LPs',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/certificates',
+                icon: ChevronRight,
+                label: 'Certificate Customization',
+                isSubmenu: true
+              }
+            ]
+            : []),
           ...(user.isSupervisor
             ? [{
               to: '/supervisor',
@@ -117,9 +176,7 @@ export function Sidebar({
         </div>
 
         <div className="px-3 py-6">
-          <div className="mb-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Menu
-          </div>
+          
           <nav className="space-y-1">
             {links.map((link) =>
             link.isHeader ? (

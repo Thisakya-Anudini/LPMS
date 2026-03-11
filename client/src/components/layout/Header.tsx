@@ -153,7 +153,7 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
     : '';
   const displayRoleLabel = roleLabel === 'Employee' ? 'Learner' : roleLabel;
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_38%,#3faa45_68%,#3faa45_100%)] px-4 lg:px-8 shadow-md">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] px-4 lg:px-8 shadow-md">
       <div className="flex items-center">
         <button
           onClick={onMenuClick}

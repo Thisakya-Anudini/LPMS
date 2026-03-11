@@ -23,7 +23,8 @@ export const signAccessToken = (principal) => jwt.sign(
     mustChangePassword: principal.mustChangePassword,
     authSource: principal.authSource,
     employeeNo: principal.employeeNo,
-    isSupervisor: principal.isSupervisor
+    isSupervisor: principal.isSupervisor,
+    isLearningAdmin: principal.isLearningAdmin
   },
   getSecret(),
   { expiresIn: ACCESS_TTL, issuer: TOKEN_ISSUER }
@@ -40,6 +41,7 @@ export const signRefreshToken = (principal, tokenId) => jwt.sign(
     authSource: principal.authSource,
     employeeNo: principal.employeeNo,
     isSupervisor: principal.isSupervisor,
+    isLearningAdmin: principal.isLearningAdmin,
     tokenId
   },
   getSecret(),

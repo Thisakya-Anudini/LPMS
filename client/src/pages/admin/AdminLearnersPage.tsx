@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { superAdminApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
@@ -42,6 +42,9 @@ export function AdminLearnersPage() {
   const [selectedLearnerPaths, setSelectedLearnerPaths] = useState<LearnerPath[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [employeeNoSearch, setEmployeeNoSearch] = useState('');
+  const [nameSearch, setNameSearch] = useState('');
+  const [designationFilter, setDesignationFilter] = useState('ALL');
 
   const loadLearners = useCallback(async () => {
     try {
@@ -93,6 +96,32 @@ export function AdminLearnersPage() {
     setSelectedLearnerPaths([]);
   };
 
+  const designationOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        learners
+          .map((learner) => (learner.designation || '').trim())
+          .filter((value) => value.length > 0)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [learners]);
+
+  const filteredLearners = useMemo(() => {
+    const employeeNoTerm = employeeNoSearch.trim().toLowerCase();
+    const nameTerm = nameSearch.trim().toLowerCase();
+
+    return learners.filter((learner) => {
+      const byEmployeeNo =
+        !employeeNoTerm || learner.employee_number.toLowerCase().includes(employeeNoTerm);
+      const byName = !nameTerm || learner.name.toLowerCase().includes(nameTerm);
+      const byDesignation =
+        designationFilter === 'ALL' || learner.designation === designationFilter;
+
+      return byEmployeeNo && byName && byDesignation;
+    });
+  }, [designationFilter, employeeNoSearch, learners, nameSearch]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -101,6 +130,41 @@ export function AdminLearnersPage() {
       </div>
 
       <Card title="All Learners">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Search by Employee No</label>
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="e.g. 011338"
+              value={employeeNoSearch}
+              onChange={(event) => setEmployeeNoSearch(event.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Search by Name</label>
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="e.g. Tennakoon"
+              value={nameSearch}
+              onChange={(event) => setNameSearch(event.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Filter by Designation</label>
+            <select
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+              value={designationFilter}
+              onChange={(event) => setDesignationFilter(event.target.value)}
+            >
+              {designationOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -117,12 +181,12 @@ export function AdminLearnersPage() {
                 <tr>
                   <td colSpan={5} className="px-3 py-3 text-slate-500">Loading learners...</td>
                 </tr>
-              ) : learners.length === 0 ? (
+              ) : filteredLearners.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3 py-3 text-slate-500">No learners found.</td>
+                  <td colSpan={5} className="px-3 py-3 text-slate-500">No learners match current filters.</td>
                 </tr>
               ) : (
-                learners.map((learner) => (
+                filteredLearners.map((learner) => (
                   <tr
                     key={learner.principal_id}
                     className="hover:bg-slate-50 cursor-pointer"

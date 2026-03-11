@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ShieldCheck, UserCheck, Users } from 'lucide-react';
-import { userApi } from '../../api/lpmsApi';
+import { superAdminApi, userApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
-import { Select } from '../../components/ui/Select';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
@@ -14,6 +13,16 @@ type UserRow = {
   email: string;
   role: 'SUPER_ADMIN' | 'LEARNING_ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
   is_active: boolean;
+};
+
+type LearnerRow = {
+  principal_id: string;
+  name: string;
+  email: string;
+  employee_number: string;
+  designation: string;
+  grade_name: string;
+  is_learning_admin: boolean;
 };
 
 const roleSections: {
@@ -29,13 +38,6 @@ const roleSections: {
     panelClass: 'border-blue-200 bg-blue-50/40',
     headingClass: 'text-blue-800',
     headRowClass: 'bg-blue-100/80 text-blue-900'
-  },
-  {
-    key: 'LEARNING_ADMIN',
-    label: 'Learning Admins',
-    panelClass: 'border-blue-200 bg-blue-50/40',
-    headingClass: 'text-blue-800',
-    headRowClass: 'bg-blue-100/80 text-blue-900'
   }
 ];
 
@@ -43,13 +45,14 @@ const initialUserForm = {
   name: '',
   email: '',
   password: '',
-  role: 'LEARNING_ADMIN' as 'SUPER_ADMIN' | 'LEARNING_ADMIN'
+  role: 'SUPER_ADMIN'
 };
 
 export function AdminDashboard() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [learners, setLearners] = useState<LearnerRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [userForm, setUserForm] = useState(initialUserForm);
@@ -66,6 +69,8 @@ export function AdminDashboard() {
 
       const response = await userApi.listUsers(token);
       setUsers(response.users);
+      const learnerResponse = await superAdminApi.getLearners(token);
+      setLearners(learnerResponse.learners);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load users.', 'error');
     } finally {
@@ -78,7 +83,7 @@ export function AdminDashboard() {
   }, [loadUsers]);
 
   const activeUsers = users.filter((user) => user.is_active).length;
-  const employeeUsers = users.filter((user) => user.role === 'EMPLOYEE').length;
+  const assignedLearningAdmins = learners.filter((learner) => learner.is_learning_admin).length;
   const usersByRole = useMemo(
     () =>
       roleSections.map((section) => ({
@@ -98,7 +103,7 @@ export function AdminDashboard() {
         return;
       }
 
-      await userApi.createUser(token, userForm);
+      await userApi.createUser(token, { ...userForm, role: 'SUPER_ADMIN' });
       showToast('User account created successfully.', 'success');
       setUserForm(initialUserForm);
       await loadUsers();
@@ -125,6 +130,27 @@ export function AdminDashboard() {
       await loadUsers();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to deactivate account.', 'error');
+    }
+  };
+
+  const handleAssignLearningAdmin = async (employeeNumber: string, shouldAssign: boolean) => {
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      if (shouldAssign) {
+        await superAdminApi.assignLearningAdmin(token, employeeNumber);
+        showToast('Learner assigned as Learning Admin.', 'success');
+      } else {
+        await superAdminApi.removeLearningAdmin(token, employeeNumber);
+        showToast('Learning Admin access removed.', 'success');
+      }
+      await loadUsers();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to update Learning Admin assignment.', 'error');
     }
   };
 
@@ -159,7 +185,16 @@ export function AdminDashboard() {
             <ShieldCheck className="h-5 w-5 text-amber-600" />
             <div>
               <p className="text-sm text-slate-500">Learners (ERP/AD)</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : employeeUsers}</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : learners.length}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="h-5 w-5 text-indigo-600" />
+            <div>
+              <p className="text-sm text-slate-500">Assigned Learning Admins</p>
+              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : assignedLearningAdmins}</p>
             </div>
           </div>
         </Card>
@@ -188,28 +223,66 @@ export function AdminDashboard() {
               onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}
               required
             />
-            <Select
-              label="Role"
-              value={userForm.role}
-              onChange={(event) =>
-                setUserForm((prev) => ({
-                  ...prev,
-                  role: event.target.value as 'SUPER_ADMIN' | 'LEARNING_ADMIN'
-                }))
-              }
-              options={[
-                { value: 'LEARNING_ADMIN', label: 'Learning Admin' },
-                { value: 'SUPER_ADMIN', label: 'Super Admin' }
-              ]}
-            />
           </div>
           <p className="text-xs text-slate-500">
-            Learner and learner-supervisor credentials are managed via ERP/AD integration mock service.
+            Only system Super Admin accounts are created here. Learning Admin access is assigned to existing learners below.
           </p>
           <Button type="submit" isLoading={userFormLoading}>
-            Create User
+            Create Super Admin
           </Button>
         </form>
+      </Card>
+
+      <Card title="Assign Learning Admin Access">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left border-b border-slate-200 bg-slate-50">
+                <th className="py-2 px-3 font-semibold">Learner</th>
+                <th className="py-2 px-3 font-semibold">Employee No</th>
+                <th className="py-2 px-3 font-semibold">Designation</th>
+                <th className="py-2 px-3 font-semibold">Learning Admin</th>
+              </tr>
+            </thead>
+            <tbody>
+              {learners.map((learner) => (
+                <tr key={learner.principal_id} className="border-b border-slate-100">
+                  <td className="py-2 px-3">
+                    <p className="font-medium text-slate-900">{learner.name}</p>
+                    <p className="text-xs text-slate-500">{learner.email}</p>
+                  </td>
+                  <td className="py-2 px-3">{learner.employee_number}</td>
+                  <td className="py-2 px-3">{learner.designation || '-'}</td>
+                  <td className="py-2 px-3">
+                    {learner.is_learning_admin ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleAssignLearningAdmin(learner.employee_number, false)}
+                      >
+                        Remove
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => handleAssignLearningAdmin(learner.employee_number, true)}
+                      >
+                        Assign
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {learners.length === 0 ? (
+                <tr>
+                  <td className="py-3 px-3 text-slate-500" colSpan={4}>
+                    No learners available.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
       <Card title="Recent Users">

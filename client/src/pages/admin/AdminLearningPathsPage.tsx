@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import { learningApi } from '../../api/lpmsApi';
+import { learningApi, superAdminApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ProgressBar } from '../../components/ui/ProgressBar';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -31,10 +32,31 @@ export function AdminLearningPathsPage() {
     category: string;
     total_duration: string;
     status: string;
-    stages: Array<{ id: string; title: string; stage_order: number }>;
+    stages: Array<{
+      id: string;
+      title: string;
+      stage_order: number;
+      courses?: Array<{ course_id: string; title: string; course_order: number }>;
+    }>;
   } | null>(null);
+  const [pathEnrollments, setPathEnrollments] = useState<
+    Array<{
+      enrollment_id: string;
+      status: string;
+      progress: number;
+      enrolled_at: string;
+      completed_at?: string;
+      principal_id: string;
+      name: string;
+      email: string;
+      employee_number: string;
+      designation: string;
+      grade_name: string;
+    }>
+  >([]);
   const [filter, setFilter] = useState<CategoryFilter>('ALL');
   const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const [popupSection, setPopupSection] = useState<'DETAILS' | 'ENROLLMENTS'>('DETAILS');
 
   const loadPaths = useCallback(async () => {
     try {
@@ -74,8 +96,12 @@ export function AdminLearningPathsPage() {
         showToast('Session expired. Please login again.', 'error');
         return;
       }
-      const response = await learningApi.getLearningPathById(token, pathId);
-      setPathDetail(response.learningPath);
+      const [detailResponse, enrollmentsResponse] = await Promise.all([
+        learningApi.getLearningPathById(token, pathId),
+        superAdminApi.getLearningPathEnrollments(token, pathId)
+      ]);
+      setPathDetail(detailResponse.learningPath);
+      setPathEnrollments(enrollmentsResponse.enrollments);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load learning path details.', 'error');
     } finally {
@@ -87,13 +113,15 @@ export function AdminLearningPathsPage() {
     setIsPopupOpen(false);
     setSelectedPathId(null);
     setPathDetail(null);
+    setPathEnrollments([]);
+    setPopupSection('DETAILS');
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Learning Paths</h1>
-        <p className="text-slate-500">Browse learning paths and inspect included course details.</p>
+        <p className="text-slate-500">Browse learning paths, included courses, and enrolled learner progress.</p>
       </div>
 
       <Card title="All Learning Paths">
@@ -176,6 +204,31 @@ export function AdminLearningPathsPage() {
                 <p className="text-sm text-slate-500">Select a learning path to view details and courses.</p>
               ) : (
                 <div className="space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setPopupSection('DETAILS')}
+                      className={`px-3 py-1.5 rounded-md text-sm border ${
+                        popupSection === 'DETAILS'
+                          ? 'bg-blue-100 border-blue-300 text-blue-800'
+                          : 'bg-white border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      Learning Path Details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPopupSection('ENROLLMENTS')}
+                      className={`px-3 py-1.5 rounded-md text-sm border ${
+                        popupSection === 'ENROLLMENTS'
+                          ? 'bg-blue-100 border-blue-300 text-blue-800'
+                          : 'bg-white border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      Enrolled Learners & Progress
+                    </button>
+                  </div>
+
                   <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
                     <p className="font-medium text-slate-900">{pathDetail.title}</p>
                     <p className="text-sm text-slate-600 mt-1">{pathDetail.description}</p>
@@ -183,22 +236,66 @@ export function AdminLearningPathsPage() {
                       {pathDetail.category.replace('_', ' ')} | {pathDetail.total_duration} | {pathDetail.status}
                     </p>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800 mb-2">Courses</p>
-                    <div className="space-y-2">
-                      {pathDetail.stages.length === 0 ? (
-                        <p className="text-sm text-slate-500">No courses found for this learning path.</p>
+                  {popupSection === 'DETAILS' ? (
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 mb-2">Courses</p>
+                      <div className="space-y-2">
+                        {pathDetail.stages.length === 0 ? (
+                          <p className="text-sm text-slate-500">No courses found for this learning path.</p>
+                        ) : (
+                          pathDetail.stages
+                            .sort((a, b) => a.stage_order - b.stage_order)
+                            .map((stage) => (
+                              <div key={stage.id} className="p-2 rounded border border-slate-200 bg-white text-sm text-slate-800">
+                                <p className="font-semibold text-slate-900">
+                                  Stage {stage.stage_order}: {stage.title}
+                                </p>
+                                <div className="mt-1 space-y-1">
+                                  {(stage.courses || [])
+                                    .sort((a, b) => a.course_order - b.course_order)
+                                    .map((course) => (
+                                      <p key={course.course_id} className="text-slate-700">
+                                        {course.course_order}. {course.title}
+                                      </p>
+                                    ))}
+                                </div>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800 mb-2">Enrolled Learners & Progress</p>
+                      {pathEnrollments.length === 0 ? (
+                        <p className="text-sm text-slate-500">No learners enrolled in this learning path yet.</p>
                       ) : (
-                        pathDetail.stages
-                          .sort((a, b) => a.stage_order - b.stage_order)
-                          .map((stage) => (
-                            <div key={stage.id} className="p-2 rounded border border-slate-200 bg-white text-sm text-slate-800">
-                              {stage.stage_order}. {stage.title}
+                        <div className="space-y-2">
+                          {pathEnrollments.map((enrollment) => (
+                            <div
+                              key={enrollment.enrollment_id}
+                              className="p-3 rounded-lg border border-slate-200 bg-slate-50"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div>
+                                  <p className="font-medium text-slate-900">
+                                    {enrollment.name} ({enrollment.employee_number})
+                                  </p>
+                                  <p className="text-xs text-slate-500">
+                                    {enrollment.designation || '-'} | {enrollment.email}
+                                  </p>
+                                </div>
+                                <span className="text-xs text-slate-600">
+                                  {enrollment.status.replace('_', ' ')}
+                                </span>
+                              </div>
+                              <ProgressBar progress={Number(enrollment.progress || 0)} showLabel size="sm" />
                             </div>
-                          ))
+                          ))}
+                        </div>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

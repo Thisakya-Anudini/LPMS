@@ -92,6 +92,12 @@ export const userApi = {
       token,
       body: payload
     });
+  },
+  deleteUser(token: string, userId: string) {
+    return request<{ user: { id: string; name: string; email: string; role: Role; is_active: boolean } }>(`/users/${userId}`, {
+      method: 'DELETE',
+      token
+    });
   }
 };
 
@@ -112,7 +118,18 @@ const requestBlob = async (path: string, token: string) => {
 
 export const learningApi = {
   getLearningPaths(token: string) {
-    return request<{ learningPaths: Array<{ id: string; title: string; description: string; category: string; total_duration: string; status: string }> }>('/learning-paths', { token });
+    return request<{
+      learningPaths: Array<{
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        total_duration: string;
+        status: string;
+        certificate_signer_name?: string | null;
+        certificate_signer_title?: string | null;
+      }>;
+    }>('/learning-paths', { token });
   },
   getLearningPathById(token: string, id: string) {
     return request<{
@@ -123,7 +140,19 @@ export const learningApi = {
         category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
         total_duration: string;
         status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
-        stages: Array<{ id: string; title: string; stage_order: number }>;
+        certificate_signer_name?: string | null;
+        certificate_signer_title?: string | null;
+        stages: Array<{
+          id: string;
+          title: string;
+          stage_order: number;
+          courses?: Array<{
+            course_id: string;
+            title: string;
+            course_order: number;
+            delivery_mode?: 'ONLINE' | 'PHYSICAL';
+          }>;
+        }>;
       };
     }>(`/learning-paths/${id}`, { token });
   },
@@ -134,7 +163,11 @@ export const learningApi = {
       description: string;
       category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
       totalDuration: string;
-      stages?: Array<{ title: string; order: number }>;
+      stages?: Array<{
+        title: string;
+        order: number;
+        courses?: Array<{ courseId: string; order: number }>;
+      }>;
     }
   ) {
     return request<{ learningPath: { id: string } }>('/learning-paths', {
@@ -152,7 +185,11 @@ export const learningApi = {
       category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
       totalDuration: string;
       status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
-      stages?: Array<{ title: string; order: number }>;
+      stages?: Array<{
+        title: string;
+        order: number;
+        courses?: Array<{ courseId: string; order: number }>;
+      }>;
     }
   ) {
     return request<{ learningPath: { id: string } }>(`/learning-paths/${id}`, {
@@ -188,6 +225,36 @@ export const learningApi = {
         totalCertificates: number;
       };
     }>('/reports/summary', { token });
+  },
+  getCertificateSettings(token: string) {
+    return request<{
+      learningPaths: Array<{
+        id: string;
+        title: string;
+        certificate_signer_name: string | null;
+        certificate_signer_title: string | null;
+        updated_at: string;
+      }>;
+    }>('/certificate-settings', { token });
+  },
+  updateCertificateSignature(
+    token: string,
+    learningPathId: string,
+    payload: { signerName: string; signerTitle: string }
+  ) {
+    return request<{
+      learningPath: {
+        id: string;
+        title: string;
+        certificate_signer_name: string;
+        certificate_signer_title: string;
+        updated_at: string;
+      };
+    }>(`/learning-paths/${learningPathId}/certificate-signature`, {
+      method: 'PUT',
+      token,
+      body: payload
+    });
   }
 };
 
@@ -356,7 +423,15 @@ export const integrationApi = {
 export const courseApi = {
   getAllCourses(token: string) {
     return request<{
-      courses: Array<{ id: string; title: string; description: string; durationHours: number }>;
+      courses: Array<{
+        id: string;
+        title: string;
+        description: string;
+        durationHours: number;
+        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        videoUrl: string | null;
+        venue: string | null;
+      }>;
     }>('/courses', { token });
   }
 };
@@ -396,7 +471,11 @@ export const learnerApi = {
         courseId: string;
         title: string;
         order: number;
+        stageTitle: string | null;
+        stageOrder: number;
         isCompleted: boolean;
+        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        venue: string | null;
         videoUrl: string | null;
       }>;
     }>(`/learner/my-paths/${enrollmentId}/courses`, { token });
@@ -421,7 +500,11 @@ export const learnerApi = {
         courseId: string;
         title: string;
         order: number;
+        stageTitle: string | null;
+        stageOrder: number;
         isCompleted: boolean;
+        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        venue: string | null;
         videoUrl: string | null;
       }>;
     }>(`/learner/my-paths/${enrollmentId}/courses/${courseId}`, {
@@ -502,12 +585,6 @@ export const learnerApi = {
       token,
       body: payload
     });
-  },
-  deleteUser(token: string, userId: string) {
-    return request<{ user: { id: string; name: string; email: string; role: Role; is_active: boolean } }>(`/users/${userId}`, {
-      method: 'DELETE',
-      token
-    });
   }
 };
 
@@ -522,6 +599,7 @@ export const superAdminApi = {
         employee_number: string;
         designation: string;
         grade_name: string;
+        is_learning_admin: boolean;
         total_learning_paths: number;
         completed_learning_paths: number;
         average_progress: string;
@@ -544,6 +622,52 @@ export const superAdminApi = {
         total_duration: string;
       }>;
     }>(`/users/learners/${principalId}/learning-paths`, { token });
+  },
+  getLearningPathEnrollments(token: string, learningPathId: string) {
+    return request<{
+      learningPath: {
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        total_duration: string;
+        status: string;
+      };
+      enrollments: Array<{
+        enrollment_id: string;
+        status: string;
+        progress: number;
+        enrolled_at: string;
+        completed_at?: string;
+        principal_id: string;
+        name: string;
+        email: string;
+        employee_number: string;
+        designation: string;
+        grade_name: string;
+      }>;
+    }>(`/users/learning-paths/${learningPathId}/enrollments`, { token });
+  },
+  assignLearningAdmin(token: string, employeeNumber: string) {
+    return request<{
+      assignment: {
+        employeeNumber: string;
+        principalId: string;
+        name: string;
+        email: string;
+        isLearningAdmin: boolean;
+      };
+    }>('/users/learning-admin-assignments', {
+      method: 'POST',
+      token,
+      body: { employeeNumber }
+    });
+  },
+  removeLearningAdmin(token: string, employeeNumber: string) {
+    return request<{ success: boolean }>(`/users/learning-admin-assignments/${employeeNumber}`, {
+      method: 'DELETE',
+      token
+    });
   }
 };
 

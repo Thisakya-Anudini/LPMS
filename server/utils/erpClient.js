@@ -4,17 +4,10 @@ import {
   ERP_MOCK_SUBORDINATES
 } from '../mock/erpMockData.js';
 
-const DEFAULT_ERP_SUBORDINATES_URL =
-  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeSubordinatesDetailsList';
-const DEFAULT_ERP_DETAILS_URL =
-  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeDetailsForServiceNo';
-const DEFAULT_ERP_HIERARCHY_URL =
-  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeDetailsHierarchy';
-
 const getErpConfig = () => ({
-  subordinatesUrl: process.env.ERP_SUBORDINATES_URL || DEFAULT_ERP_SUBORDINATES_URL,
-  detailsUrl: process.env.ERP_DETAILS_URL || DEFAULT_ERP_DETAILS_URL,
-  hierarchyUrl: process.env.ERP_HIERARCHY_URL || DEFAULT_ERP_HIERARCHY_URL,
+  subordinatesUrl: process.env.ERP_SUBORDINATES_URL,
+  detailsUrl: process.env.ERP_DETAILS_URL,
+  hierarchyUrl: process.env.ERP_HIERARCHY_URL,
   username: process.env.ERP_USERNAME,
   password: process.env.ERP_PASSWORD,
   useMock: String(process.env.ERP_USE_MOCK || 'true').toLowerCase() === 'true',
@@ -80,6 +73,9 @@ const getMockHierarchy = (employeeNo) =>
   buildSuccessResponse('Success', ERP_MOCK_HIERARCHIES[employeeNo] || []);
 
 const postErp = async ({ url, username, password, body }) => {
+  if (!url) {
+    throw new Error('ERP URL is not configured. Set ERP_*_URL in .env.');
+  }
   if (!username || !password) {
     throw new Error('ERP credentials are not configured (ERP_USERNAME / ERP_PASSWORD).');
   }

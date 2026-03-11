@@ -4,9 +4,11 @@ import {
   createLearningPath,
   deleteLearningPath,
   getAssignableEmployees,
+  getCertificateCustomizationPaths,
   getLearningSummaryReport,
   getLearningPathById,
   getLearningPaths,
+  updateLearningPathCertificateSignature,
   updateLearningPath
 } from '../controllers/learningAdminController.js';
 import { protect, requireRole } from '../middlewares/authMiddleware.js';
@@ -36,5 +38,13 @@ router.post(
 );
 router.get('/employees', protect, requireRole([ROLES.LEARNING_ADMIN]), getAssignableEmployees);
 router.get('/reports/summary', protect, requireRole([ROLES.LEARNING_ADMIN]), getLearningSummaryReport);
+router.get('/certificate-settings', protect, requireRole([ROLES.LEARNING_ADMIN]), getCertificateCustomizationPaths);
+router.put(
+  '/learning-paths/:id/certificate-signature',
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  requireFields(['signerName', 'signerTitle']),
+  updateLearningPathCertificateSignature
+);
 
 export default router;
