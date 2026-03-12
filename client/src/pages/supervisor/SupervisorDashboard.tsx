@@ -10,10 +10,8 @@ import { useToast } from '../../contexts/useToast';
 type TeamMember = {
   employeeNumber: string;
   name: string;
-  email: string;
-  total_enrollments: string;
-  avg_progress: string;
-  completed_count: string;
+  designation: string;
+  gradeName: string;
 };
 
 type LearningPath = {
@@ -39,32 +37,47 @@ export function SupervisorDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-
-  const [selectedPathId, setSelectedPathId] = useState('');
-  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
-  const [enrollLoading, setEnrollLoading] = useState(false);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
+  const [selectedLearningPathId, setSelectedLearningPathId] = useState('');
+  const [selectedTeamNumbers, setSelectedTeamNumbers] = useState<string[]>([]);
+  const [employeeNoSearch, setEmployeeNoSearch] = useState('');
+  const [nameSearch, setNameSearch] = useState('');
+  const [designationFilter, setDesignationFilter] = useState('ALL');
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-
       const token = await getAccessToken();
       if (!token) {
         showToast('Session expired. Please login again.', 'error');
         return;
       }
 
-      const [progressResponse, approvalResponse, pathResponse] = await Promise.all([
-        supervisorApi.getTeamProgress(token),
-        supervisorApi.getApprovals(token),
-        supervisorApi.getSupervisorPaths(token)
+      const [teamResponse, learningPathResponse] = await Promise.all([
+        learnerApi.getTeam(token),
+        learnerApi.getLearningPaths(token)
       ]);
-      setRows(progressResponse.progress);
-      setApprovals(approvalResponse.approvals);
-      setPaths(pathResponse.learningPaths);
+
+      if (!teamResponse.isSupervisor) {
+        const message = 'Supervisor access is not enabled for this account.';
+        setError(message);
+        showToast(message, 'error');
+        setTeam([]);
+        setLearningPaths([]);
+        return;
+      }
+
+      setTeam(
+        (teamResponse.team || []).map((row) => ({
+          employeeNumber: String(row.employeeNumber || ''),
+          name: getEmployeeDisplayName(row),
+          designation: String(row.designation || '-'),
+          gradeName: String(row.gradeName || '-')
+        }))
+      );
+      setLearningPaths(learningPathResponse.learningPaths);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load supervisor dashboard.';
       setError(message);
@@ -78,22 +91,35 @@ export function SupervisorDashboard() {
     load();
   }, [load]);
 
-  // ✅ Stats (UNFILTERED)
   const stats = useMemo(() => {
-    const memberCount = rows.length;
-    const avgProgress = memberCount
-      ? Math.round(rows.reduce((sum, row) => sum + Number(row.avg_progress), 0) / memberCount)
-      : 0;
-    const completed = rows.reduce((sum, row) => sum + Number(row.completed_count), 0);
-    return { memberCount, avgProgress, completed };
-  }, [rows]);
+    return {
+      teamCount: team.length,
+      availablePathCount: learningPaths.length
+    };
+  }, [team.length, learningPaths.length]);
 
-  const pendingApprovals = approvals.filter((approval) => approval.approval_status === 'PENDING');
-  const teamMembers: TeamMember[] = rows.map((row) => ({
-    principal_id: row.principal_id,
-    name: row.name,
-    email: row.email
-  }));
+  const designationOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        team
+          .map((member) => member.designation.trim())
+          .filter((value) => value.length > 0 && value !== '-')
+      )
+    ).sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [team]);
+
+  const filteredTeam = useMemo(() => {
+    const employeeNoTerm = employeeNoSearch.trim().toLowerCase();
+    const nameTerm = nameSearch.trim().toLowerCase();
+
+    return team.filter((member) => {
+      const byEmployeeNo = !employeeNoTerm || member.employeeNumber.toLowerCase().includes(employeeNoTerm);
+      const byName = !nameTerm || member.name.toLowerCase().includes(nameTerm);
+      const byDesignation = designationFilter === 'ALL' || member.designation === designationFilter;
+      return byEmployeeNo && byName && byDesignation;
+    });
+  }, [designationFilter, employeeNoSearch, nameSearch, team]);
 
   const toggleTeamMember = (employeeNumber: string) => {
     setSelectedTeamNumbers((prev) =>
@@ -103,38 +129,28 @@ export function SupervisorDashboard() {
     );
   };
 
-  const handleApprovalAction = async (enrollmentId: string, action: 'approve' | 'reject') => {
-    setActionLoadingId(enrollmentId);
-    setError(null);
-    setMessage(null);
-    try {
-      const token = await getAccessToken();
-      if (!token) {
-        setError('Session expired. Please login again.');
-        return;
-      }
-
-      if (action === 'approve') {
-        await supervisorApi.approveEnrollment(token, enrollmentId);
-        setMessage('Enrollment approved successfully.');
-      } else {
-        await supervisorApi.rejectEnrollment(token, enrollmentId);
-        setMessage('Enrollment rejected successfully.');
-      }
-
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update approval.');
-    } finally {
-      setActionLoadingId(null);
-    }
+  const selectAllFiltered = () => {
+    const filteredNumbers = filteredTeam.map((member) => member.employeeNumber);
+    setSelectedTeamNumbers((prev) => {
+      const next = new Set(prev);
+      filteredNumbers.forEach((employeeNumber) => next.add(employeeNumber));
+      return Array.from(next);
+    });
   };
 
-  const handleEnrollTeam = async () => {
-    setEnrollLoading(true);
-    setError(null);
-    setMessage(null);
+  const clearAllFiltered = () => {
+    const filteredSet = new Set(filteredTeam.map((member) => member.employeeNumber));
+    setSelectedTeamNumbers((prev) => prev.filter((employeeNumber) => !filteredSet.has(employeeNumber)));
+  };
+
+  const handleAssign = async () => {
+    if (!selectedLearningPathId || selectedTeamNumbers.length === 0) {
+      return;
+    }
+
     try {
+      setSaving(true);
+      setError(null);
       const token = await getAccessToken();
       if (!token) {
         showToast('Session expired. Please login again.', 'error');
@@ -145,9 +161,9 @@ export function SupervisorDashboard() {
         employeeNumbers: selectedTeamNumbers,
         learningPathIds: [selectedLearningPathId]
       });
-      setMessage('Team members enrolled successfully.');
-      setSelectedTeamIds([]);
-      setSelectedPathId('');
+      showToast(`Assigned learning path to ${result.assignedCount} learner(s).`, 'success');
+      setSelectedTeamNumbers([]);
+      setSelectedLearningPathId('');
       await load();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to assign learning paths to learners.', 'error');
@@ -158,32 +174,25 @@ export function SupervisorDashboard() {
 
   return (
     <div className="space-y-6">
-
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Team Overview</h1>
-        <p className="text-slate-500">Track progress and manage semi-restricted enrollments.</p>
+        <h1 className="text-2xl font-bold text-slate-900">Supervisor Dashboard</h1>
+        <p className="text-slate-500">Assign learning paths to team learners under your supervision.</p>
       </div>
 
       {error ? <Card className="text-red-600">{error}</Card> : null}
-      {message ? <Card className="text-green-700">{message}</Card> : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-4">
-          <p className="text-sm text-slate-500">Team Members</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.memberCount}</p>
+          <p className="text-sm text-slate-500">Team Learners</p>
+          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.teamCount}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-slate-500">Average Progress</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : `${stats.avgProgress}%`}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Completed Enrollments</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.completed}</p>
+          <p className="text-sm text-slate-500">Available Learning Paths</p>
+          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.availablePathCount}</p>
         </Card>
       </div>
 
-      <Card title="Enroll Team (Semi-Restricted Paths)">
+      <Card title="Assign Learning Paths">
         <div className="space-y-4">
           <Select
             label="Learning Path"
@@ -194,23 +203,69 @@ export function SupervisorDashboard() {
               ...learningPaths.map((path) => ({ value: path.id, label: path.title }))
             ]}
           />
-          <div className="max-h-56 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-            {teamMembers.map((member) => (
-              <label key={member.principal_id} className="flex items-start gap-3 p-2 rounded hover:bg-slate-50">
-                <input
-                  type="checkbox"
-                  checked={selectedTeamIds.includes(member.principal_id)}
-                  onChange={() => toggleTeamMember(member.principal_id)}
-                />
-                <span>
-                  <span className="block text-sm font-medium text-slate-900">{member.name}</span>
-                  <span className="block text-xs text-slate-500">{member.email}</span>
-                </span>
-              </label>
-            ))}
-            {teamMembers.length === 0 ? (
-              <p className="text-sm text-slate-500 p-2">No team members found.</p>
-            ) : null}
+
+          <div className="max-h-80 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-2 border-b border-slate-200 mb-2">
+              <Input
+                label="Search by Employee No"
+                value={employeeNoSearch}
+                onChange={(event) => setEmployeeNoSearch(event.target.value)}
+                placeholder="e.g. 011338"
+              />
+              <Input
+                label="Search by Name"
+                value={nameSearch}
+                onChange={(event) => setNameSearch(event.target.value)}
+                placeholder="e.g. Tennakoon"
+              />
+              <Select
+                label="Filter by Designation"
+                value={designationFilter}
+                onChange={(event) => setDesignationFilter(event.target.value)}
+                options={designationOptions.map((option) => ({ value: option, label: option }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between px-2 pb-2">
+              <p className="text-xs text-slate-500">
+                Filtered learners: {filteredTeam.length} | Selected: {selectedTeamNumbers.length}
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={selectAllFiltered} disabled={filteredTeam.length === 0}>
+                  Select All Filtered
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={clearAllFiltered} disabled={filteredTeam.length === 0}>
+                  Clear Filtered
+                </Button>
+              </div>
+            </div>
+
+            {team.length === 0 ? (
+              <p className="text-sm text-slate-500 p-2">No learners found under this supervisor.</p>
+            ) : filteredTeam.length === 0 ? (
+              <p className="text-sm text-slate-500 p-2">No learners match current filters.</p>
+            ) : (
+              filteredTeam.map((member) => (
+                <label
+                  key={member.employeeNumber}
+                  className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedTeamNumbers.includes(member.employeeNumber)}
+                    onChange={() => toggleTeamMember(member.employeeNumber)}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-slate-900">
+                      {member.name} ({member.employeeNumber})
+                    </span>
+                    <span className="block text-xs text-slate-500">
+                      {member.designation} | {member.gradeName}
+                    </span>
+                  </span>
+                </label>
+              ))
+            )}
           </div>
 
           <Button
@@ -220,65 +275,6 @@ export function SupervisorDashboard() {
           >
             Assign Learning Path to Selected Learners
           </Button>
-        </div>
-      </Card>
-
-      <Card title="Pending Approvals">
-        <div className="space-y-3">
-          {pendingApprovals.length === 0 ? (
-            <p className="text-sm text-slate-500">No pending approvals.</p>
-          ) : (
-            pendingApprovals.map((approval) => (
-              <div
-                key={approval.id}
-                className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
-              >
-                <div>
-                  <p className="font-medium text-slate-900">{approval.learning_path_title}</p>
-                  <p className="text-xs text-slate-500">
-                    {approval.name} ({approval.email}) | Progress {approval.progress}%
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleApprovalAction(approval.id, 'approve')}
-                    isLoading={actionLoadingId === approval.id}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleApprovalAction(approval.id, 'reject')}
-                    isLoading={actionLoadingId === approval.id}
-                  >
-                    Reject
-                  </Button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </Card>
-
-      <Card title="Team Progress">
-        <div className="space-y-5">
-          {rows.map((row) => (
-            <div key={row.principal_id}>
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <p className="font-medium text-slate-900">{row.name}</p>
-                  <p className="text-xs text-slate-500">{row.email}</p>
-                </div>
-                <p className="text-xs text-slate-500">{row.completed_count} completed</p>
-              </div>
-              <ProgressBar progress={Number(row.avg_progress)} showLabel size="sm" />
-            </div>
-          ))}
-          {!loading && rows.length === 0 ? (
-            <p className="text-sm text-slate-500">No team progress records found.</p>
-          ) : null}
         </div>
       </Card>
     </div>

@@ -1,13 +1,21 @@
-const DEFAULT_ERP_SUBORDINATES_URL =
-  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeSubordinatesDetailsList';
+import {
+  ERP_MOCK_DETAILS,
+  ERP_MOCK_HIERARCHIES,
+  ERP_MOCK_SUBORDINATES
+} from '../mock/erpMockData.js';
 
-const getEprConfig = () => {
-  const url = process.env.ERP_SUBORDINATES_URL || DEFAULT_ERP_SUBORDINATES_URL;
-  const username = process.env.ERP_USERNAME;
-  const password = process.env.ERP_PASSWORD;
-
-  return { url, username, password };
-};
+const getErpConfig = () => ({
+  subordinatesUrl: process.env.ERP_SUBORDINATES_URL,
+  detailsUrl: process.env.ERP_DETAILS_URL,
+  hierarchyUrl: process.env.ERP_HIERARCHY_URL,
+  username: process.env.ERP_USERNAME,
+  password: process.env.ERP_PASSWORD,
+  useMock: String(process.env.ERP_USE_MOCK || 'true').toLowerCase() === 'true',
+  fallbackToMock:
+    String(process.env.ERP_FALLBACK_TO_MOCK || 'true').toLowerCase() === 'true',
+  defaultCostCenterCode: process.env.ERP_DEFAULT_COST_CENTER_CODE || '6221',
+  defaultOrganizationId: process.env.ERP_DEFAULT_ORGANIZATION_ID || 'string'
+});
 
 const parseErpResponse = (rawText) => {
   if (!rawText) {
