@@ -7,6 +7,10 @@ export type User = {
   role: Role;
   principalType: 'USER' | 'EMPLOYEE';
   mustChangePassword: boolean;
+  authSource?: 'SYSTEM' | 'MOCK_LEARNER';
+  employeeNo?: string | null;
+  isSupervisor?: boolean;
+  isLearningAdmin?: boolean;
 };
 
 export type Course = {

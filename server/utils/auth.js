@@ -18,7 +18,13 @@ export const signAccessToken = (principal) => jwt.sign(
     sub: principal.id,
     email: principal.email,
     role: principal.role,
-    principalType: principal.principalType
+    principalType: principal.principalType,
+    name: principal.name,
+    mustChangePassword: principal.mustChangePassword,
+    authSource: principal.authSource,
+    employeeNo: principal.employeeNo,
+    isSupervisor: principal.isSupervisor,
+    isLearningAdmin: principal.isLearningAdmin
   },
   getSecret(),
   { expiresIn: ACCESS_TTL, issuer: TOKEN_ISSUER }
@@ -27,8 +33,15 @@ export const signAccessToken = (principal) => jwt.sign(
 export const signRefreshToken = (principal, tokenId) => jwt.sign(
   {
     sub: principal.id,
+    email: principal.email,
+    name: principal.name,
     role: principal.role,
     principalType: principal.principalType,
+    mustChangePassword: principal.mustChangePassword,
+    authSource: principal.authSource,
+    employeeNo: principal.employeeNo,
+    isSupervisor: principal.isSupervisor,
+    isLearningAdmin: principal.isLearningAdmin,
     tokenId
   },
   getSecret(),

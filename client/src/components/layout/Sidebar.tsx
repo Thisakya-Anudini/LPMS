@@ -5,7 +5,8 @@ import {
   LayoutDashboard,
   Users,
   BookOpen,
-  GraduationCap,
+  ChevronRight,
+  UserCog,
   Shield } from
 'lucide-react';
 export function Sidebar({
@@ -22,14 +23,19 @@ export function Sidebar({
       case 'SUPER_ADMIN':
         return [
         {
-          to: '/admin',
-          icon: LayoutDashboard,
-          label: 'Dashboard'
+          to: '/admin/learners',
+          icon: Users,
+          label: 'Learners'
         },
         {
-          to: '/admin/user-access',
-          icon: Users,
-          label: 'User Access'
+          to: '/admin/accounts',
+          icon: LayoutDashboard,
+          label: 'System Accounts'
+        },
+        {
+          to: '/admin/learning-paths',
+          icon: BookOpen,
+          label: 'Learning Paths'
         }];
 
       case 'LEARNING_ADMIN':
@@ -40,31 +46,103 @@ export function Sidebar({
           label: 'Dashboard'
         },
         {
-          to: '/learning-admin/paths',
-          icon: BookOpen,
-          label: 'Learning Paths'
-        }];
-
-      case 'SUPERVISOR':
-        return [
+          isHeader: true,
+          label: 'Learning Paths',
+        
+        },
         {
-          to: '/supervisor',
-          icon: LayoutDashboard,
-          label: 'Dashboard'
+          to: '/learning-admin/paths/create',
+          icon: ChevronRight,
+          label: 'Create LP',
+          isSubmenu: true
+        },
+        {
+          to: '/learning-admin/paths/assign',
+          icon: ChevronRight,
+          label: 'Assign Enrollments',
+          isSubmenu: true
+        },
+        {
+          to: '/learning-admin/paths/manage',
+          icon: BookOpen,
+          label: 'Manage LPs',
+          isSubmenu: true
+        },
+        {
+          to: '/learning-admin/certificates',
+          icon: ChevronRight,
+          label: 'Certificate Customization',
+          isSubmenu: true
         }];
 
       case 'EMPLOYEE':
         return [
-        {
-          to: '/employee',
-          icon: LayoutDashboard,
-          label: 'Dashboard'
-        },
-        {
-          to: '/employee/my-paths',
-          icon: GraduationCap,
-          label: 'My Learning'
-        }];
+          {
+            to: '/learner',
+                icon: UserCog,
+                label: 'Learner Dashboard'
+          
+          },
+          {
+            to: '/learner/my-progress',
+            icon: ChevronRight,
+            label: 'My Learning Progress',
+            isSubmenu: true
+          },
+          {
+            to: '/learner/public-paths',
+            icon: ChevronRight,
+            label: 'Public Learning Paths',
+            isSubmenu: true
+          },
+          {
+            to: '/learner/certificates',
+            icon: ChevronRight,
+            label: 'Certificates',
+            isSubmenu: true
+          },
+          ...(user.isLearningAdmin
+            ? [
+              {
+                to: '/learning-admin',
+                icon: UserCog,
+                label: 'Learning Admin Dashboard'
+              },
+              
+              {
+                to: '/learning-admin/paths/create',
+                icon: ChevronRight,
+                label: 'Create LP',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/paths/assign',
+                icon: ChevronRight,
+                label: 'Assign Enrollments',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/paths/manage',
+                icon: ChevronRight,
+                label: 'Manage LPs',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/certificates',
+                icon: ChevronRight,
+                label: 'Certificate Customization',
+                isSubmenu: true
+              }
+            ]
+            : []),
+          ...(user.isSupervisor
+            ? [{
+              to: '/supervisor',
+              icon: UserCog,
+              label: 'Supervisor Dashboard'
+            }]
+            : [])
+        ];
 
       default:
         return [];
@@ -98,24 +176,32 @@ export function Sidebar({
         </div>
 
         <div className="px-3 py-6">
-          <div className="mb-2 px-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            Menu
-          </div>
+          
           <nav className="space-y-1">
             {links.map((link) =>
-            <NavLink
-              key={`${link.to}-${link.label}`}
-              to={link.to}
-              end
-              onClick={() => window.innerWidth < 1024 && onClose()}
-              className={({ isActive }) => `
+            link.isHeader ? (
+              <div
+                key={`hdr-${link.label}`}
+                className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-300"
+              >
+                {link.label}
+              </div>
+            ) : (
+              <NavLink
+                key={`${link.to}-${link.label}`}
+                to={link.to}
+                end
+                onClick={() => window.innerWidth < 1024 && onClose()}
+                className={({ isActive }) => `
                   flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                  ${link.isSubmenu ? 'ml-3' : ''}
                   ${isActive ? 'bg-slate-200 text-slate-900' : 'text-white hover:bg-white/15'}
                 `}>
 
                 <link.icon className="mr-3 h-5 w-5" />
                 {link.label}
               </NavLink>
+            )
             )}
           </nav>
         </div>
@@ -127,9 +213,6 @@ export function Sidebar({
             </div>
             <div className="ml-3">
               <p className="text-sm font-medium text-white">{user.name}</p>
-              <p className="text-xs text-slate-400 capitalize">
-                {user.role.replace('_', ' ').toLowerCase()}
-              </p>
             </div>
           </div>
         </div>

@@ -1,8 +1,8 @@
-const DEFAULT_ERP_EMPLOYEE_DETAILS_URL =
-  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeDetailsForServiceNo';
+const DEFAULT_ERP_SUBORDINATES_URL =
+  'https://oneidentitytest.slt.com.lk/ERPAPIs/api/ERPData/GetEmployeeSubordinatesDetailsList';
 
 const getEprConfig = () => {
-  const url = process.env.ERP_EMPLOYEE_DETAILS_URL || DEFAULT_ERP_EMPLOYEE_DETAILS_URL;
+  const url = process.env.ERP_SUBORDINATES_URL || DEFAULT_ERP_SUBORDINATES_URL;
   const username = process.env.ERP_USERNAME;
   const password = process.env.ERP_PASSWORD;
 
@@ -21,8 +21,53 @@ const parseErpResponse = (rawText) => {
   }
 };
 
-export const fetchEmployeeSubordinates = async (employeeNo) => {
-  const { url, username, password } = getEprConfig();
+const buildSuccessResponse = (message, data) => ({
+  success: true,
+  message,
+  data
+});
+
+const getMockEmployeeDetailsForServiceNo = (employeeNo) => {
+  const detail = ERP_MOCK_DETAILS[employeeNo] || {
+    employeeNumber: employeeNo,
+    employeeInitials: 'M',
+    employeeSurname: `Learner ${employeeNo}`,
+    designation: 'Engineer',
+    employeeName: `Mock Learner ${employeeNo}`,
+    gradeName: 'A.5.',
+    employeeSupervisorNumber: '',
+    email: `${employeeNo}@mock.slt.com.lk`,
+    mobileNo: null,
+    dateOfBirth: null,
+    gender: null,
+    orgName: 'Mock Organization',
+    empSection: 'Mock Section',
+    empDivision: 'Mock Division',
+    empGroup: 'Mock Group',
+    sectionHead: null,
+    divisionHead: null,
+    groupHead: null,
+    fingerScanLocation: null,
+    employeeCostCode: '6221',
+    employeeCostCentreName: 'Mock Cost Centre'
+  };
+
+  return buildSuccessResponse('Operation completed successfully', [detail]);
+};
+
+const getMockSubordinates = (employeeNo) =>
+  buildSuccessResponse(
+    'Operation completed successfully',
+    ERP_MOCK_SUBORDINATES[employeeNo] || []
+  );
+
+const getMockHierarchy = (employeeNo) =>
+  buildSuccessResponse('Success', ERP_MOCK_HIERARCHIES[employeeNo] || []);
+
+const postErp = async ({ url, username, password, body }) => {
+  if (!url) {
+    throw new Error('ERP URL is not configured. Set ERP_*_URL in .env.');
+  }
   if (!username || !password) {
     throw new Error('ERP credentials are not configured (ERP_USERNAME / ERP_PASSWORD).');
   }
@@ -39,7 +84,7 @@ export const fetchEmployeeSubordinates = async (employeeNo) => {
         Password: password,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ employeeNo }),
+      body: JSON.stringify(body),
       signal: controller.signal
     });
 
@@ -53,8 +98,79 @@ export const fetchEmployeeSubordinates = async (employeeNo) => {
       throw error;
     }
 
-    return data;
+    return data || buildSuccessResponse('Success', []);
   } finally {
     clearTimeout(timeout);
+  }
+};
+
+export const fetchEmployeeSubordinates = async (employeeNo) => {
+  const config = getErpConfig();
+  if (config.useMock) {
+    return getMockSubordinates(employeeNo);
+  }
+
+  try {
+    return await postErp({
+      url: config.subordinatesUrl,
+      username: config.username,
+      password: config.password,
+      body: { employeeNo }
+    });
+  } catch (error) {
+    if (config.fallbackToMock) {
+      return getMockSubordinates(employeeNo);
+    }
+    throw error;
+  }
+};
+
+export const fetchEmployeeDetailsForServiceNo = async (employeeNo) => {
+  const config = getErpConfig();
+  if (config.useMock) {
+    return getMockEmployeeDetailsForServiceNo(employeeNo);
+  }
+
+  try {
+    return await postErp({
+      url: config.detailsUrl,
+      username: config.username,
+      password: config.password,
+      body: {
+        organizationID: config.defaultOrganizationId,
+        costCenterCode: config.defaultCostCenterCode,
+        employeeNo
+      }
+    });
+  } catch (error) {
+    if (config.fallbackToMock) {
+      return getMockEmployeeDetailsForServiceNo(employeeNo);
+    }
+    throw error;
+  }
+};
+
+export const fetchEmployeeHierarchy = async (employeeNo) => {
+  const config = getErpConfig();
+  if (config.useMock) {
+    return getMockHierarchy(employeeNo);
+  }
+
+  try {
+    return await postErp({
+      url: config.hierarchyUrl,
+      username: config.username,
+      password: config.password,
+      body: {
+        organizationID: config.defaultOrganizationId,
+        costCenterCode: config.defaultCostCenterCode,
+        employeeNo
+      }
+    });
+  } catch (error) {
+    if (config.fallbackToMock) {
+      return getMockHierarchy(employeeNo);
+    }
+    throw error;
   }
 };
