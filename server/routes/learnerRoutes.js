@@ -11,6 +11,7 @@ import {
   getLearningPaths,
   getLearnerProfile,
   getLearnerTeam,
+  getPublicLearningPathById,
   selfEnrollPublicLearningPath,
   updateLearnerCourseCompletion
 } from '../controllers/learnerController.js';
@@ -32,6 +33,7 @@ router.put(
   updateLearnerCourseCompletion
 );
 router.get('/public-paths', protect, requireRole([ROLES.EMPLOYEE]), getPublicLearningPaths);
+router.get('/public-paths/:id', protect, requireRole([ROLES.EMPLOYEE]), getPublicLearningPathById);
 router.get('/team', protect, requireRole([ROLES.EMPLOYEE]), getLearnerTeam);
 router.post(
   '/self-enroll',

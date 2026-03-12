@@ -1,5 +1,5 @@
 import { sendError } from '../utils/http.js';
-import { getMockCourseVideoUrlByTitle, MOCK_COURSES } from '../utils/mockLearningStore.js';
+import { getMockCourseByTitle, getMockCourseVideoUrlByTitle, MOCK_COURSES } from '../utils/mockLearningStore.js';
 import bcrypt from 'bcryptjs';
 import {
   fetchEmployeeDetailsForServiceNo,
@@ -54,14 +54,29 @@ const recalculateEnrollmentFromStageProgress = async ({
 }) => {
   const aggregate = await query(
     `
+      WITH scoped_courses AS (
+        SELECT sc.course_id AS activity_id
+        FROM learning_path_stages lps
+        JOIN stage_courses sc ON sc.stage_id = lps.id
+        WHERE lps.learning_path_id = $2
+        UNION ALL
+        SELECT lps.id AS activity_id
+        FROM learning_path_stages lps
+        WHERE lps.learning_path_id = $2
+          AND NOT EXISTS (
+            SELECT 1
+            FROM stage_courses sc2
+            JOIN learning_path_stages lps2 ON lps2.id = sc2.stage_id
+            WHERE lps2.learning_path_id = $2
+          )
+      )
       SELECT
         COUNT(*)::int AS total_courses,
         COUNT(*) FILTER (WHERE COALESCE(ep.progress, 0) >= 100)::int AS completed_courses
-      FROM learning_path_stages lps
+      FROM scoped_courses sc
       LEFT JOIN enrollment_progress ep
         ON ep.enrollment_id = $1
-       AND ep.stage_id = lps.id
-      WHERE lps.learning_path_id = $2
+       AND (ep.course_id = sc.activity_id OR ep.stage_id = sc.activity_id)
     `,
     [enrollmentId, learningPathId]
   );
@@ -527,6 +542,83 @@ export const getPublicLearningPaths = async (req, res) => {
   return res.status(200).json({ learningPaths: result.rows });
 };
 
+export const getPublicLearningPathById = async (req, res) => {
+  const { id } = req.params;
+
+  const pathResult = await query(
+    `
+      SELECT id, title, description, category, total_duration, status, created_at
+      FROM learning_paths
+      WHERE id = $1
+        AND is_deleted = FALSE
+        AND status = 'ACTIVE'
+        AND category = 'PUBLIC'
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  const learningPath = pathResult.rows[0];
+  if (!learningPath) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+  }
+
+  const stageResult = await query(
+    `
+      SELECT id, title, stage_order
+      FROM learning_path_stages
+      WHERE learning_path_id = $1
+      ORDER BY stage_order ASC
+    `,
+    [id]
+  );
+
+  const stageCourseResult = await query(
+    `
+      SELECT
+        lps.id AS stage_id,
+        c.id AS course_id,
+        c.title AS course_title,
+        sc.course_order,
+        CASE
+          WHEN c.type = 'ONLINE' THEN 'ONLINE'
+          ELSE 'PHYSICAL'
+        END AS delivery_mode
+      FROM learning_path_stages lps
+      JOIN stage_courses sc ON sc.stage_id = lps.id
+      JOIN courses c ON c.id = sc.course_id
+      WHERE lps.learning_path_id = $1
+      ORDER BY lps.stage_order ASC, sc.course_order ASC
+    `,
+    [id]
+  );
+
+  const stageCoursesByStageId = new Map();
+  for (const row of stageCourseResult.rows) {
+    if (!stageCoursesByStageId.has(row.stage_id)) {
+      stageCoursesByStageId.set(row.stage_id, []);
+    }
+    stageCoursesByStageId.get(row.stage_id).push({
+      course_id: row.course_id,
+      title: row.course_title,
+      course_order: Number(row.course_order),
+      delivery_mode: row.delivery_mode
+    });
+  }
+
+  const structuredStages = stageResult.rows.map((stageRow) => ({
+    ...stageRow,
+    courses: stageCoursesByStageId.get(stageRow.id) || []
+  }));
+
+  return res.status(200).json({
+    learningPath: {
+      ...learningPath,
+      stages: structuredStages
+    }
+  });
+};
+
 export const selfEnrollPublicLearningPath = async (req, res) => {
   const employeeNo = normalizeEmployeeNo(req.user, req.body);
   if (!employeeNo) {
@@ -634,27 +726,41 @@ export const getLearnerPathCourses = async (req, res) => {
   const coursesResult = await query(
     `
       SELECT
-        lps.id AS course_id,
-        lps.title,
-        lps.stage_order AS course_order,
+        COALESCE(c.id, lps.id) AS course_id,
+        COALESCE(c.title, lps.title) AS title,
+        lps.title AS stage_title,
+        lps.stage_order,
+        COALESCE(sc.course_order, lps.stage_order) AS course_order,
         COALESCE(ep.progress, 0) >= 100 AS is_completed
       FROM learning_path_stages lps
+      LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+      LEFT JOIN courses c ON c.id = sc.course_id
       LEFT JOIN enrollment_progress ep
         ON ep.enrollment_id = $1
-       AND ep.stage_id = lps.id
+       AND (
+         ep.course_id = COALESCE(c.id, lps.id)
+         OR ep.stage_id = COALESCE(c.id, lps.id)
+       )
       WHERE lps.learning_path_id = $2
-      ORDER BY lps.stage_order ASC
+      ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
     `,
     [enrollmentId, enrollment.learning_path_id]
   );
 
-  const courses = coursesResult.rows.map((row) => ({
-    courseId: row.course_id,
-    title: row.title,
-    order: Number(row.course_order),
-    isCompleted: Boolean(row.is_completed),
-    videoUrl: getMockCourseVideoUrlByTitle(row.title)
-  }));
+  const courses = coursesResult.rows.map((row) => {
+    const mockCourse = getMockCourseByTitle(row.title);
+    return {
+      courseId: row.course_id,
+      title: row.title,
+      order: Number(row.course_order),
+      stageTitle: row.stage_title,
+      stageOrder: Number(row.stage_order),
+      isCompleted: Boolean(row.is_completed),
+      deliveryMode: mockCourse?.deliveryMode || 'ONLINE',
+      venue: mockCourse?.venue || null,
+      videoUrl: getMockCourseVideoUrlByTitle(row.title)
+    };
+  });
   const totalCourses = courses.length;
   const completedCourses = courses.filter((course) => course.isCompleted).length;
 
@@ -708,10 +814,14 @@ export const updateLearnerCourseCompletion = async (req, res) => {
 
   const stageCheck = await query(
     `
-      SELECT id
-      FROM learning_path_stages
-      WHERE id = $1
-        AND learning_path_id = $2
+      SELECT
+        COALESCE(c.id, lps.id) AS activity_id,
+        c.id IS NOT NULL AS is_catalog_course
+      FROM learning_path_stages lps
+      LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+      LEFT JOIN courses c ON c.id = sc.course_id
+      WHERE lps.learning_path_id = $2
+        AND COALESCE(c.id, lps.id) = $1
       LIMIT 1
     `,
     [courseId, enrollment.learning_path_id]
@@ -720,15 +830,30 @@ export const updateLearnerCourseCompletion = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'Course not found in this learning path.');
   }
 
-  await query(
-    `
-      INSERT INTO enrollment_progress (enrollment_id, stage_id, progress, created_at)
-      VALUES ($1, $2, $3, NOW())
-      ON CONFLICT (enrollment_id, stage_id) WHERE stage_id IS NOT NULL
-      DO UPDATE SET progress = EXCLUDED.progress, created_at = NOW()
-    `,
-    [enrollmentId, courseId, completed ? 100 : 0]
-  );
+  const match = stageCheck.rows[0];
+  const isCatalogCourse = Boolean(match.is_catalog_course);
+
+  if (isCatalogCourse) {
+    await query(
+      `
+        INSERT INTO enrollment_progress (enrollment_id, stage_id, course_id, progress, created_at)
+        VALUES ($1, NULL, $2, $3, NOW())
+        ON CONFLICT (enrollment_id, course_id) WHERE course_id IS NOT NULL
+        DO UPDATE SET progress = EXCLUDED.progress, created_at = NOW()
+      `,
+      [enrollmentId, courseId, completed ? 100 : 0]
+    );
+  } else {
+    await query(
+      `
+        INSERT INTO enrollment_progress (enrollment_id, stage_id, course_id, progress, created_at)
+        VALUES ($1, $2, NULL, $3, NOW())
+        ON CONFLICT (enrollment_id, stage_id) WHERE stage_id IS NOT NULL
+        DO UPDATE SET progress = EXCLUDED.progress, created_at = NOW()
+      `,
+      [enrollmentId, courseId, completed ? 100 : 0]
+    );
+  }
 
   const previousProgress = Number(enrollment.progress || 0);
   const computed = await recalculateEnrollmentFromStageProgress({
@@ -761,16 +886,23 @@ export const updateLearnerCourseCompletion = async (req, res) => {
   const coursesResult = await query(
     `
       SELECT
-        lps.id AS course_id,
-        lps.title,
-        lps.stage_order AS course_order,
+        COALESCE(c.id, lps.id) AS course_id,
+        COALESCE(c.title, lps.title) AS title,
+        lps.title AS stage_title,
+        lps.stage_order,
+        COALESCE(sc.course_order, lps.stage_order) AS course_order,
         COALESCE(ep.progress, 0) >= 100 AS is_completed
       FROM learning_path_stages lps
+      LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+      LEFT JOIN courses c ON c.id = sc.course_id
       LEFT JOIN enrollment_progress ep
         ON ep.enrollment_id = $1
-       AND ep.stage_id = lps.id
+       AND (
+         ep.course_id = COALESCE(c.id, lps.id)
+         OR ep.stage_id = COALESCE(c.id, lps.id)
+       )
       WHERE lps.learning_path_id = $2
-      ORDER BY lps.stage_order ASC
+      ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
     `,
     [enrollmentId, enrollment.learning_path_id]
   );
@@ -785,13 +917,20 @@ export const updateLearnerCourseCompletion = async (req, res) => {
       totalCourses: computed.totalCourses,
       completedCourses: computed.completedCourses
     },
-    courses: coursesResult.rows.map((row) => ({
-      courseId: row.course_id,
-      title: row.title,
-      order: Number(row.course_order),
-      isCompleted: Boolean(row.is_completed),
-      videoUrl: getMockCourseVideoUrlByTitle(row.title)
-    }))
+    courses: coursesResult.rows.map((row) => {
+      const mockCourse = getMockCourseByTitle(row.title);
+      return {
+        courseId: row.course_id,
+        title: row.title,
+        order: Number(row.course_order),
+        stageTitle: row.stage_title,
+        stageOrder: Number(row.stage_order),
+        isCompleted: Boolean(row.is_completed),
+        deliveryMode: mockCourse?.deliveryMode || 'ONLINE',
+        venue: mockCourse?.venue || null,
+        videoUrl: getMockCourseVideoUrlByTitle(row.title)
+      };
+    })
   });
 };
 
@@ -855,6 +994,8 @@ export const downloadLearnerCertificate = async (req, res) => {
         lp.title AS learning_path_title,
         lp.description AS learning_path_description,
         lp.total_duration AS learning_path_duration,
+        lp.certificate_signer_name,
+        lp.certificate_signer_title,
         ap.name AS learner_name,
         en.completed_at
       FROM certificates c
@@ -881,6 +1022,8 @@ export const downloadLearnerCertificate = async (req, res) => {
   const safeTitle = String(certificate.learning_path_title || 'learning_path')
     .replace(/[^a-z0-9]+/gi, '_')
     .toLowerCase();
+  const signerName = String(certificate.certificate_signer_name || '').trim() || 'Learning Administrator';
+  const signerTitle = String(certificate.certificate_signer_title || '').trim() || 'LPMS';
 
   let PDFDocument;
   try {
@@ -934,6 +1077,19 @@ export const downloadLearnerCertificate = async (req, res) => {
   doc.text(`Issued Date: ${issuedDateText}`);
   doc.moveDown(1.5);
   doc.text('Generated by LPMS', { align: 'right' });
+  doc.moveDown(2);
+  const pageWidth = doc.page.width;
+  const rightBlockStart = pageWidth - 210;
+  doc.moveTo(rightBlockStart, doc.y).lineTo(pageWidth - 48, doc.y).stroke('#94a3b8');
+  doc.moveDown(0.3);
+  doc.fontSize(12).fillColor('#0f172a').text(signerName, rightBlockStart, doc.y, {
+    width: 162,
+    align: 'center'
+  });
+  doc.fontSize(10).fillColor('#475569').text(signerTitle, rightBlockStart, doc.y, {
+    width: 162,
+    align: 'center'
+  });
 
   doc.end();
   return undefined;

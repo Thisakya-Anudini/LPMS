@@ -19,7 +19,11 @@ type PathCourse = {
   courseId: string;
   title: string;
   order: number;
+  stageTitle: string | null;
+  stageOrder: number;
   isCompleted: boolean;
+  deliveryMode: 'ONLINE' | 'PHYSICAL';
+  venue: string | null;
   videoUrl: string | null;
 };
 
@@ -81,14 +85,40 @@ export function LearnerMyProgressPage() {
   const summary = useMemo(() => {
     const totalLearningPaths = assignedLearningPaths.length;
     const completedLearningPaths = assignedLearningPaths.filter((row) => row.status === 'COMPLETED').length;
-    const averageProgress =
-      totalLearningPaths > 0
-        ? Math.round(
-          assignedLearningPaths.reduce((sum, row) => sum + Number(row.progress), 0) / totalLearningPaths
-        )
-        : 0;
-    return { totalLearningPaths, completedLearningPaths, averageProgress };
+    const remainingLearningPaths = Math.max(totalLearningPaths - completedLearningPaths, 0);
+    return { totalLearningPaths, completedLearningPaths, remainingLearningPaths };
   }, [assignedLearningPaths]);
+
+  const groupedCoursesByStage = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { stageTitle: string; stageOrder: number; courses: PathCourse[] }
+    >();
+
+    for (const course of selectedPathCourses) {
+      const stageOrder = Number(course.stageOrder || 0);
+      const stageTitle =
+        (typeof course.stageTitle === 'string' && course.stageTitle.trim()) ||
+        `Stage ${stageOrder || 1}`;
+      const key = `${stageOrder}-${stageTitle}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          stageTitle,
+          stageOrder,
+          courses: []
+        });
+      }
+      grouped.get(key)?.courses.push(course);
+    }
+
+    return Array.from(grouped.values())
+      .sort((a, b) => a.stageOrder - b.stageOrder)
+      .map((stage) => ({
+        ...stage,
+        courses: [...stage.courses].sort((a, b) => a.order - b.order)
+      }));
+  }, [selectedPathCourses]);
 
   const openLearningPathModal = async (enrollmentId: string) => {
     try {
@@ -190,8 +220,8 @@ export function LearnerMyProgressPage() {
           <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.completedLearningPaths}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-sm text-slate-500">Average Progress</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : `${summary.averageProgress}%`}</p>
+          <p className="text-sm text-slate-500">Pending Learning Paths</p>
+          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.remainingLearningPaths}</p>
         </Card>
       </div>
 
@@ -248,36 +278,56 @@ export function LearnerMyProgressPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    {selectedPathCourses.map((course) => (
-                      <div
-                        key={course.courseId}
-                        className="flex items-start gap-3 p-3 rounded border border-slate-200 bg-white hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={course.isCompleted}
-                          disabled={courseUpdateLoadingId === course.courseId}
-                          onChange={(event) => handleToggleCourse(course, event.target.checked)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1">
-                          <span className="block text-sm font-medium text-slate-900">
-                            {course.order}. {course.title}
-                          </span>
-                          <span className="block text-xs text-slate-500">
-                            {course.isCompleted ? 'Completed' : 'Pending'}
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => course.videoUrl && window.open(course.videoUrl, '_blank', 'noopener,noreferrer')}
-                          disabled={!course.videoUrl}
-                        >
-                          Learn Now
-                        </Button>
+                  <div className="space-y-3">
+                    {groupedCoursesByStage.map((stage) => (
+                      <div key={`${stage.stageOrder}-${stage.stageTitle}`} className="space-y-2">
+                        <p className="text-sm font-semibold text-slate-800">
+                          Stage {stage.stageOrder}: {stage.stageTitle}
+                        </p>
+                        {stage.courses.map((course) => (
+                          <div
+                            key={course.courseId}
+                            className="flex items-start gap-3 p-3 rounded border border-slate-200 bg-white hover:bg-slate-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={course.isCompleted}
+                              disabled={courseUpdateLoadingId === course.courseId}
+                              onChange={(event) => handleToggleCourse(course, event.target.checked)}
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <span className="block text-sm font-medium text-slate-900">
+                                {course.order}. {course.title}
+                              </span>
+                              <span className="block text-xs text-slate-500">
+                                {course.isCompleted ? 'Completed' : 'Pending'}
+                              </span>
+                              <span className="block text-xs text-slate-500">
+                                {course.deliveryMode === 'ONLINE'
+                                  ? 'Mode: Online'
+                                  : `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`}
+                              </span>
+                            </div>
+                            {course.deliveryMode === 'ONLINE' ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  course.videoUrl && window.open(course.videoUrl, '_blank', 'noopener,noreferrer')
+                                }
+                                disabled={!course.videoUrl}
+                              >
+                                Learn Now
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-slate-500 border border-slate-200 rounded px-2 py-1">
+                                Physical Course
+                              </span>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     ))}
                     {selectedPathCourses.length === 0 ? (

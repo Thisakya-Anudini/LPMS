@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
@@ -40,6 +41,9 @@ export function SupervisorDashboard() {
   const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
   const [selectedLearningPathId, setSelectedLearningPathId] = useState('');
   const [selectedTeamNumbers, setSelectedTeamNumbers] = useState<string[]>([]);
+  const [employeeNoSearch, setEmployeeNoSearch] = useState('');
+  const [nameSearch, setNameSearch] = useState('');
+  const [designationFilter, setDesignationFilter] = useState('ALL');
 
   const load = useCallback(async () => {
     try {
@@ -94,12 +98,49 @@ export function SupervisorDashboard() {
     };
   }, [team.length, learningPaths.length]);
 
+  const designationOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        team
+          .map((member) => member.designation.trim())
+          .filter((value) => value.length > 0 && value !== '-')
+      )
+    ).sort((a, b) => a.localeCompare(b));
+    return ['ALL', ...values];
+  }, [team]);
+
+  const filteredTeam = useMemo(() => {
+    const employeeNoTerm = employeeNoSearch.trim().toLowerCase();
+    const nameTerm = nameSearch.trim().toLowerCase();
+
+    return team.filter((member) => {
+      const byEmployeeNo = !employeeNoTerm || member.employeeNumber.toLowerCase().includes(employeeNoTerm);
+      const byName = !nameTerm || member.name.toLowerCase().includes(nameTerm);
+      const byDesignation = designationFilter === 'ALL' || member.designation === designationFilter;
+      return byEmployeeNo && byName && byDesignation;
+    });
+  }, [designationFilter, employeeNoSearch, nameSearch, team]);
+
   const toggleTeamMember = (employeeNumber: string) => {
     setSelectedTeamNumbers((prev) =>
       prev.includes(employeeNumber)
         ? prev.filter((id) => id !== employeeNumber)
         : [...prev, employeeNumber]
     );
+  };
+
+  const selectAllFiltered = () => {
+    const filteredNumbers = filteredTeam.map((member) => member.employeeNumber);
+    setSelectedTeamNumbers((prev) => {
+      const next = new Set(prev);
+      filteredNumbers.forEach((employeeNumber) => next.add(employeeNumber));
+      return Array.from(next);
+    });
+  };
+
+  const clearAllFiltered = () => {
+    const filteredSet = new Set(filteredTeam.map((member) => member.employeeNumber));
+    setSelectedTeamNumbers((prev) => prev.filter((employeeNumber) => !filteredSet.has(employeeNumber)));
   };
 
   const handleAssign = async () => {
@@ -164,10 +205,47 @@ export function SupervisorDashboard() {
           />
 
           <div className="max-h-80 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-2 border-b border-slate-200 mb-2">
+              <Input
+                label="Search by Employee No"
+                value={employeeNoSearch}
+                onChange={(event) => setEmployeeNoSearch(event.target.value)}
+                placeholder="e.g. 011338"
+              />
+              <Input
+                label="Search by Name"
+                value={nameSearch}
+                onChange={(event) => setNameSearch(event.target.value)}
+                placeholder="e.g. Tennakoon"
+              />
+              <Select
+                label="Filter by Designation"
+                value={designationFilter}
+                onChange={(event) => setDesignationFilter(event.target.value)}
+                options={designationOptions.map((option) => ({ value: option, label: option }))}
+              />
+            </div>
+
+            <div className="flex items-center justify-between px-2 pb-2">
+              <p className="text-xs text-slate-500">
+                Filtered learners: {filteredTeam.length} | Selected: {selectedTeamNumbers.length}
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="outline" onClick={selectAllFiltered} disabled={filteredTeam.length === 0}>
+                  Select All Filtered
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={clearAllFiltered} disabled={filteredTeam.length === 0}>
+                  Clear Filtered
+                </Button>
+              </div>
+            </div>
+
             {team.length === 0 ? (
               <p className="text-sm text-slate-500 p-2">No learners found under this supervisor.</p>
+            ) : filteredTeam.length === 0 ? (
+              <p className="text-sm text-slate-500 p-2">No learners match current filters.</p>
             ) : (
-              team.map((member) => (
+              filteredTeam.map((member) => (
                 <label
                   key={member.employeeNumber}
                   className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"

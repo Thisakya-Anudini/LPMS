@@ -5,9 +5,12 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/useAuth';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminLearnersPage } from './pages/admin/AdminLearnersPage';
+import { AdminLearnerDetailsPage } from './pages/admin/AdminLearnerDetailsPage';
 import { AdminLearningPathsPage } from './pages/admin/AdminLearningPathsPage';
+import { AdminLearningPathDetailsPage } from './pages/admin/AdminLearningPathDetailsPage';
 import { LearningAdminDashboard } from './pages/learning-admin/LearningAdminDashboard';
 import { LearningPathManagement } from './pages/learning-admin/LearningPathManagement';
+import { CertificateCustomizationPage } from './pages/learning-admin/CertificateCustomizationPage';
 import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { Role } from './types';
@@ -72,6 +75,22 @@ function SupervisorOnlyRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function LearningAdminAccessRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const hasLearningAdminAccess =
+    user.role === 'LEARNING_ADMIN' || (user.role === 'EMPLOYEE' && Boolean(user.isLearningAdmin));
+
+  if (!hasLearningAdminAccess) {
+    return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 export function App() {
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -107,6 +126,14 @@ export function App() {
               }
             />
             <Route
+              path="admin/learners/:principalId"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminLearnerDetailsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="admin/accounts"
               element={
                 <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
@@ -122,20 +149,72 @@ export function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="admin/learning-paths/:id"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminLearningPathDetailsPage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="learning-admin"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN']}>
-                  <LearningAdminDashboard />
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <LearningAdminDashboard />
+                  </LearningAdminAccessRoute>
                 </ProtectedRoute>
               }
             />
             <Route
               path="learning-admin/paths"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN']}>
-                  <LearningPathManagement />
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <Navigate to="/learning-admin/paths/create" replace />
+                  </LearningAdminAccessRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learning-admin/paths/create"
+              element={
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <LearningPathManagement section="create" />
+                  </LearningAdminAccessRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learning-admin/paths/assign"
+              element={
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <LearningPathManagement section="assign" />
+                  </LearningAdminAccessRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learning-admin/paths/manage"
+              element={
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <LearningPathManagement section="manage" />
+                  </LearningAdminAccessRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learning-admin/certificates"
+              element={
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <CertificateCustomizationPage />
+                  </LearningAdminAccessRoute>
                 </ProtectedRoute>
               }
             />

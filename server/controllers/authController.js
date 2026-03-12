@@ -62,7 +62,8 @@ const sanitizePrincipal = (principal) => ({
   mustChangePassword: principal.mustChangePassword,
   authSource: principal.authSource || 'SYSTEM',
   employeeNo: principal.employeeNo || null,
-  isSupervisor: typeof principal.isSupervisor === 'boolean' ? principal.isSupervisor : false
+  isSupervisor: typeof principal.isSupervisor === 'boolean' ? principal.isSupervisor : false,
+  isLearningAdmin: typeof principal.isLearningAdmin === 'boolean' ? principal.isLearningAdmin : false
 });
 
 const mapLearnerName = (detailsResponse, fallbackName) => {
@@ -81,8 +82,49 @@ const mapLearnerName = (detailsResponse, fallbackName) => {
   return merged || fallbackName;
 };
 
+const hasLearningAdminAssignment = async (employeeNo) => {
+  if (!employeeNo) {
+    return false;
+  }
+
+  const assignment = await query(
+    `
+      SELECT employee_number
+      FROM learning_admin_assignments
+      WHERE employee_number = $1
+      LIMIT 1
+    `,
+    [employeeNo]
+  );
+
+  return assignment.rowCount > 0;
+};
+
+const resolveEmployeeContextByNumber = async (employeeNo) => {
+  const normalizedEmployeeNo = employeeNo ? String(employeeNo).trim() : null;
+  if (!normalizedEmployeeNo) {
+    return { employeeNo: null, isSupervisor: false, isLearningAdmin: false };
+  }
+
+  let isSupervisor = false;
+  try {
+    const subordinates = await fetchEmployeeSubordinates(normalizedEmployeeNo);
+    isSupervisor = Boolean(Array.isArray(subordinates?.data) && subordinates.data.length > 0);
+  } catch {
+    isSupervisor = false;
+  }
+
+  const isLearningAdmin = await hasLearningAdminAssignment(normalizedEmployeeNo);
+
+  return {
+    employeeNo: normalizedEmployeeNo,
+    isSupervisor,
+    isLearningAdmin
+  };
+};
+
 const resolveEmployeeContext = async (principalId) => {
-  const employeeRow = await query(
+  const employeeResult = await query(
     `
       SELECT employee_number
       FROM employees
@@ -92,22 +134,10 @@ const resolveEmployeeContext = async (principalId) => {
     [principalId]
   );
 
-  const employeeNo = employeeRow.rows[0]?.employee_number
-    ? String(employeeRow.rows[0].employee_number).trim()
+  const employeeNo = employeeResult.rows[0]?.employee_number
+    ? String(employeeResult.rows[0].employee_number).trim()
     : null;
-  if (!employeeNo) {
-    return { employeeNo: null, isSupervisor: false };
-  }
-
-  try {
-    const subordinates = await fetchEmployeeSubordinates(employeeNo);
-    return {
-      employeeNo,
-      isSupervisor: Boolean(Array.isArray(subordinates?.data) && subordinates.data.length > 0)
-    };
-  } catch {
-    return { employeeNo, isSupervisor: false };
-  }
+  return resolveEmployeeContextByNumber(employeeNo);
 };
 
 export const login = async (req, res) => {
@@ -122,13 +152,12 @@ export const login = async (req, res) => {
     }
 
     let detailsResponse = null;
-    let subordinatesResponse = null;
     try {
       detailsResponse = await fetchEmployeeDetailsForServiceNo(mockLearner.employeeNo);
-      subordinatesResponse = await fetchEmployeeSubordinates(mockLearner.employeeNo);
     } catch {
       // keep login available even if ERP temporarily fails
     }
+    const mockEmployeeContext = await resolveEmployeeContextByNumber(mockLearner.employeeNo);
 
     const normalizedPrincipal = {
       id: mockLearner.id,
@@ -138,9 +167,9 @@ export const login = async (req, res) => {
       principalType: 'EMPLOYEE',
       mustChangePassword: false,
       authSource: 'MOCK_LEARNER',
-      employeeNo: mockLearner.employeeNo,
-      isSupervisor:
-        Boolean(Array.isArray(subordinatesResponse?.data) && subordinatesResponse.data.length > 0)
+      employeeNo: mockEmployeeContext.employeeNo,
+      isSupervisor: mockEmployeeContext.isSupervisor,
+      isLearningAdmin: mockEmployeeContext.isLearningAdmin
     };
 
     const accessToken = signAccessToken(normalizedPrincipal);
@@ -163,6 +192,7 @@ export const login = async (req, res) => {
     const employeeContext = await resolveEmployeeContext(normalizedPrincipal.id);
     normalizedPrincipal.employeeNo = employeeContext.employeeNo;
     normalizedPrincipal.isSupervisor = employeeContext.isSupervisor;
+    normalizedPrincipal.isLearningAdmin = employeeContext.isLearningAdmin;
   }
   const accessToken = signAccessToken(normalizedPrincipal);
   const refreshToken = await createRefreshSession(normalizedPrincipal);
@@ -197,7 +227,8 @@ export const refresh = async (req, res) => {
       mustChangePassword: false,
       authSource: decoded.authSource,
       employeeNo: decoded.employeeNo,
-      isSupervisor: Boolean(decoded.isSupervisor)
+      isSupervisor: Boolean(decoded.isSupervisor),
+      isLearningAdmin: Boolean(decoded.isLearningAdmin)
     };
 
     const accessToken = signAccessToken(principal);
@@ -232,6 +263,12 @@ export const refresh = async (req, res) => {
     principalType: tokenRow.principal_type,
     mustChangePassword: tokenRow.must_change_password
   };
+  if (principal.role === ROLES.EMPLOYEE) {
+    const employeeContext = await resolveEmployeeContext(principal.id);
+    principal.employeeNo = employeeContext.employeeNo;
+    principal.isSupervisor = employeeContext.isSupervisor;
+    principal.isLearningAdmin = employeeContext.isLearningAdmin;
+  }
 
   const accessToken = signAccessToken(principal);
   return res.status(200).json({ accessToken });
@@ -278,7 +315,8 @@ export const me = async (req, res) => {
         mustChangePassword: false,
         authSource: req.user.authSource,
         employeeNo: req.user.employeeNo || null,
-        isSupervisor: Boolean(req.user.isSupervisor)
+        isSupervisor: Boolean(req.user.isSupervisor),
+        isLearningAdmin: Boolean(req.user.isLearningAdmin)
       }
     });
   }
@@ -298,13 +336,17 @@ export const me = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'User not found.');
   }
 
+  const mappedPrincipal = mapPrincipal(principal);
+  if (mappedPrincipal.role === ROLES.EMPLOYEE) {
+    const employeeContext = await resolveEmployeeContext(mappedPrincipal.id);
+    mappedPrincipal.employeeNo = employeeContext.employeeNo;
+    mappedPrincipal.isSupervisor = employeeContext.isSupervisor;
+    mappedPrincipal.isLearningAdmin = employeeContext.isLearningAdmin;
+  }
+
   return res.status(200).json({
     user: {
-      id: principal.id,
-      email: principal.email,
-      name: principal.name,
-      role: principal.role,
-      principalType: principal.principal_type,
+      ...sanitizePrincipal(mappedPrincipal),
       mustChangePassword: principal.must_change_password
     }
   });

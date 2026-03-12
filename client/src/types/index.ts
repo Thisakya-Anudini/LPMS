@@ -10,6 +10,7 @@ export type User = {
   authSource?: 'SYSTEM' | 'MOCK_LEARNER';
   employeeNo?: string | null;
   isSupervisor?: boolean;
+  isLearningAdmin?: boolean;
 };
 
 export type Course = {
