@@ -209,7 +209,10 @@ export const learningApi = {
   getAssignableEmployees(token: string) {
     return request<{ employees: Array<{ id: string; name: string; email: string; employee_number: string; designation: string; grade_name: string }> }>('/employees', { token });
   },
-  createEnrollments(token: string, payload: { learningPathId: string; employeePrincipalIds: string[] }) {
+  createEnrollments(
+    token: string,
+    payload: { learningPathId: string; employeePrincipalIds: string[]; notifyAll?: boolean }
+  ) {
     return request<{ enrollments: Array<{ id: string }> }>('/enrollments', {
       method: 'POST',
       token,

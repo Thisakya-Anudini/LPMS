@@ -2,6 +2,7 @@ import { query } from '../db.js';
 import { sendError } from '../utils/http.js';
 import { logAudit } from '../utils/audit.js';
 import { getMockCourseById } from '../utils/mockLearningStore.js';
+import { ensureMailerConfigured, sendLearningPathAssignmentEmail } from '../utils/mailer.js';
 
 const parseCategory = (value) => {
   const allowed = ['RESTRICTED', 'SEMI_RESTRICTED', 'PUBLIC'];
@@ -429,10 +430,18 @@ export const deleteLearningPath = async (req, res) => {
 };
 
 export const createEnrollments = async (req, res) => {
-  const { learningPathId, employeePrincipalIds } = req.body;
+  const { learningPathId, employeePrincipalIds, notifyAll } = req.body;
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
+  const shouldNotifyAll = Boolean(notifyAll);
   if (!Array.isArray(employeePrincipalIds) || employeePrincipalIds.length === 0) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'employeePrincipalIds must be a non-empty array.');
+  }
+  if (shouldNotifyAll) {
+    try {
+      ensureMailerConfigured();
+    } catch (err) {
+      return sendError(res, 500, 'EMAIL_NOT_CONFIGURED', err instanceof Error ? err.message : 'Email not configured.');
+    }
   }
 
   const inserted = [];
@@ -461,7 +470,7 @@ export const createEnrollments = async (req, res) => {
       `,
       [principalId, learningPathId]
     );
-    if (created.rowCount > 0) {
+      if (created.rowCount > 0) {
       inserted.push(created.rows[0]);
       await query(
         `
@@ -473,14 +482,44 @@ export const createEnrollments = async (req, res) => {
     }
   }
 
+  let emailFailures = 0;
+  if (shouldNotifyAll && inserted.length > 0) {
+    const principalIds = inserted.map((row) => row.principal_id);
+    const principalsResult = await query(
+      `
+        SELECT id, name, email
+        FROM auth_principals
+        WHERE id = ANY($1)
+      `,
+      [principalIds]
+    );
+    const principalMap = new Map(principalsResult.rows.map((row) => [row.id, row]));
+    const emailResults = await Promise.allSettled(
+      inserted.map((row) => {
+        const principal = principalMap.get(row.principal_id);
+        const email = principal?.email;
+        if (!email) {
+          emailFailures += 1;
+          return Promise.resolve();
+        }
+        return sendLearningPathAssignmentEmail({
+          to: email,
+          learnerName: principal?.name,
+          learningPathTitle: learningPath.title
+        });
+      })
+    );
+    emailFailures += emailResults.filter((result) => result.status === 'rejected').length;
+  }
+
   await logAudit({
     actorPrincipalId,
     action: 'CREATE_ENROLLMENTS',
     resourceType: 'ENROLLMENT',
-    metadata: { learningPathId, inserted: inserted.length }
+    metadata: { learningPathId, inserted: inserted.length, notifyAll: shouldNotifyAll }
   });
 
-  return res.status(201).json({ enrollments: inserted });
+  return res.status(201).json({ enrollments: inserted, emailFailures: shouldNotifyAll ? emailFailures : 0 });
 };
 
 export const getAssignableEmployees = async (_req, res) => {

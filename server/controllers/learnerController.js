@@ -6,6 +6,7 @@ import {
   fetchEmployeeSubordinates
 } from '../utils/erpClient.js';
 import { query } from '../db.js';
+import { sendLearningPathCompletionEmail } from '../utils/mailer.js';
 
 const normalizeEmployeeNo = (user, requestBody = {}) => {
   if (user.employeeNo) {
@@ -881,6 +882,28 @@ export const updateLearnerCourseCompletion = async (req, res) => {
       `,
       [principalId]
     );
+
+    try {
+      const principalResult = await query(
+        `
+          SELECT name, email
+          FROM auth_principals
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [principalId]
+      );
+      const principal = principalResult.rows[0];
+      if (principal?.email) {
+        await sendLearningPathCompletionEmail({
+          to: principal.email,
+          learnerName: principal?.name,
+          learningPathTitle: enrollment.title
+        });
+      }
+    } catch (error) {
+      console.warn('Failed to send learning path completion email.', error);
+    }
   }
 
   const coursesResult = await query(

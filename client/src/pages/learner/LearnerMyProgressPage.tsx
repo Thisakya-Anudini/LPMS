@@ -46,6 +46,7 @@ export function LearnerMyProgressPage() {
     totalCourses: number;
     completedCourses: number;
   } | null>(null);
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -151,6 +152,7 @@ export function LearnerMyProgressPage() {
     setSelectedEnrollmentId(null);
     setSelectedPathCourses([]);
     setSelectedPathMeta(null);
+    setShowCompletionPopup(false);
   };
 
   const handleToggleCourse = async (course: PathCourse, completed: boolean) => {
@@ -341,7 +343,51 @@ export function LearnerMyProgressPage() {
             </div>
 
             <div className="border-t border-slate-200 px-4 py-3 flex justify-end">
-              <Button type="button" variant="outline" onClick={closeModal}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  if (selectedPathMeta && selectedPathMeta.progress >= 100) {
+                    setShowCompletionPopup(true);
+                    return;
+                  }
+                  closeModal();
+                }}
+              >
+                {selectedPathMeta && selectedPathMeta.progress >= 100 ? 'Complete' : 'Close'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {showCompletionPopup ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h2 className="text-lg font-semibold text-slate-900">Learning Path Completed</h2>
+              <p className="text-sm text-slate-500">
+                You have completed this learning path successfully.
+              </p>
+            </div>
+            <div className="px-4 py-4 space-y-3">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-sm text-emerald-900 font-semibold">
+                  Your certificate is ready.
+                </p>
+                <p className="text-xs text-emerald-700 mt-1">
+                  You can download it from the Certificates tab.
+                </p>
+              </div>
+            </div>
+            <div className="border-t border-slate-200 px-4 py-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowCompletionPopup(false);
+                  closeModal();
+                }}
+              >
                 Close
               </Button>
             </div>

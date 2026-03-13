@@ -2,3 +2,5 @@
 .env
 node_modules
 dist
+# Local mock data
+mock/erpMockData.js

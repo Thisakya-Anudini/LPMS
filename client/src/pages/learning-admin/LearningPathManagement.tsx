@@ -112,6 +112,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
   const [assignNameSearch, setAssignNameSearch] = useState('');
   const [assignDesignationFilter, setAssignDesignationFilter] = useState('ALL');
+  const [assignConfirmOpen, setAssignConfirmOpen] = useState(false);
+  const [assignNotifyAll, setAssignNotifyAll] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -601,8 +603,15 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     </div>
   );
 
-  const handleAssign = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAssignRequest = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!assignForm.learningPathId || assignForm.selectedLearnerIds.length === 0) {
+      return;
+    }
+    setAssignConfirmOpen(true);
+  };
+
+  const handleAssignConfirm = async () => {
     setAssignLoading(true);
     try {
       const token = await getAccessToken();
@@ -613,11 +622,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
       await learningApi.createEnrollments(token, {
         learningPathId: assignForm.learningPathId,
-        employeePrincipalIds: assignForm.selectedLearnerIds
+        employeePrincipalIds: assignForm.selectedLearnerIds,
+        notifyAll: assignNotifyAll
       });
 
       showToast('Enrollments assigned successfully.', 'success');
       setAssignForm(initialAssignForm);
+      setAssignNotifyAll(false);
+      setAssignConfirmOpen(false);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to assign enrollments.', 'error');
     } finally {
@@ -752,7 +764,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
       {section === 'assign' ? (
         <Card title="Assign Learning Path to Learners">
-          <form className="space-y-4" onSubmit={handleAssign}>
+          <form className="space-y-4" onSubmit={handleAssignRequest}>
             <Select
               label="Learning Path"
               value={assignForm.learningPathId}
@@ -850,6 +862,55 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             </Button>
           </form>
         </Card>
+      ) : null}
+      {section === 'assign' && assignConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <h2 className="text-lg font-semibold text-slate-900">Confirm Assignment</h2>
+              <p className="text-sm text-slate-500">
+                You are about to assign{' '}
+                <span className="font-semibold text-slate-700">
+                  {assignForm.selectedLearnerIds.length} learner(s)
+                </span>{' '}
+                to{' '}
+                <span className="font-semibold text-slate-700">
+                  {paths.find((path) => path.id === assignForm.learningPathId)?.title || 'selected learning path'}
+                </span>
+                .
+              </p>
+            </div>
+            <div className="px-4 py-4 space-y-4">
+              <label className="flex items-start gap-3 rounded-lg border border-slate-200 p-3">
+                <input
+                  type="checkbox"
+                  checked={assignNotifyAll}
+                  onChange={(event) => setAssignNotifyAll(event.target.checked)}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-slate-900">Notify all assigned learners by email</span>
+                  <span className="block text-xs text-slate-500">
+                    Sends an email from your configured account to each newly assigned learner.
+                  </span>
+                </span>
+              </label>
+            </div>
+            <div className="border-t border-slate-200 px-4 py-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAssignConfirmOpen(false)}
+                disabled={assignLoading}
+              >
+                Cancel
+              </Button>
+              <Button type="button" isLoading={assignLoading} onClick={handleAssignConfirm}>
+                Assign
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {section === 'manage' ? (
