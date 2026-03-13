@@ -354,12 +354,16 @@ export const getCertificateCustomizationPaths = async (_req, res) => {
         title,
         certificate_signer_name,
         certificate_signer_title,
+        certificate_signature_file,
+        certificate_signature_file_type,
         updated_at
       FROM learning_paths
       WHERE is_deleted = FALSE
       ORDER BY title ASC
     `
   );
+
+  console.log('certificate-settings rows:', result.rows.length); // add this
 
   return res.status(200).json({ learningPaths: result.rows });
 };
@@ -369,6 +373,8 @@ export const updateLearningPathCertificateSignature = async (req, res) => {
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
   const signerName = String(req.body.signerName || '').trim();
   const signerTitle = String(req.body.signerTitle || '').trim();
+  const signatureFile = req.body.signatureFile || null;
+  const signatureFileType = req.body.signatureFileType || null;
 
   if (!signerName || !signerTitle) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'signerName and signerTitle are required.');
@@ -379,12 +385,18 @@ export const updateLearningPathCertificateSignature = async (req, res) => {
       UPDATE learning_paths
       SET certificate_signer_name = $2,
           certificate_signer_title = $3,
+          certificate_signature_file = $4,
+          certificate_signature_file_type = $5,
           updated_at = NOW()
       WHERE id = $1
         AND is_deleted = FALSE
-      RETURNING id, title, certificate_signer_name, certificate_signer_title, updated_at
+      RETURNING
+        id, title,
+        certificate_signer_name, certificate_signer_title,
+        certificate_signature_file, certificate_signature_file_type,
+        updated_at
     `,
-    [id, signerName, signerTitle]
+    [id, signerName, signerTitle, signatureFile, signatureFileType]
   );
 
   if (result.rowCount === 0) {

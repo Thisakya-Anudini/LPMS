@@ -232,35 +232,44 @@ export const learningApi = {
     }>('/reports/summary', { token });
   },
   getCertificateSettings(token: string) {
-    return request<{
-      learningPaths: Array<{
-        id: string;
-        title: string;
-        certificate_signer_name: string | null;
-        certificate_signer_title: string | null;
-        updated_at: string;
-      }>;
-    }>('/certificate-settings', { token });
-  },
-  updateCertificateSignature(
-    token: string,
-    learningPathId: string,
-    payload: { signerName: string; signerTitle: string }
-  ) {
-    return request<{
-      learningPath: {
-        id: string;
-        title: string;
-        certificate_signer_name: string;
-        certificate_signer_title: string;
-        updated_at: string;
-      };
-    }>(`/learning-paths/${learningPathId}/certificate-signature`, {
-      method: 'PUT',
-      token,
-      body: payload
-    });
+  return request<{
+    learningPaths: Array<{
+      id: string;
+      title: string;
+      certificate_signer_name: string | null;
+      certificate_signer_title: string | null;
+      certificate_signature_file: string | null;       // add this
+      certificate_signature_file_type: string | null;  // add this
+      updated_at: string;
+    }>;
+  }>('/certificate-settings', { token });
+},
+updateCertificateSignature(
+  token: string,
+  learningPathId: string,
+  payload: { 
+    signerName: string; 
+    signerTitle: string;
+    signatureFile?: string | null;      // base64 string (data URI)
+    signatureFileType?: string | null;  // e.g. "image/png", "application/pdf"
   }
+) {
+  return request<{
+    learningPath: {
+      id: string;
+      title: string;
+      certificate_signer_name: string;
+      certificate_signer_title: string;
+      certificate_signature_file?: string | null;
+      certificate_signature_file_type?: string | null;
+      updated_at: string;
+    };
+  }>(`/learning-paths/${learningPathId}/certificate-signature`, {
+    method: 'PUT',
+    token,
+    body: payload
+  });
+}
 };
 
 export const supervisorApi = {

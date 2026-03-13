@@ -7,6 +7,72 @@ import {
 } from '../utils/erpClient.js';
 import { query } from '../db.js';
 import { sendLearningPathCompletionEmail } from '../utils/mailer.js';
+import sharp from 'sharp';
+
+const removeImageBackground = async (base64DataUri) => {
+  try {
+    const base64Data = base64DataUri.includes(',')
+      ? base64DataUri.split(',')[1]
+      : base64DataUri;
+
+    const inputBuffer = Buffer.from(base64Data, 'base64');
+
+    const { data, info } = await sharp(inputBuffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height, channels } = info;
+    const pixels = new Uint8Array(data);
+
+    const samplePixel = (x, y) => {
+      const idx = (y * width + x) * channels;
+      return { r: pixels[idx], g: pixels[idx + 1], b: pixels[idx + 2] };
+    };
+
+    const corners = [
+      samplePixel(0, 0),
+      samplePixel(width - 1, 0),
+      samplePixel(0, height - 1),
+      samplePixel(width - 1, height - 1),
+    ];
+
+    const bgColor = {
+      r: Math.round(corners.reduce((s, c) => s + c.r, 0) / corners.length),
+      g: Math.round(corners.reduce((s, c) => s + c.g, 0) / corners.length),
+      b: Math.round(corners.reduce((s, c) => s + c.b, 0) / corners.length),
+    };
+
+    const TOLERANCE = 30;
+
+    const colorDiff = (r, g, b) =>
+      Math.sqrt(
+        Math.pow(r - bgColor.r, 2) +
+        Math.pow(g - bgColor.g, 2) +
+        Math.pow(b - bgColor.b, 2)
+      );
+
+    for (let i = 0; i < pixels.length; i += channels) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+      if (colorDiff(r, g, b) <= TOLERANCE) {
+        pixels[i + 3] = 0;
+      }
+    }
+
+    const outputBuffer = await sharp(Buffer.from(pixels), {
+      raw: { width, height, channels },
+    })
+      .png()
+      .toBuffer();
+
+    return `data:image/png;base64,${outputBuffer.toString('base64')}`;
+  } catch (err) {
+    console.warn('Background removal failed, using original:', err.message);
+    return base64DataUri;
+  }
+};
 
 const normalizeEmployeeNo = (user, requestBody = {}) => {
   if (user.employeeNo) {
@@ -995,7 +1061,6 @@ export const getLearnerCertificates = async (req, res) => {
 
   return res.status(200).json({ certificates: result.rows });
 };
-
 export const downloadLearnerCertificate = async (req, res) => {
   const employeeNo = normalizeEmployeeNo(req.user, req.body);
   if (!employeeNo) {
@@ -1019,6 +1084,8 @@ export const downloadLearnerCertificate = async (req, res) => {
         lp.total_duration AS learning_path_duration,
         lp.certificate_signer_name,
         lp.certificate_signer_title,
+        lp.certificate_signature_file,
+        lp.certificate_signature_file_type,
         ap.name AS learner_name,
         en.completed_at
       FROM certificates c
@@ -1048,6 +1115,29 @@ export const downloadLearnerCertificate = async (req, res) => {
   const signerName = String(certificate.certificate_signer_name || '').trim() || 'Learning Administrator';
   const signerTitle = String(certificate.certificate_signer_title || '').trim() || 'LPMS';
 
+  // Parse signature image from base64 if present and is an image (not PDF)
+// Parse and clean signature image
+let signatureImageBuffer = null;
+const sigFile = certificate.certificate_signature_file;
+const sigFileType = certificate.certificate_signature_file_type;
+
+if (sigFile && sigFileType && sigFileType.startsWith('image/')) {
+  try {
+    const cleanedDataUri = await removeImageBackground(sigFile);
+    const base64Data = cleanedDataUri.includes(',')
+      ? cleanedDataUri.split(',')[1]
+      : cleanedDataUri;
+    
+    // Trim transparent edges so signature fills the box tightly
+    const { default: sharp } = await import('sharp');
+    signatureImageBuffer = await sharp(Buffer.from(base64Data, 'base64'))
+      .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: 10 })
+      .png()
+      .toBuffer();
+  } catch {
+    signatureImageBuffer = null;
+  }
+}
   let PDFDocument;
   try {
     ({ default: PDFDocument } = await import('pdfkit'));
@@ -1067,16 +1157,16 @@ export const downloadLearnerCertificate = async (req, res) => {
   const doc = new PDFDocument({ size: 'A4', margin: 48 });
   doc.pipe(res);
 
+  // Border
   doc.rect(36, 36, 523, 770).lineWidth(2).stroke('#2563eb');
   doc.moveDown();
-  doc.fontSize(26).fillColor('#0f172a').text('Certificate of Completion', {
-    align: 'center'
-  });
-  doc.moveDown(0.4);
-  doc.fontSize(14).fillColor('#334155').text('Learning Path Management System (LPMS)', {
-    align: 'center'
-  });
 
+  // Header
+  doc.fontSize(26).fillColor('#0f172a').text('Certificate of Completion', { align: 'center' });
+  doc.moveDown(0.4);
+  doc.fontSize(14).fillColor('#334155').text('Learning Path Management System (LPMS)', { align: 'center' });
+
+  // Learner details
   doc.moveDown(2);
   doc.fontSize(12).fillColor('#475569').text('This certifies that', { align: 'center' });
   doc.moveDown(0.4);
@@ -1093,6 +1183,7 @@ export const downloadLearnerCertificate = async (req, res) => {
   });
   doc.moveDown(2);
 
+  // Certificate metadata
   doc.fontSize(11).fillColor('#334155');
   doc.text(`Certificate ID: ${certificate.id}`);
   doc.text(`Completion Scope: ${certificate.scope}`);
@@ -1101,19 +1192,47 @@ export const downloadLearnerCertificate = async (req, res) => {
   doc.moveDown(1.5);
   doc.text('Generated by LPMS', { align: 'right' });
   doc.moveDown(2);
-  const pageWidth = doc.page.width;
-  const rightBlockStart = pageWidth - 210;
-  doc.moveTo(rightBlockStart, doc.y).lineTo(pageWidth - 48, doc.y).stroke('#94a3b8');
-  doc.moveDown(0.3);
-  doc.fontSize(12).fillColor('#0f172a').text(signerName, rightBlockStart, doc.y, {
-    width: 162,
-    align: 'center'
-  });
-  doc.fontSize(10).fillColor('#475569').text(signerTitle, rightBlockStart, doc.y, {
-    width: 162,
-    align: 'center'
-  });
 
+// Signature block
+// Signature block
+const pageWidth = doc.page.width;
+const signatureBlockWidth = 200;
+const rightBlockStart = pageWidth - 48 - signatureBlockWidth;
+const sigImgHeight = 50;
+
+// Pin the line position first, then place image directly above it
+const lineY = doc.y + sigImgHeight + 4;
+
+if (signatureImageBuffer) {
+  try {
+    doc.image(signatureImageBuffer, rightBlockStart, doc.y, {
+      width: signatureBlockWidth,
+      height: sigImgHeight,
+      fit: [signatureBlockWidth, sigImgHeight],
+      align: 'center',
+      valign: 'bottom'
+    });
+  } catch {
+    // skip if image fails
+  }
+}
+
+// Line directly below image
+doc.moveTo(rightBlockStart, lineY).lineTo(pageWidth - 48, lineY).stroke('#94a3b8');
+
+// Name below line
+const nameY = lineY + 6;
+doc.fontSize(12).fillColor('#0f172a').text(signerName, rightBlockStart, nameY, {
+  width: signatureBlockWidth,
+  align: 'center'
+});
+
+// Title below name
+const titleY = nameY + 18;
+doc.fontSize(10).fillColor('#475569').text(signerTitle, rightBlockStart, titleY, {
+  width: signatureBlockWidth,
+  align: 'center'
+});
   doc.end();
   return undefined;
 };

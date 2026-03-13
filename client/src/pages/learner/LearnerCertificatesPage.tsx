@@ -18,6 +18,11 @@ type CertificateRow = {
   completed_at: string | null;
 };
 
+type LoadingState = {
+  id: string;
+  action: 'view' | 'download';
+} | null;
+
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -33,7 +38,7 @@ export function LearnerCertificatesPage() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [loadingState, setLoadingState] = useState<LoadingState>(null);
   const [certificates, setCertificates] = useState<CertificateRow[]>([]);
 
   const load = useCallback(async () => {
@@ -44,7 +49,6 @@ export function LearnerCertificatesPage() {
         showToast('Session expired. Please login again.', 'error');
         return;
       }
-
       const response = await learnerApi.getCertificates(token);
       setCertificates(response.certificates);
     } catch (err) {
@@ -60,21 +64,51 @@ export function LearnerCertificatesPage() {
 
   const handleDownload = async (certificate: CertificateRow) => {
     try {
-      setDownloadingId(certificate.id);
+      setLoadingState({ id: certificate.id, action: 'download' });
       const token = await getAccessToken();
       if (!token) {
         showToast('Session expired. Please login again.', 'error');
         return;
       }
-
       const blob = await learnerApi.downloadCertificate(token, certificate.id);
-      const safeTitle = certificate.learning_path_title.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
-      downloadBlob(blob, `certificate_${safeTitle}_${certificate.id}.pdf`);
+      const safeTitle = `${certificate.learner_name} - ${certificate.learning_path_title} - Certificate`;
+      downloadBlob(blob, `${safeTitle}.pdf`);
       showToast('Certificate downloaded.', 'success');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to download certificate.', 'error');
     } finally {
-      setDownloadingId(null);
+      setLoadingState(null);
+    }
+  };
+
+  const handleView = async (certificate: CertificateRow) => {
+    try {
+      setLoadingState({ id: certificate.id, action: 'view' });
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+      const blob = await learnerApi.downloadCertificate(token, certificate.id);
+      const pdfUrl = window.URL.createObjectURL(blob);
+      const tabTitle = `${certificate.learner_name} - ${certificate.learning_path_title} - Certificate`;
+
+      const html = `<!DOCTYPE html>
+<html>
+  <head><title>${tabTitle}</title></head>
+  <body style="margin:0;padding:0;height:100vh;">
+    <embed src="${pdfUrl}" type="application/pdf" width="100%" height="100%" />
+  </body>
+</html>`;
+
+      const htmlBlob = new Blob([html], { type: 'text/html' });
+      const htmlUrl = window.URL.createObjectURL(htmlBlob);
+      window.open(htmlUrl, '_blank');
+      showToast('Certificate opened in new tab.', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to view certificate.', 'error');
+    } finally {
+      setLoadingState(null);
     }
   };
 
@@ -105,19 +139,37 @@ export function LearnerCertificatesPage() {
                     Learner: {certificate.learner_name} ({certificate.learner_email})
                   </p>
                   <p className="text-xs text-slate-600">
-                    Finished: {new Date(certificate.completed_at || certificate.issued_at).toLocaleDateString()}
-                    {' | '}Issued: {new Date(certificate.issued_at).toLocaleDateString()}
+                    Finished:{' '}
+                    {new Date(certificate.completed_at || certificate.issued_at).toLocaleDateString()}
+                    {' | '}
+                    Issued: {new Date(certificate.issued_at).toLocaleDateString()}
                   </p>
                   <p className="text-xs text-slate-600">
                     Duration: {certificate.learning_path_duration || '-'} | Scope: {certificate.scope}
                   </p>
                 </div>
-                <Button
-                  onClick={() => handleDownload(certificate)}
-                  isLoading={downloadingId === certificate.id}
-                >
-                  Download Certificate
-                </Button>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleView(certificate)}
+                    isLoading={
+                      loadingState?.id === certificate.id && loadingState?.action === 'view'
+                    }
+                    disabled={loadingState !== null}
+                  >
+                    View Certificate
+                  </Button>
+                  <Button
+                    onClick={() => handleDownload(certificate)}
+                    isLoading={
+                      loadingState?.id === certificate.id && loadingState?.action === 'download'
+                    }
+                    disabled={loadingState !== null}
+                  >
+                    Download Certificate
+                  </Button>
+                </div>
               </div>
             ))
           )}
