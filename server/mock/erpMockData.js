@@ -10,89 +10,89 @@ const MINIMAL_EMPLOYEE = (row) => ({
 });
 
 const subordinates011338Raw = [
-  { employeeNumber: '008668', employeeInitials: 'M', employeeSurname: 'Giridaran', designation: 'Manager', gradeName: 'A.5.' },
-  { employeeNumber: '010402', employeeInitials: 'L P', employeeSurname: 'Gallage', designation: 'Manager', gradeName: 'A.4.' },
-  { employeeNumber: '010950', employeeInitials: 'B N', employeeSurname: 'Alwis', designation: 'Manager', gradeName: 'A.4.' },
-  { employeeNumber: '011379', employeeInitials: 'E A T', employeeSurname: 'Edirisinghe', designation: 'Manager', gradeName: 'A.5.' },
-  { employeeNumber: '012258', employeeInitials: 'J R A C P', employeeSurname: 'Samaranayaka', designation: 'Engineer', gradeName: 'A.4.' },
-  { employeeNumber: '012459', employeeInitials: 'S V', employeeSurname: 'Amarasinghe', designation: 'Engineer', gradeName: 'A.4.' },
-  { employeeNumber: '014050', employeeInitials: 'K D D S', employeeSurname: 'Weerasekera', designation: 'Engineer', gradeName: 'A.5.' },
-  { employeeNumber: '014150', employeeInitials: 'E B L', employeeSurname: 'Geeganage', designation: 'Engineer', gradeName: 'A.4.' },
-  { employeeNumber: '017837', employeeInitials: 'S', employeeSurname: 'Shankarnath', designation: 'Engineer', gradeName: 'A.5.' },
-  { employeeNumber: '018972', employeeInitials: 'B P G', employeeSurname: 'Balasuriya', designation: 'Engineer', gradeName: 'A.5.' },
-  { employeeNumber: '020998', employeeInitials: 'J A G G', employeeSurname: 'Jayasinghe', designation: 'Engineer', gradeName: 'A.5.' },
-  { employeeNumber: '000000', employeeInitials: 'test', employeeSurname: 'test', designation: 'Engineer', gradeName: 'A.5.' }
+  { employeeNumber: 'EMP_SUB_A', employeeInitials: null, employeeSurname: null, designation: 'Manager', gradeName: null },
+  { employeeNumber: 'EMP_SUB_B', employeeInitials: null, employeeSurname: null, designation: 'Manager', gradeName: null },
+  { employeeNumber: 'EMP_SUB_C', employeeInitials: null, employeeSurname: null, designation: 'Manager', gradeName: null },
+  { employeeNumber: 'EMP_SUB_D', employeeInitials: null, employeeSurname: null, designation: 'Manager', gradeName: null },
+  { employeeNumber: 'EMP_SUB_E', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null },
+  { employeeNumber: 'EMP_SUB_F', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null },
+  { employeeNumber: 'EMP_SUB_G', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null },
+  { employeeNumber: 'EMP_SUB_H', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null },
+  { employeeNumber: 'EMP_SUB_I', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null },
+  { employeeNumber: 'EMP_SUB_J', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null },
+  { employeeNumber: 'EMP_SUB_K', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null },
+  { employeeNumber: 'EMP_SUB_L', employeeInitials: null, employeeSurname: null, designation: 'Engineer', gradeName: null }
 ];
 
 const hierarchy011349Raw = [
   {
-    employeeNumber: '011349',
-    employeeInitials: 'Y A J',
-    employeeSurname: 'Mohan',
-    employeeName: 'Y A J Mohan',
+    employeeNumber: 'EMP_TARGET',
+    employeeInitials: null,
+    employeeSurname: null,
+    employeeName: null,
     designation: 'Senior Assistant Manager (IT & NW) - A7',
-    gradeName: 'A.7.B',
-    email: 'mohan@slt.com.lk',
-    employeeSupervisorNumber: '012258'
+    gradeName: null,
+    email: null,
+    employeeSupervisorNumber: 'EMP_SUPERVISOR'
   },
   {
-    employeeNumber: '012258',
-    employeeInitials: 'J R A C P',
-    employeeSurname: 'Samaranayaka',
-    employeeName: 'J R A C P Samaranayaka',
+    employeeNumber: 'EMP_SUPERVISOR',
+    employeeInitials: null,
+    employeeSurname: null,
+    employeeName: null,
     designation: 'Engineer',
-    gradeName: 'A.4.',
-    email: 'charitha@slt.com.lk',
-    employeeSupervisorNumber: '011338'
+    gradeName: null,
+    email: null,
+    employeeSupervisorNumber: 'EMP_DIRECTOR'
   },
   {
-    employeeNumber: '011338',
-    employeeInitials: 'T M K B',
-    employeeSurname: 'Tennakoon',
-    employeeName: 'T M K B Tennakoon',
+    employeeNumber: 'EMP_DIRECTOR',
+    employeeInitials: null,
+    employeeSurname: null,
+    employeeName: null,
     designation: 'Deputy General Manager',
-    gradeName: 'A.3.',
-    email: 'kosalat@slt.com.lk',
-    employeeSupervisorNumber: '010067'
+    gradeName: null,
+    email: null,
+    employeeSupervisorNumber: 'EMP_GM'
   },
   {
-    employeeNumber: '010067',
-    employeeInitials: 'J C',
-    employeeSurname: 'Harambearachchi',
-    employeeName: 'J C Harambearachchi',
+    employeeNumber: 'EMP_GM',
+    employeeInitials: null,
+    employeeSurname: null,
+    employeeName: null,
     designation: 'General Manager',
-    gradeName: 'A.2.',
-    email: 'jana@slt.com.lk',
-    employeeSupervisorNumber: '009935'
+    gradeName: null,
+    email: null,
+    employeeSupervisorNumber: 'EMP_CO'
   },
   {
-    employeeNumber: '009935',
-    employeeInitials: 'H K S K',
-    employeeSurname: 'Abeysekara',
-    employeeName: 'H K S K Abeysekara',
+    employeeNumber: 'EMP_CO',
+    employeeInitials: null,
+    employeeSurname: null,
+    employeeName: null,
     designation: 'Chief Officer',
-    gradeName: 'A.1.',
-    email: 'samank@slt.com.lk',
-    employeeSupervisorNumber: '020987'
+    gradeName: null,
+    email: null,
+    employeeSupervisorNumber: 'EMP_CEO'
   },
   {
-    employeeNumber: '020987',
-    employeeInitials: 'M R',
-    employeeSurname: 'Rasheed',
-    employeeName: 'M R Rasheed',
+    employeeNumber: 'EMP_CEO',
+    employeeInitials: null,
+    employeeSurname: null,
+    employeeName: null,
     designation: 'Chief Executive Officer',
-    gradeName: 'C..Executive',
-    email: 'riyaazmr@slt.com.lk',
+    gradeName: null,
+    email: null,
     employeeSupervisorNumber: ''
   }
 ];
 
 export const ERP_MOCK_SUBORDINATES = {
-  '011338': subordinates011338Raw.map(MINIMAL_EMPLOYEE)
+  EMP_DIRECTOR: subordinates011338Raw.map(MINIMAL_EMPLOYEE)
 };
 
 export const ERP_MOCK_HIERARCHIES = {
-  '011349': hierarchy011349Raw.map(MINIMAL_EMPLOYEE)
+  EMP_TARGET: hierarchy011349Raw.map(MINIMAL_EMPLOYEE)
 };
 
 const detailsMap = new Map();
@@ -107,7 +107,7 @@ for (const row of subordinates011338Raw) {
         ...row,
         employeeName: null,
         email: `${row.employeeNumber}@mock.slt.com.lk`,
-        employeeSupervisorNumber: '011338'
+        employeeSupervisorNumber: 'EMP_DIRECTOR'
       })
     );
   }
