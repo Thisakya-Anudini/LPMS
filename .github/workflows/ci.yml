@@ -28,6 +28,11 @@ jobs:
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
 
+      - name: Fix ESLint Version for Legacy Config
+        # This dynamically uses ESLint 8 which supports .eslintrc.cjs
+        # It avoids changing any files in your project repository permanently.
+        run: npm install eslint@8.57.0 --no-save --legacy-peer-deps
+
       - name: Run Linter
         run: npm run lint
         # If lint fails, it will fail the build
