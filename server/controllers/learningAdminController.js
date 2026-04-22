@@ -2,6 +2,18 @@ import { query } from '../db.js';
 import { sendError } from '../utils/http.js';
 import { logAudit } from '../utils/audit.js';
 import { getMockCourseById } from '../utils/mockLearningStore.js';
+import bcrypt from 'bcryptjs';
+import {
+  fetchAllDesignations,
+  fetchAllSalaryGrades,
+  fetchEmployeesByDesignation,
+  fetchEmployeeDetailsForServiceNo,
+  fetchEmployeesByOrganization,
+  fetchEmployeesByPartialName,
+  fetchEmployeesByPayroll,
+  fetchEmployeesBySalaryGrade,
+  fetchOrganizationList
+} from '../utils/erpClient.js';
 
 const parseCategory = (value) => {
   const allowed = ['RESTRICTED', 'SEMI_RESTRICTED', 'PUBLIC'];
@@ -15,6 +27,58 @@ const isStructuredStagePayload = (stages) =>
   Array.isArray(stages) && stages.some((stage) => Array.isArray(stage?.courses));
 
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const EXECUTIVE_PAYROLL = 'SLT Executive Payroll';
+const NON_EXECUTIVE_PAYROLL = 'SLT Non Executive Payroll';
+
+const normalizeEmployeeDisplayName = (row, employeeNo) => {
+  if (row?.employeeName && String(row.employeeName).trim()) {
+    return String(row.employeeName).trim();
+  }
+  const initials = row?.employeeInitials ? String(row.employeeInitials).trim() : '';
+  const surname = row?.employeeSurname ? String(row.employeeSurname).trim() : '';
+  const merged = `${initials} ${surname}`.trim();
+  return merged || `Learner ${employeeNo}`;
+};
+
+const normalizeEmployeeRow = (row) => ({
+  employeeNumber: String(row?.employeeNumber || '').trim(),
+  employeeName: normalizeEmployeeDisplayName(row, row?.employeeNumber || ''),
+  employeeSurname: row?.employeeSurname ? String(row.employeeSurname).trim() : '',
+  designation: row?.designation ? String(row.designation).trim() : '',
+  gradeName: row?.gradeName ? String(row.gradeName).trim() : '',
+  email: row?.email ? String(row.email).trim().toLowerCase() : '',
+  organizationName: row?.orgName ? String(row.orgName).trim() : '',
+  costCenterCode: row?.employeeCostCode ? String(row.employeeCostCode).trim() : '',
+  costCenterName: row?.employeeCostCentreName ? String(row.employeeCostCentreName).trim() : '',
+  employeeInitials: row?.employeeInitials ? String(row.employeeInitials).trim() : '',
+  employeeSupervisorNumber: row?.employeeSupervisorNumber ? String(row.employeeSupervisorNumber).trim() : ''
+});
+
+const mergeEmployeeRows = (base = {}, incoming = {}) => {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (
+      value !== null &&
+      value !== undefined &&
+      String(value).trim() !== '' &&
+      (!merged[key] || String(merged[key]).trim() === '')
+    ) {
+      merged[key] = value;
+    }
+  }
+  return merged;
+};
+
+const normalizeOptionList = (rows, key) =>
+  Array.from(
+    new Set(
+      (Array.isArray(rows) ? rows : [])
+        .map((row) => String(row?.[key] || '').trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+const getSearchErrorStatus = (error) => (typeof error?.status === 'number' ? error.status : 502);
 
 const resolveActorPrincipalId = async (user) => {
   const directId = String(user?.id || '').trim();
@@ -85,6 +149,69 @@ const resolveCourseUuid = async (courseId) => {
   );
 
   return created.rows[0].id;
+};
+
+const getOrCreateLearnerPrincipalForEnrollment = async (employee) => {
+  const employeeNumber = String(employee?.employeeNumber || '').trim();
+  if (!employeeNumber) {
+    return null;
+  }
+
+  const existingEmployee = await query(
+    `
+      SELECT principal_id
+      FROM employees
+      WHERE employee_number = $1
+      LIMIT 1
+    `,
+    [employeeNumber]
+  );
+  if (existingEmployee.rowCount > 0) {
+    return existingEmployee.rows[0].principal_id;
+  }
+
+  const fallbackDomain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || 'erp.local';
+  const email =
+    (employee?.email ? String(employee.email).trim().toLowerCase() : '') || `${employeeNumber}@${fallbackDomain}`;
+  const name = normalizeEmployeeDisplayName(employee, employeeNumber);
+  const designation = employee?.designation ? String(employee.designation).trim() : 'Learner';
+  const gradeName = employee?.gradeName ? String(employee.gradeName).trim() : 'N/A';
+
+  let principalId = null;
+  const existingPrincipal = await query(
+    `
+      SELECT id
+      FROM auth_principals
+      WHERE email = $1
+      LIMIT 1
+    `,
+    [email]
+  );
+  if (existingPrincipal.rowCount > 0) {
+    principalId = existingPrincipal.rows[0].id;
+  } else {
+    const passwordHash = await bcrypt.hash(employeeNumber, 10);
+    const createdPrincipal = await query(
+      `
+        INSERT INTO auth_principals (email, password_hash, role, name, principal_type, must_change_password)
+        VALUES ($1, $2, 'EMPLOYEE', $3, 'EMPLOYEE', FALSE)
+        RETURNING id
+      `,
+      [email, passwordHash, name]
+    );
+    principalId = createdPrincipal.rows[0].id;
+  }
+
+  await query(
+    `
+      INSERT INTO employees (principal_id, employee_number, designation, grade_name, supervisor_id)
+      VALUES ($1, $2, $3, $4, NULL)
+      ON CONFLICT (employee_number) DO NOTHING
+    `,
+    [principalId, employeeNumber, designation || 'Learner', gradeName || 'N/A']
+  );
+
+  return principalId;
 };
 
 const insertLearningPathStages = async ({ learningPathId, stages = [] }) => {
@@ -429,10 +556,10 @@ export const deleteLearningPath = async (req, res) => {
 };
 
 export const createEnrollments = async (req, res) => {
-  const { learningPathId, employeePrincipalIds } = req.body;
+  const { learningPathId, selectedLearners } = req.body;
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
-  if (!Array.isArray(employeePrincipalIds) || employeePrincipalIds.length === 0) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeePrincipalIds must be a non-empty array.');
+  if (!Array.isArray(selectedLearners) || selectedLearners.length === 0) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'selectedLearners must be a non-empty array.');
   }
 
   const inserted = [];
@@ -451,7 +578,11 @@ export const createEnrollments = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
   }
 
-  for (const principalId of employeePrincipalIds) {
+  for (const learner of selectedLearners) {
+    const principalId = await getOrCreateLearnerPrincipalForEnrollment(learner);
+    if (!principalId) {
+      continue;
+    }
     const created = await query(
       `
         INSERT INTO enrollments (principal_id, learning_path_id, status, progress, enrolled_at, enrollment_source)
@@ -483,18 +614,140 @@ export const createEnrollments = async (req, res) => {
   return res.status(201).json({ enrollments: inserted });
 };
 
-export const getAssignableEmployees = async (_req, res) => {
-  const result = await query(
-    `
-      SELECT ap.id, ap.name, ap.email, e.employee_number, e.designation, e.grade_name
-      FROM auth_principals ap
-      JOIN employees e ON e.principal_id = ap.id
-      WHERE ap.role = 'EMPLOYEE' AND ap.is_active = TRUE
-      ORDER BY ap.name ASC
-    `
-  );
+export const getAssignableEmployeeSearchOptions = async (_req, res) => {
+  try {
+    const [designationsResponse, salaryGradesResponse, organizationsResponse] = await Promise.all([
+      fetchAllDesignations(),
+      fetchAllSalaryGrades(),
+      fetchOrganizationList()
+    ]);
 
-  return res.status(200).json({ employees: result.rows });
+    return res.status(200).json({
+      designations: normalizeOptionList(designationsResponse?.data, 'designation'),
+      grades: normalizeOptionList(salaryGradesResponse?.data, 'salaryGrade'),
+      organizations: (Array.isArray(organizationsResponse?.data) ? organizationsResponse.data : [])
+        .map((row) => ({
+          organizationId: String(row?.organizationId || '').trim(),
+          organizationName: String(row?.organizationName || '').trim(),
+          parentOrganizationId: String(row?.parentOrganizationId || '').trim(),
+          parentOrganizationName: String(row?.parentOrganizationName || '').trim()
+        }))
+        .filter((row) => row.organizationId && row.organizationName)
+        .sort((a, b) => a.organizationName.localeCompare(b.organizationName)),
+      payrolls: [
+        { value: 'EXECUTIVE', label: 'Executive' },
+        { value: 'NON_EXECUTIVE', label: 'Non Executive' }
+      ]
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      getSearchErrorStatus(error),
+      'ERP_REQUEST_FAILED',
+      'Failed to load ERP filter options.',
+      error.details || error.message
+    );
+  }
+};
+
+export const searchAssignableEmployees = async (req, res) => {
+  const employeeNo = String(req.body.employeeNo || '').trim();
+  const surname = String(req.body.surname || '').trim();
+  const designation = String(req.body.designation || '').trim();
+  const grade = String(req.body.grade || '').trim();
+  const organizationId = String(req.body.organizationId || '').trim();
+  const payrollType = String(req.body.payrollType || '').trim().toUpperCase();
+
+  if (!employeeNo && !surname && !designation && !grade && !organizationId && !payrollType) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'At least one search or filter value is required.');
+  }
+
+  const calls = [];
+  if (employeeNo) {
+    calls.push(fetchEmployeeDetailsForServiceNo(employeeNo));
+  }
+  if (surname) {
+    calls.push(fetchEmployeesByPartialName(surname));
+  }
+  if (designation) {
+    calls.push(fetchEmployeesByDesignation(designation));
+  }
+  if (grade) {
+    calls.push(fetchEmployeesBySalaryGrade(grade));
+  }
+  if (organizationId) {
+    calls.push(fetchEmployeesByOrganization(organizationId));
+  }
+  if (payrollType) {
+    calls.push(
+      fetchEmployeesByPayroll(
+        payrollType === 'EXECUTIVE' ? EXECUTIVE_PAYROLL : NON_EXECUTIVE_PAYROLL
+      )
+    );
+  }
+
+  try {
+    const responses = await Promise.all(calls);
+    const employeeMaps = responses.map((response) => {
+      const map = new Map();
+      for (const row of Array.isArray(response?.data) ? response.data : []) {
+        const normalized = normalizeEmployeeRow(row);
+        if (!normalized.employeeNumber) {
+          continue;
+        }
+        map.set(normalized.employeeNumber, normalized);
+      }
+      return map;
+    });
+
+    const intersection = new Map();
+    if (employeeMaps.length > 0) {
+      for (const [employeeNumber, employee] of employeeMaps[0].entries()) {
+        let merged = employee;
+        let foundInAll = true;
+        for (let index = 1; index < employeeMaps.length; index += 1) {
+          const next = employeeMaps[index].get(employeeNumber);
+          if (!next) {
+            foundInAll = false;
+            break;
+          }
+          merged = mergeEmployeeRows(merged, next);
+        }
+        if (foundInAll) {
+          intersection.set(employeeNumber, merged);
+        }
+      }
+    }
+
+    const employees = Array.from(intersection.values()).sort((a, b) =>
+      a.employeeName.localeCompare(b.employeeName)
+    );
+
+    await logAudit({
+      actorPrincipalId: await resolveActorPrincipalId(req.user),
+      action: 'SEARCH_ASSIGNABLE_ERP_EMPLOYEES',
+      resourceType: 'ERP',
+      metadata: {
+        employeeNo: employeeNo || null,
+        surname: surname || null,
+        designation: designation || null,
+        grade: grade || null,
+        organizationId: organizationId || null,
+        payrollType: payrollType || null,
+        matched: employees.length
+      }
+    });
+
+    return res.status(200).json({ employees });
+  } catch (error) {
+    return sendError(
+      res,
+      getSearchErrorStatus(error),
+      'ERP_REQUEST_FAILED',
+      'Failed to search ERP employees.',
+      error.details || error.message
+    );
+  }
 };
 
 export const getLearningSummaryReport = async (_req, res) => {

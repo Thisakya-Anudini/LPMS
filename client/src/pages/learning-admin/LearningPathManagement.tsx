@@ -22,12 +22,17 @@ type LearningPathRow = {
 };
 
 type AssignableLearner = {
-  id: string;
-  name: string;
+  employeeNumber: string;
+  employeeName: string;
+  employeeSurname: string;
   email: string;
-  employee_number: string;
   designation: string;
-  grade_name: string;
+  gradeName: string;
+  organizationName: string;
+  costCenterCode: string;
+  costCenterName: string;
+  employeeInitials: string;
+  employeeSupervisorNumber: string;
 };
 
 type CourseItem = {
@@ -63,7 +68,7 @@ const initialPathForm = {
 
 const initialAssignForm = {
   learningPathId: '',
-  selectedLearnerIds: [] as string[]
+  selectedLearnerEmployeeNumbers: [] as string[]
 };
 
 type LearningPathManagementSection = 'create' | 'assign' | 'manage';
@@ -109,9 +114,18 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
   const [assignForm, setAssignForm] = useState(initialAssignForm);
   const [assignLoading, setAssignLoading] = useState(false);
+  const [assignSearchLoading, setAssignSearchLoading] = useState(false);
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
-  const [assignNameSearch, setAssignNameSearch] = useState('');
-  const [assignDesignationFilter, setAssignDesignationFilter] = useState('ALL');
+  const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
+  const [assignDesignationFilter, setAssignDesignationFilter] = useState('');
+  const [assignGradeFilter, setAssignGradeFilter] = useState('');
+  const [assignOrganizationFilter, setAssignOrganizationFilter] = useState('');
+  const [assignPayrollFilter, setAssignPayrollFilter] = useState('');
+  const [designationOptions, setDesignationOptions] = useState<string[]>([]);
+  const [gradeOptions, setGradeOptions] = useState<string[]>([]);
+  const [organizationOptions, setOrganizationOptions] = useState<
+    Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
+  >([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -122,21 +136,32 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         return;
       }
 
-      const [pathsResponse, learnersResponse, coursesResponse] = await Promise.all([
+      const [pathsResponse, coursesResponse] = await Promise.all([
         learningApi.getLearningPaths(token),
-        learningApi.getAssignableEmployees(token),
         courseApi.getAllCourses(token)
       ]);
 
       setPaths(pathsResponse.learningPaths as LearningPathRow[]);
-      setLearners(learnersResponse.employees);
       setCourses(coursesResponse.courses);
+
+      if (section === 'assign') {
+        const optionsResponse = await learningApi.getAssignableEmployeeSearchOptions(token);
+        setDesignationOptions(optionsResponse.designations);
+        setGradeOptions(optionsResponse.grades);
+        setOrganizationOptions(
+          optionsResponse.organizations.map((organization) => ({
+            organizationId: organization.organizationId,
+            organizationName: organization.organizationName,
+            parentOrganizationName: organization.parentOrganizationName
+          }))
+        );
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load data.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [getAccessToken, showToast]);
+  }, [getAccessToken, section, showToast]);
 
   useEffect(() => {
     loadData();
@@ -153,30 +178,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         path.description.toLowerCase().includes(normalized)
     );
   }, [paths, query]);
-
-  const learnerDesignationOptions = useMemo(() => {
-    const values = Array.from(
-      new Set(
-        learners
-          .map((learner) => learner.designation.trim())
-          .filter((value) => value.length > 0 && value !== '-')
-      )
-    ).sort((a, b) => a.localeCompare(b));
-    return ['ALL', ...values];
-  }, [learners]);
-
-  const filteredAssignableLearners = useMemo(() => {
-    const employeeNoTerm = assignEmployeeNoSearch.trim().toLowerCase();
-    const nameTerm = assignNameSearch.trim().toLowerCase();
-
-    return learners.filter((learner) => {
-      const byEmployeeNo = !employeeNoTerm || learner.employee_number.toLowerCase().includes(employeeNoTerm);
-      const byName = !nameTerm || learner.name.toLowerCase().includes(nameTerm);
-      const byDesignation =
-        assignDesignationFilter === 'ALL' || learner.designation === assignDesignationFilter;
-      return byEmployeeNo && byName && byDesignation;
-    });
-  }, [assignDesignationFilter, assignEmployeeNoSearch, assignNameSearch, learners]);
 
   const toStages = (stages: StageForm[]) =>
     stages
@@ -311,14 +312,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     }
   };
 
-  const toggleLearnerSelection = (learnerId: string) => {
+  const toggleLearnerSelection = (employeeNumber: string) => {
     setAssignForm((prev) => {
-      const exists = prev.selectedLearnerIds.includes(learnerId);
+      const exists = prev.selectedLearnerEmployeeNumbers.includes(employeeNumber);
       return {
         ...prev,
-        selectedLearnerIds: exists
-          ? prev.selectedLearnerIds.filter((id) => id !== learnerId)
-          : [...prev.selectedLearnerIds, learnerId]
+        selectedLearnerEmployeeNumbers: exists
+          ? prev.selectedLearnerEmployeeNumbers.filter((value) => value !== employeeNumber)
+          : [...prev.selectedLearnerEmployeeNumbers, employeeNumber]
       };
     });
   };
@@ -613,11 +614,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
       await learningApi.createEnrollments(token, {
         learningPathId: assignForm.learningPathId,
-        employeePrincipalIds: assignForm.selectedLearnerIds
+        selectedLearners: learners.filter((learner) =>
+          assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)
+        )
       });
 
       showToast('Enrollments assigned successfully.', 'success');
       setAssignForm(initialAssignForm);
+      setLearners([]);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to assign enrollments.', 'error');
     } finally {
@@ -625,20 +629,47 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     }
   };
 
+  const handleAssignSearch = async () => {
+    try {
+      setAssignSearchLoading(true);
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const response = await learningApi.searchAssignableEmployees(token, {
+        employeeNo: assignEmployeeNoSearch,
+        surname: assignSurnameSearch,
+        designation: assignDesignationFilter,
+        grade: assignGradeFilter,
+        organizationId: assignOrganizationFilter,
+        payrollType: assignPayrollFilter as '' | 'EXECUTIVE' | 'NON_EXECUTIVE'
+      });
+
+      setLearners(response.employees);
+      setAssignForm((prev) => ({ ...prev, selectedLearnerEmployeeNumbers: [] }));
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to search ERP employees.', 'error');
+    } finally {
+      setAssignSearchLoading(false);
+    }
+  };
+
   const selectAllFilteredLearners = () => {
-    const filteredIds = filteredAssignableLearners.map((learner) => learner.id);
+    const filteredIds = learners.map((learner) => learner.employeeNumber);
     setAssignForm((prev) => {
-      const next = new Set(prev.selectedLearnerIds);
+      const next = new Set(prev.selectedLearnerEmployeeNumbers);
       filteredIds.forEach((id) => next.add(id));
-      return { ...prev, selectedLearnerIds: Array.from(next) };
+      return { ...prev, selectedLearnerEmployeeNumbers: Array.from(next) };
     });
   };
 
   const clearFilteredLearners = () => {
-    const filteredIdSet = new Set(filteredAssignableLearners.map((learner) => learner.id));
+    const filteredIdSet = new Set(learners.map((learner) => learner.employeeNumber));
     setAssignForm((prev) => ({
       ...prev,
-      selectedLearnerIds: prev.selectedLearnerIds.filter((id) => !filteredIdSet.has(id))
+      selectedLearnerEmployeeNumbers: prev.selectedLearnerEmployeeNumbers.filter((id) => !filteredIdSet.has(id))
     }));
   };
 
@@ -752,7 +783,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
       {section === 'assign' ? (
         <Card title="Assign Learning Path to Learners">
-          <form className="space-y-4" onSubmit={handleAssign}>
+          <form className="space-y-3" onSubmit={handleAssign}>
             <Select
               label="Learning Path"
               value={assignForm.learningPathId}
@@ -764,12 +795,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 ...paths.map((path) => ({ value: path.id, label: `${path.title} (${path.status})` }))
               ]}
               required
-            />
+              />
 
             <div>
               <p className="text-sm font-medium text-slate-700 mb-2">Select Learners</p>
-              <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-2 border-b border-slate-200 mb-2">
+              <div className="border border-slate-200 rounded-md bg-white">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-3 border-b border-slate-200">
                   <Input
                     label="Search by Employee No"
                     value={assignEmployeeNoSearch}
@@ -777,22 +808,76 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     placeholder="e.g. 011338"
                   />
                   <Input
-                    label="Search by Name"
-                    value={assignNameSearch}
-                    onChange={(event) => setAssignNameSearch(event.target.value)}
-                    placeholder="e.g. Tennakoon"
+                    label="Search by Surname"
+                    value={assignSurnameSearch}
+                    onChange={(event) => setAssignSurnameSearch(event.target.value)}
+                    placeholder="e.g. Mohamed"
                   />
                   <Select
                     label="Filter by Designation"
                     value={assignDesignationFilter}
                     onChange={(event) => setAssignDesignationFilter(event.target.value)}
-                    options={learnerDesignationOptions.map((option) => ({ value: option, label: option }))}
+                    options={[
+                      { value: '', label: 'All Designations' },
+                      ...designationOptions.map((option) => ({ value: option, label: option }))
+                    ]}
+                  />
+                  <Select
+                    label="Filter by Grade"
+                    value={assignGradeFilter}
+                    onChange={(event) => setAssignGradeFilter(event.target.value)}
+                    options={[
+                      { value: '', label: 'All Grades' },
+                      ...gradeOptions.map((option) => ({ value: option, label: option }))
+                    ]}
+                  />
+                  <Select
+                    label="Filter by Organization"
+                    value={assignOrganizationFilter}
+                    onChange={(event) => setAssignOrganizationFilter(event.target.value)}
+                    options={[
+                      { value: '', label: 'All Organizations' },
+                      ...organizationOptions.map((option) => ({
+                        value: option.organizationId,
+                        label: option.parentOrganizationName
+                          ? `${option.organizationName} (${option.parentOrganizationName})`
+                          : option.organizationName
+                      }))
+                    ]}
+                  />
+                  <Select
+                    label="Executive / Non Executive"
+                    value={assignPayrollFilter}
+                    onChange={(event) => setAssignPayrollFilter(event.target.value)}
+                    options={[
+                      { value: '', label: 'All Payrolls' },
+                      { value: 'EXECUTIVE', label: 'Executive' },
+                      { value: 'NON_EXECUTIVE', label: 'Non Executive' }
+                    ]}
                   />
                 </div>
 
-                <div className="flex items-center justify-between px-2 pb-2">
+                <div className="flex justify-end px-3 py-2 border-b border-slate-200 bg-slate-50/70">
+                  <Button
+                    type="button"
+                    onClick={handleAssignSearch}
+                    isLoading={assignSearchLoading}
+                    disabled={
+                      !assignEmployeeNoSearch.trim() &&
+                      !assignSurnameSearch.trim() &&
+                      !assignDesignationFilter &&
+                      !assignGradeFilter &&
+                      !assignOrganizationFilter &&
+                      !assignPayrollFilter
+                    }
+                  >
+                    Search
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-200">
                   <p className="text-xs text-slate-500">
-                    Filtered learners: {filteredAssignableLearners.length} | Selected: {assignForm.selectedLearnerIds.length}
+                    ERP results: {learners.length} | Selected: {assignForm.selectedLearnerEmployeeNumbers.length}
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -800,51 +885,59 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       size="sm"
                       variant="outline"
                       onClick={selectAllFilteredLearners}
-                      disabled={filteredAssignableLearners.length === 0}
+                      disabled={learners.length === 0}
                     >
-                      Select All Filtered
+                      Select All Results
                     </Button>
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
                       onClick={clearFilteredLearners}
-                      disabled={filteredAssignableLearners.length === 0}
+                      disabled={learners.length === 0}
                     >
-                      Clear Filtered
+                      Clear Results
                     </Button>
                   </div>
                 </div>
 
-                {learners.length === 0 ? (
-                  <p className="text-sm text-slate-500 p-2">No learners available.</p>
-                ) : filteredAssignableLearners.length === 0 ? (
-                  <p className="text-sm text-slate-500 p-2">No learners match current filters.</p>
-                ) : (
-                  filteredAssignableLearners.map((learner) => (
-                    <label key={learner.id} className="flex items-start gap-3 p-2 rounded hover:bg-slate-50">
-                      <input
-                        type="checkbox"
-                        checked={assignForm.selectedLearnerIds.includes(learner.id)}
-                        onChange={() => toggleLearnerSelection(learner.id)}
-                        className="mt-1"
-                      />
-                      <span>
-                        <span className="block text-sm font-medium text-slate-900">{learner.name}</span>
-                        <span className="block text-xs text-slate-500">
-                          {learner.email} | {learner.employee_number} | {learner.designation}
+                <div className="max-h-[26rem] overflow-y-auto p-2">
+                  {learners.length === 0 ? (
+                    <p className="text-sm text-slate-500 p-2">Search ERP to load learners.</p>
+                  ) : (
+                    learners.map((learner) => (
+                      <label
+                        key={learner.employeeNumber}
+                        className="flex items-start gap-3 p-2 rounded-md hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)}
+                          onChange={() => toggleLearnerSelection(learner.employeeNumber)}
+                          className="mt-1"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-slate-900">
+                            {learner.employeeName} ({learner.employeeNumber})
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            {learner.employeeSurname || '-'} | {learner.designation || '-'} | {learner.gradeName || '-'}
+                          </span>
+                          <span className="block text-xs text-slate-500">
+                            {learner.organizationName || '-'} | {learner.email || '-'}
+                          </span>
                         </span>
-                      </span>
-                    </label>
-                  ))
-                )}
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 
             <Button
               type="submit"
               isLoading={assignLoading}
-              disabled={!assignForm.learningPathId || assignForm.selectedLearnerIds.length === 0}
+              disabled={!assignForm.learningPathId || assignForm.selectedLearnerEmployeeNumbers.length === 0}
             >
               Assign Enrollments
             </Button>
