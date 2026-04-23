@@ -88,12 +88,9 @@ const isSupervisorFromSubordinateResponse = (response) =>
   Boolean(Array.isArray(response?.data) && response.data.length > 0);
 
 const resolveDashboardPrincipalId = async (user, employeeNo) => {
-  // DB users already carry UUID principal IDs.
   if (user.authSource !== 'MOCK_LEARNER') {
     return user.id;
   }
-
-  // Mock users are keyed by employee number; map to real principal if imported.
   const result = await query(
     `
       SELECT principal_id
@@ -103,7 +100,6 @@ const resolveDashboardPrincipalId = async (user, employeeNo) => {
     `,
     [employeeNo]
   );
-
   return result.rows[0]?.principal_id || null;
 };
 
@@ -441,7 +437,6 @@ export const enrollLearnerTeam = async (req, res) => {
       employeeLookup.rows.map((row) => [String(row.employee_number), row.principal_id])
     );
 
-    // Auto-provision missing learners into LPMS so supervisor assignment works without manual ERP import.
     const subordinateByEmployeeNo = new Map(
       Array.isArray(subordinates?.data)
         ? subordinates.data.map((row) => [String(row.employeeNumber).trim(), row])
@@ -586,7 +581,6 @@ export const getPublicLearningPaths = async (req, res) => {
         ORDER BY lp.created_at DESC
       `
     );
-
     return res.status(200).json({ learningPaths: result.rows });
   }
 
@@ -1062,6 +1056,30 @@ export const getLearnerCertificates = async (req, res) => {
   return res.status(200).json({ certificates: result.rows });
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// buildCertificateTitle
+//
+// Converts the learning path title into the bold certificate heading shown at
+// the top of the PDF, exactly matching the reference design:
+//
+//   Learning path title : "Compulsory Training"
+//   Certificate heading : "COMPULSORY TRAINING CERTIFICATE"
+//
+//   Learning path title : "Health & Safety Induction"
+//   Certificate heading : "HEALTH & SAFETY INDUCTION CERTIFICATE"
+//
+// The word "CERTIFICATE" is always appended as a separate word so path titles
+// never need to include it themselves. The only exception is when the title
+// already ends with "CERTIFICATE" (case-insensitive) to avoid duplication.
+// ─────────────────────────────────────────────────────────────────────────────
+const buildCertificateTitle = (learningPathTitle) => {
+  const base = String(learningPathTitle || 'Learning Path').trim().toUpperCase();
+  if (base.endsWith('CERTIFICATE')) {
+    return base;
+  }
+  return `${base} CERTIFICATE`;
+};
+
 export const downloadLearnerCertificate = async (req, res) => {
   const employeeNo = normalizeEmployeeNo(req.user, req.body);
   if (!employeeNo) {
@@ -1108,17 +1126,17 @@ export const downloadLearnerCertificate = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'Certificate not found.');
   }
 
-  // ── Fetch all courses under this learning path (ordered by stage + course order) ──
+  // ── Fetch all courses for this learning path (stage order → course order) ──
   const coursesResult = await query(
     `
       SELECT
-        COALESCE(c.title, lps.title) AS course_title,
-        c.duration AS course_duration,
+        COALESCE(c.title, lps.title)               AS course_title,
+        c.duration                                  AS course_duration,
         lps.stage_order,
-        COALESCE(sc.course_order, lps.stage_order) AS course_order
+        COALESCE(sc.course_order, lps.stage_order)  AS course_order
       FROM learning_path_stages lps
       LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
-      LEFT JOIN courses c ON c.id = sc.course_id
+      LEFT JOIN courses c        ON c.id = sc.course_id
       WHERE lps.learning_path_id = $1
       ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
     `,
@@ -1126,50 +1144,49 @@ export const downloadLearnerCertificate = async (req, res) => {
   );
 
   const courseRows = coursesResult.rows.map((row) => ({
-    title: String(row.course_title || '').trim(),
-    // duration is stored in the courses table; may be null until populated
-    duration: row.course_duration != null ? row.course_duration : null
+    title:    String(row.course_title || '').trim(),
+    // duration is null until an admin populates it; rendered as blank cell
+    duration: row.course_duration != null ? String(row.course_duration) : ''
   }));
 
-  // ── Date & name helpers ────────────────────────────────────────────────────
-  const finishedDate = certificate.completed_at || certificate.issued_at;
-  const issuedDateText = new Date(certificate.issued_at).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  });
-  const finishedDateFormatted = new Date(finishedDate).toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  });
-  // Short date for the "Awarded on" line (e.g. "05th March 2026")
+  // ── Dynamic title: "<LEARNING PATH NAME> CERTIFICATE" ─────────────────────
+  const certificateTitle = buildCertificateTitle(certificate.learning_path_title);
+
+  // ── Date helpers ───────────────────────────────────────────────────────────
+  const finishedDate    = certificate.completed_at || certificate.issued_at;
   const awardedDateText = new Date(finishedDate).toLocaleDateString('en-GB', {
-    day: '2-digit',
+    day:   '2-digit',
     month: 'long',
-    year: 'numeric'
+    year:  'numeric'
   });
+
+  // Certificate number formatted as TRPS/CC/XXXXXXXXX/YYYY
+  const rawId      = String(certificate.id).replace(/-/g, '').toUpperCase();
+  const serial     = rawId.slice(0, 9);
+  const issueYear  = new Date(certificate.issued_at).getFullYear();
+  const certNumber = `TRPS/CC/${serial}/${issueYear}`;
 
   const safeTitle = String(certificate.learning_path_title || 'learning_path')
     .replace(/[^a-z0-9]+/gi, '_')
     .toLowerCase();
-  const signerName = String(certificate.certificate_signer_name || '').trim() || 'Learning Administrator';
+
+  const signerName  = String(certificate.certificate_signer_name  || '').trim() || 'Learning Administrator';
   const signerTitle = String(certificate.certificate_signer_title || '').trim() || 'LPMS';
 
   // ── Signature image processing ─────────────────────────────────────────────
   let signatureImageBuffer = null;
-  const sigFile = certificate.certificate_signature_file;
+  const sigFile     = certificate.certificate_signature_file;
   const sigFileType = certificate.certificate_signature_file_type;
 
   if (sigFile && sigFileType && sigFileType.startsWith('image/')) {
     try {
       const cleanedDataUri = await removeImageBackground(sigFile);
-      const base64Data = cleanedDataUri.includes(',')
+      const base64Data     = cleanedDataUri.includes(',')
         ? cleanedDataUri.split(',')[1]
         : cleanedDataUri;
 
-      const { default: sharp } = await import('sharp');
-      signatureImageBuffer = await sharp(Buffer.from(base64Data, 'base64'))
+      const { default: sharpLib } = await import('sharp');
+      signatureImageBuffer = await sharpLib(Buffer.from(base64Data, 'base64'))
         .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 }, threshold: 10 })
         .png()
         .toBuffer();
@@ -1195,212 +1212,222 @@ export const downloadLearnerCertificate = async (req, res) => {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-  // ── A4 page setup ──────────────────────────────────────────────────────────
-  // A4 = 595.28 × 841.89 pt  |  margin = 56 pt
-  const PAGE_WIDTH = 595.28;
-  const PAGE_HEIGHT = 841.89;
-  const MARGIN = 56;
-  const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+  // ── A4 page constants (595.28 × 841.89 pt) ────────────────────────────────
+  const PAGE_W    = 595.28;
+  const PAGE_H    = 841.89;
+  const MARGIN    = 56;
+  const CONTENT_W = PAGE_W - MARGIN * 2;
 
   const doc = new PDFDocument({ size: 'A4', margin: MARGIN, autoFirstPage: true });
   doc.pipe(res);
 
   // ── Outer border ───────────────────────────────────────────────────────────
   doc
-    .rect(28, 28, PAGE_WIDTH - 56, PAGE_HEIGHT - 56)
+    .rect(28, 28, PAGE_W - 56, PAGE_H - 56)
     .lineWidth(1.5)
     .stroke('#888888');
 
-  // ── Title ──────────────────────────────────────────────────────────────────
+  // ── Certificate title (dynamic) ────────────────────────────────────────────
+  // Matches reference exactly: bold, centred, all-caps, e.g.
+  // "COMPULSORY TRAINING CERTIFICATE"
   doc.moveDown(1);
   doc
-    .fontSize(18)
+    .fontSize(16)
     .font('Helvetica-Bold')
     .fillColor('#000000')
-    .text('COMPULSORY TRAINING CERTIFICATE', MARGIN, doc.y, {
-      width: CONTENT_WIDTH,
+    .text(certificateTitle, MARGIN, doc.y, {
+      width: CONTENT_W,
       align: 'center'
     });
 
-  // ── Subtitle ───────────────────────────────────────────────────────────────
+  // ── "This certificate is awarded to" ──────────────────────────────────────
   doc.moveDown(2);
   doc
     .fontSize(11)
     .font('Helvetica')
     .fillColor('#333333')
-    .text('This certificate is awarded to', { width: CONTENT_WIDTH, align: 'center' });
+    .text('This certificate is awarded to', { width: CONTENT_W, align: 'center' });
 
   // ── Learner name ───────────────────────────────────────────────────────────
-  doc.moveDown(1);
+  doc.moveDown(0.8);
   doc
     .fontSize(20)
     .font('Helvetica-Bold')
     .fillColor('#000000')
-    .text(certificate.learner_name || `Employee ${employeeNo}`, { width: CONTENT_WIDTH, align: 'center' });
+    .text(certificate.learner_name || `Employee ${employeeNo}`, {
+      width: CONTENT_W,
+      align: 'center'
+    });
 
   // ── "On successful completion…" ────────────────────────────────────────────
-  doc.moveDown(1.2);
+  doc.moveDown(1);
   doc
     .fontSize(11)
     .font('Helvetica')
     .fillColor('#333333')
     .text('On successful completion of following e-learning courses', {
-      width: CONTENT_WIDTH,
+      width: CONTENT_W,
       align: 'center'
     });
 
   // ── Courses table ──────────────────────────────────────────────────────────
   doc.moveDown(1.2);
 
-  const tableTop = doc.y;
-  const colCourse = MARGIN;
-  const colDuration = MARGIN + CONTENT_WIDTH - 90; // duration column is 90 pt wide
-  const colCourseWidth = CONTENT_WIDTH - 90;
-  const durationColWidth = 90;
-  const rowHeight = 22;
-  const headerHeight = 36; // two-line header
+  const TABLE_TOP      = doc.y;
+  const DURATION_W     = 90;
+  const COL_COURSE_X   = MARGIN;
+  const COL_DURATION_X = MARGIN + CONTENT_W - DURATION_W;
+  const COURSE_COL_W   = CONTENT_W - DURATION_W;
+  const ROW_H          = 22;
+  const HEADER_H       = 36; // two-line header
 
-  // Header background
+  // Header background + border
   doc
-    .rect(colCourse, tableTop, CONTENT_WIDTH, headerHeight)
+    .rect(COL_COURSE_X, TABLE_TOP, CONTENT_W, HEADER_H)
     .fillAndStroke('#f0f0f0', '#aaaaaa');
 
-  // Header text – "Courses"
+  // "Courses" header label — centred within its column
   doc
     .fontSize(10)
     .font('Helvetica-Bold')
     .fillColor('#000000')
-    .text('Courses', colCourse + 6, tableTop + 6, {
-      width: colCourseWidth - 6,
-      align: 'left'
+    .text('Courses', COL_COURSE_X + 8, TABLE_TOP + 12, {
+      width: COURSE_COL_W - 16,
+      align: 'center'
     });
 
-  // Header text – "Duration" / "(hours)"
+  // "Duration" + "(hours)" stacked labels
   doc
     .fontSize(10)
     .font('Helvetica-Bold')
     .fillColor('#000000')
-    .text('Duration', colDuration, tableTop + 4, { width: durationColWidth, align: 'center' });
+    .text('Duration', COL_DURATION_X, TABLE_TOP + 4, {
+      width: DURATION_W,
+      align: 'center'
+    });
   doc
     .fontSize(9)
     .font('Helvetica')
     .fillColor('#333333')
-    .text('(hours)', colDuration, tableTop + 16, { width: durationColWidth, align: 'center' });
+    .text('(hours)', COL_DURATION_X, TABLE_TOP + 17, {
+      width: DURATION_W,
+      align: 'center'
+    });
 
-  // Vertical divider in header
+  // Vertical divider inside the header
   doc
-    .moveTo(colDuration - 1, tableTop)
-    .lineTo(colDuration - 1, tableTop + headerHeight)
+    .moveTo(COL_DURATION_X - 1, TABLE_TOP)
+    .lineTo(COL_DURATION_X - 1, TABLE_TOP + HEADER_H)
+    .lineWidth(0.5)
     .stroke('#aaaaaa');
 
   // ── Data rows ──────────────────────────────────────────────────────────────
-  let currentY = tableTop + headerHeight;
+  let currentY = TABLE_TOP + HEADER_H;
 
   courseRows.forEach((course, index) => {
-    const isEven = index % 2 === 0;
-    const rowBg = isEven ? '#ffffff' : '#f9f9f9';
+    const rowBg = index % 2 === 0 ? '#ffffff' : '#f9f9f9';
 
-    // Row background + border
     doc
-      .rect(colCourse, currentY, CONTENT_WIDTH, rowHeight)
+      .rect(COL_COURSE_X, currentY, CONTENT_W, ROW_H)
       .fillAndStroke(rowBg, '#cccccc');
 
-    // Course title
+    // Course title — bold, left-aligned, single line with ellipsis
     doc
       .fontSize(9.5)
       .font('Helvetica-Bold')
       .fillColor('#111111')
-      .text(course.title, colCourse + 6, currentY + 6, {
-        width: colCourseWidth - 12,
-        align: 'left',
+      .text(course.title, COL_COURSE_X + 8, currentY + 6, {
+        width:     COURSE_COL_W - 16,
+        align:     'left',
         lineBreak: false,
-        ellipsis: true
+        ellipsis:  true
       });
 
-    // Duration value (empty string when null — to be filled in the future)
-    const durationText = course.duration != null ? String(course.duration) : '';
+    // Duration value (blank until populated by admin)
     doc
       .fontSize(9.5)
       .font('Helvetica')
       .fillColor('#111111')
-      .text(durationText, colDuration, currentY + 6, {
-        width: durationColWidth - 4,
+      .text(course.duration, COL_DURATION_X, currentY + 6, {
+        width: DURATION_W - 4,
         align: 'center'
       });
 
-    // Vertical divider for each data row
+    // Vertical divider for each row
     doc
-      .moveTo(colDuration - 1, currentY)
-      .lineTo(colDuration - 1, currentY + rowHeight)
+      .moveTo(COL_DURATION_X - 1, currentY)
+      .lineTo(COL_DURATION_X - 1, currentY + ROW_H)
+      .lineWidth(0.5)
       .stroke('#cccccc');
 
-    currentY += rowHeight;
+    currentY += ROW_H;
   });
 
   // Bottom border of the table
   doc
-    .moveTo(colCourse, currentY)
-    .lineTo(colCourse + CONTENT_WIDTH, currentY)
+    .moveTo(COL_COURSE_X, currentY)
+    .lineTo(COL_COURSE_X + CONTENT_W, currentY)
     .lineWidth(0.5)
     .stroke('#aaaaaa');
 
-  // ── Bottom section: awarded date + cert no. left | signature right ─────────
-  const bottomSectionTop = currentY + 40;
+  // ── Footer ─────────────────────────────────────────────────────────────────
+  // Always push the footer to a minimum safe distance from the bottom of the
+  // page so it never collides with the table, even for very long course lists.
+  const FOOTER_TOP = Math.max(currentY + 40, PAGE_H - 160);
 
-  // "Awarded on …" and "Certificate No: …"
-  const certNumber = `TRPS/CC/${certificate.id.toString().slice(-9).toUpperCase()}`;
+  // Left column: "Awarded on …" + "Certificate No: …"
   doc
     .fontSize(9)
     .font('Helvetica')
     .fillColor('#333333')
-    .text(`Awarded on ${awardedDateText}`, MARGIN, bottomSectionTop, {
-      width: CONTENT_WIDTH / 2,
+    .text(`Awarded on ${awardedDateText}`, MARGIN, FOOTER_TOP, {
+      width: CONTENT_W / 2,
       align: 'left'
     });
   doc
     .fontSize(9)
     .font('Helvetica')
     .fillColor('#333333')
-    .text(`Certificate No: ${certNumber}`, MARGIN, bottomSectionTop + 14, {
-      width: CONTENT_WIDTH / 2,
+    .text(`Certificate No: ${certNumber}`, MARGIN, FOOTER_TOP + 14, {
+      width: CONTENT_W / 2,
       align: 'left'
     });
 
   // ── Signature block (right side) ──────────────────────────────────────────
-  const sigBlockWidth = 180;
-  const sigBlockLeft = PAGE_WIDTH - MARGIN - sigBlockWidth;
-  const sigImgHeight = 48;
-  const sigImgTop = bottomSectionTop - 4;
+  const SIG_BLOCK_W = 180;
+  const SIG_BLOCK_X = PAGE_W - MARGIN - SIG_BLOCK_W;
+  const SIG_IMG_H   = 48;
+  const SIG_IMG_TOP = FOOTER_TOP - 4;
 
   if (signatureImageBuffer) {
     try {
-      doc.image(signatureImageBuffer, sigBlockLeft, sigImgTop, {
-        width: sigBlockWidth,
-        height: sigImgHeight,
-        fit: [sigBlockWidth, sigImgHeight],
-        align: 'center',
+      doc.image(signatureImageBuffer, SIG_BLOCK_X, SIG_IMG_TOP, {
+        width:  SIG_BLOCK_W,
+        height: SIG_IMG_H,
+        fit:    [SIG_BLOCK_W, SIG_IMG_H],
+        align:  'center',
         valign: 'bottom'
       });
     } catch {
-      // skip if image fails
+      // silently skip if image buffer is corrupt
     }
   } else {
-    // Dotted line placeholder when no signature image is set
+    // Dotted placeholder when no signature image has been set
     doc
       .fontSize(9)
       .font('Helvetica')
       .fillColor('#aaaaaa')
-      .text('............................................', sigBlockLeft, sigImgTop + sigImgHeight - 12, {
-        width: sigBlockWidth,
+      .text('............................................', SIG_BLOCK_X, SIG_IMG_TOP + SIG_IMG_H - 12, {
+        width: SIG_BLOCK_W,
         align: 'center'
       });
   }
 
-  // Signature underline
-  const sigLineY = sigImgTop + sigImgHeight + 4;
+  // Underline beneath signature
+  const SIG_LINE_Y = SIG_IMG_TOP + SIG_IMG_H + 4;
   doc
-    .moveTo(sigBlockLeft, sigLineY)
-    .lineTo(sigBlockLeft + sigBlockWidth, sigLineY)
+    .moveTo(SIG_BLOCK_X, SIG_LINE_Y)
+    .lineTo(SIG_BLOCK_X + SIG_BLOCK_W, SIG_LINE_Y)
     .lineWidth(0.75)
     .stroke('#888888');
 
@@ -1409,18 +1436,18 @@ export const downloadLearnerCertificate = async (req, res) => {
     .fontSize(10)
     .font('Helvetica-Bold')
     .fillColor('#111111')
-    .text(signerName, sigBlockLeft, sigLineY + 5, {
-      width: sigBlockWidth,
+    .text(signerName, SIG_BLOCK_X, SIG_LINE_Y + 5, {
+      width: SIG_BLOCK_W,
       align: 'center'
     });
 
-  // Signer title
+  // Signer title / designation
   doc
     .fontSize(9)
     .font('Helvetica')
     .fillColor('#444444')
-    .text(signerTitle, sigBlockLeft, sigLineY + 18, {
-      width: sigBlockWidth,
+    .text(signerTitle, SIG_BLOCK_X, SIG_LINE_Y + 18, {
+      width: SIG_BLOCK_W,
       align: 'center'
     });
 
