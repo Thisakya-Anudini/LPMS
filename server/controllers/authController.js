@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { query } from '../db.js';
+import { ROLES } from '../constants/roles.js';
 import {
   addDays,
   getRefreshTokenTtlDays,
@@ -10,11 +11,13 @@ import {
   verifyToken
 } from '../utils/auth.js';
 import { sendError } from '../utils/http.js';
+import { fetchEmployeeDetailsForServiceNo, fetchEmployeeSubordinates } from '../utils/erpClient.js';
+import { findMockLearnerByIdentifier, isValidMockLearnerPassword } from '../users/learner.js';
 
 const mapPrincipal = (row) => ({
   id: row.id,
   email: row.email,
-  role: row.role,
+  role: row.role === ROLES.SUPERVISOR ? ROLES.EMPLOYEE : row.role,
   name: row.name,
   principalType: row.principal_type,
   mustChangePassword: row.must_change_password
@@ -56,15 +59,127 @@ const sanitizePrincipal = (principal) => ({
   role: principal.role,
   name: principal.name,
   principalType: principal.principalType,
-  mustChangePassword: principal.mustChangePassword
+  mustChangePassword: principal.mustChangePassword,
+  authSource: principal.authSource || 'SYSTEM',
+  employeeNo: principal.employeeNo || null,
+  isSupervisor: typeof principal.isSupervisor === 'boolean' ? principal.isSupervisor : false,
+  isLearningAdmin: typeof principal.isLearningAdmin === 'boolean' ? principal.isLearningAdmin : false
 });
 
-export const login = async (req, res) => {
-  const { email, password } = req.body;
+const mapLearnerName = (detailsResponse, fallbackName) => {
+  const row = detailsResponse?.data?.[0];
+  if (!row) {
+    return fallbackName;
+  }
 
-  const principal = await getPrincipalByEmail(email);
+  if (row.employeeName && String(row.employeeName).trim()) {
+    return String(row.employeeName).trim();
+  }
+
+  const initials = row.employeeInitials ? String(row.employeeInitials).trim() : '';
+  const surname = row.employeeSurname ? String(row.employeeSurname).trim() : '';
+  const merged = `${initials} ${surname}`.trim();
+  return merged || fallbackName;
+};
+
+const hasLearningAdminAssignment = async (employeeNo) => {
+  if (!employeeNo) {
+    return false;
+  }
+
+  const assignment = await query(
+    `
+      SELECT employee_number
+      FROM learning_admin_assignments
+      WHERE employee_number = $1
+      LIMIT 1
+    `,
+    [employeeNo]
+  );
+
+  return assignment.rowCount > 0;
+};
+
+const resolveEmployeeContextByNumber = async (employeeNo) => {
+  const normalizedEmployeeNo = employeeNo ? String(employeeNo).trim() : null;
+  if (!normalizedEmployeeNo) {
+    return { employeeNo: null, isSupervisor: false, isLearningAdmin: false };
+  }
+
+  let isSupervisor = false;
+  try {
+    const subordinates = await fetchEmployeeSubordinates(normalizedEmployeeNo);
+    isSupervisor = Boolean(Array.isArray(subordinates?.data) && subordinates.data.length > 0);
+  } catch {
+    isSupervisor = false;
+  }
+
+  const isLearningAdmin = await hasLearningAdminAssignment(normalizedEmployeeNo);
+
+  return {
+    employeeNo: normalizedEmployeeNo,
+    isSupervisor,
+    isLearningAdmin
+  };
+};
+
+const resolveEmployeeContext = async (principalId) => {
+  const employeeResult = await query(
+    `
+      SELECT employee_number
+      FROM employees
+      WHERE principal_id = $1
+      LIMIT 1
+    `,
+    [principalId]
+  );
+
+  const employeeNo = employeeResult.rows[0]?.employee_number
+    ? String(employeeResult.rows[0].employee_number).trim()
+    : null;
+  return resolveEmployeeContextByNumber(employeeNo);
+};
+
+export const login = async (req, res) => {
+  const { email, username, password } = req.body;
+  const identifier = String(username || email || '').trim();
+
+  const principal = await getPrincipalByEmail(identifier.toLowerCase());
   if (!principal) {
-    return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
+    const mockLearner = findMockLearnerByIdentifier(identifier);
+    if (!mockLearner || !isValidMockLearnerPassword(mockLearner, password)) {
+      return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
+    }
+
+    let detailsResponse = null;
+    try {
+      detailsResponse = await fetchEmployeeDetailsForServiceNo(mockLearner.employeeNo);
+    } catch {
+      // keep login available even if ERP temporarily fails
+    }
+    const mockEmployeeContext = await resolveEmployeeContextByNumber(mockLearner.employeeNo);
+
+    const normalizedPrincipal = {
+      id: mockLearner.id,
+      email: mockLearner.email,
+      role: ROLES.EMPLOYEE,
+      name: mapLearnerName(detailsResponse, mockLearner.email.split('@')[0]),
+      principalType: 'EMPLOYEE',
+      mustChangePassword: false,
+      authSource: 'MOCK_LEARNER',
+      employeeNo: mockEmployeeContext.employeeNo,
+      isSupervisor: mockEmployeeContext.isSupervisor,
+      isLearningAdmin: mockEmployeeContext.isLearningAdmin
+    };
+
+    const accessToken = signAccessToken(normalizedPrincipal);
+    const refreshToken = signRefreshToken(normalizedPrincipal, crypto.randomUUID());
+
+    return res.status(200).json({
+      accessToken,
+      refreshToken,
+      user: sanitizePrincipal(normalizedPrincipal)
+    });
   }
 
   const isValidPassword = await bcrypt.compare(password, principal.password_hash);
@@ -73,6 +188,12 @@ export const login = async (req, res) => {
   }
 
   const normalizedPrincipal = mapPrincipal(principal);
+  if (normalizedPrincipal.role === ROLES.EMPLOYEE) {
+    const employeeContext = await resolveEmployeeContext(normalizedPrincipal.id);
+    normalizedPrincipal.employeeNo = employeeContext.employeeNo;
+    normalizedPrincipal.isSupervisor = employeeContext.isSupervisor;
+    normalizedPrincipal.isLearningAdmin = employeeContext.isLearningAdmin;
+  }
   const accessToken = signAccessToken(normalizedPrincipal);
   const refreshToken = await createRefreshSession(normalizedPrincipal);
 
@@ -94,6 +215,24 @@ export const refresh = async (req, res) => {
     decoded = verifyToken(refreshToken);
   } catch {
     return sendError(res, 401, 'INVALID_REFRESH_TOKEN', 'Refresh token is invalid or expired.');
+  }
+
+  if (decoded.authSource === 'MOCK_LEARNER') {
+    const principal = {
+      id: decoded.sub,
+      email: decoded.email,
+      name: decoded.name,
+      role: decoded.role,
+      principalType: decoded.principalType,
+      mustChangePassword: false,
+      authSource: decoded.authSource,
+      employeeNo: decoded.employeeNo,
+      isSupervisor: Boolean(decoded.isSupervisor),
+      isLearningAdmin: Boolean(decoded.isLearningAdmin)
+    };
+
+    const accessToken = signAccessToken(principal);
+    return res.status(200).json({ accessToken });
   }
 
   const stored = await query(
@@ -124,6 +263,12 @@ export const refresh = async (req, res) => {
     principalType: tokenRow.principal_type,
     mustChangePassword: tokenRow.must_change_password
   };
+  if (principal.role === ROLES.EMPLOYEE) {
+    const employeeContext = await resolveEmployeeContext(principal.id);
+    principal.employeeNo = employeeContext.employeeNo;
+    principal.isSupervisor = employeeContext.isSupervisor;
+    principal.isLearningAdmin = employeeContext.isLearningAdmin;
+  }
 
   const accessToken = signAccessToken(principal);
   return res.status(200).json({ accessToken });
@@ -142,6 +287,10 @@ export const logout = async (req, res) => {
     return sendError(res, 200, 'OK', 'Already logged out.');
   }
 
+  if (decoded.authSource === 'MOCK_LEARNER') {
+    return res.status(200).json({ success: true });
+  }
+
   await query(
     `
       UPDATE refresh_tokens
@@ -155,6 +304,23 @@ export const logout = async (req, res) => {
 };
 
 export const me = async (req, res) => {
+  if (req.user.authSource === 'MOCK_LEARNER') {
+    return res.status(200).json({
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        name: req.user.name,
+        role: req.user.role,
+        principalType: req.user.principalType,
+        mustChangePassword: false,
+        authSource: req.user.authSource,
+        employeeNo: req.user.employeeNo || null,
+        isSupervisor: Boolean(req.user.isSupervisor),
+        isLearningAdmin: Boolean(req.user.isLearningAdmin)
+      }
+    });
+  }
+
   const result = await query(
     `
       SELECT id, email, name, role, principal_type, must_change_password
@@ -170,19 +336,32 @@ export const me = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'User not found.');
   }
 
+  const mappedPrincipal = mapPrincipal(principal);
+  if (mappedPrincipal.role === ROLES.EMPLOYEE) {
+    const employeeContext = await resolveEmployeeContext(mappedPrincipal.id);
+    mappedPrincipal.employeeNo = employeeContext.employeeNo;
+    mappedPrincipal.isSupervisor = employeeContext.isSupervisor;
+    mappedPrincipal.isLearningAdmin = employeeContext.isLearningAdmin;
+  }
+
   return res.status(200).json({
     user: {
-      id: principal.id,
-      email: principal.email,
-      name: principal.name,
-      role: principal.role,
-      principalType: principal.principal_type,
+      ...sanitizePrincipal(mappedPrincipal),
       mustChangePassword: principal.must_change_password
     }
   });
 };
 
 export const changePassword = async (req, res) => {
+  if (req.user.authSource === 'MOCK_LEARNER') {
+    return sendError(
+      res,
+      400,
+      'NOT_SUPPORTED',
+      'Password change is not enabled for mock learner authentication.'
+    );
+  }
+
   const { oldPassword, newPassword } = req.body;
   if (typeof newPassword !== 'string' || newPassword.length < 8) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'newPassword must be at least 8 characters.');

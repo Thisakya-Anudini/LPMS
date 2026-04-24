@@ -1,8 +1,42 @@
-import { fetchEmployeeSubordinates } from '../utils/erpClient.js';
+import {
+  fetchEmployeeDetailsForServiceNo,
+  fetchEmployeeHierarchy,
+  fetchEmployeeSubordinates
+} from '../utils/erpClient.js';
 import { sendError } from '../utils/http.js';
 import { logAudit } from '../utils/audit.js';
 import { query } from '../db.js';
 import bcrypt from 'bcryptjs';
+
+const getErrorStatus = (error) => (typeof error.status === 'number' ? error.status : 502);
+
+export const getErpLearnerDetails = async (req, res) => {
+  const { employeeNo } = req.body;
+  if (!employeeNo || typeof employeeNo !== 'string') {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
+  }
+
+  try {
+    const data = await fetchEmployeeDetailsForServiceNo(employeeNo.trim());
+
+    await logAudit({
+      actorPrincipalId: req.user.id,
+      action: 'FETCH_ERP_LEARNER_DETAILS',
+      resourceType: 'ERP',
+      metadata: { employeeNo }
+    });
+
+    return res.status(200).json(data);
+  } catch (error) {
+    return sendError(
+      res,
+      getErrorStatus(error),
+      'ERP_REQUEST_FAILED',
+      'Failed to fetch learner details from ERP.',
+      error.details || error.message
+    );
+  }
+};
 
 export const getErpSubordinates = async (req, res) => {
   const { employeeNo } = req.body;
@@ -20,18 +54,41 @@ export const getErpSubordinates = async (req, res) => {
       metadata: { employeeNo }
     });
 
-    return res.status(200).json({
-      source: 'ERP',
-      employeeNo,
-      data
-    });
+    return res.status(200).json(data);
   } catch (error) {
-    const status = typeof error.status === 'number' ? error.status : 502;
     return sendError(
       res,
-      status,
+      getErrorStatus(error),
       'ERP_REQUEST_FAILED',
       'Failed to fetch subordinate details from ERP.',
+      error.details || error.message
+    );
+  }
+};
+
+export const getErpHierarchy = async (req, res) => {
+  const { employeeNo } = req.body;
+  if (!employeeNo || typeof employeeNo !== 'string') {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
+  }
+
+  try {
+    const data = await fetchEmployeeHierarchy(employeeNo.trim());
+
+    await logAudit({
+      actorPrincipalId: req.user.id,
+      action: 'FETCH_ERP_HIERARCHY',
+      resourceType: 'ERP',
+      metadata: { employeeNo }
+    });
+
+    return res.status(200).json(data);
+  } catch (error) {
+    return sendError(
+      res,
+      getErrorStatus(error),
+      'ERP_REQUEST_FAILED',
+      'Failed to fetch hierarchy details from ERP.',
       error.details || error.message
     );
   }

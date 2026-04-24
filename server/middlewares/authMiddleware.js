@@ -1,5 +1,6 @@
 import { verifyToken } from '../utils/auth.js';
 import { sendError } from '../utils/http.js';
+import { ROLES } from '../constants/roles.js';
 
 const parseBearerToken = (authorizationHeader) => {
   if (!authorizationHeader) {
@@ -28,7 +29,13 @@ export const protect = (req, res, next) => {
       id: decoded.sub,
       email: decoded.email,
       role: decoded.role,
-      principalType: decoded.principalType
+      principalType: decoded.principalType,
+      name: decoded.name,
+      mustChangePassword: decoded.mustChangePassword,
+      authSource: decoded.authSource,
+      employeeNo: decoded.employeeNo,
+      isSupervisor: decoded.isSupervisor,
+      isLearningAdmin: decoded.isLearningAdmin
     };
     return next();
   } catch {
@@ -41,7 +48,16 @@ export const requireRole = (roles) => (req, res, next) => {
     return sendError(res, 401, 'AUTH_REQUIRED', 'Authentication is required.');
   }
 
-  if (!roles.includes(req.user.role)) {
+  if (roles.includes(req.user.role)) {
+    return next();
+  }
+
+  const hasLearningAdminAccess =
+    roles.includes(ROLES.LEARNING_ADMIN) &&
+    req.user.role === ROLES.EMPLOYEE &&
+    Boolean(req.user.isLearningAdmin);
+
+  if (!hasLearningAdminAccess) {
     return sendError(res, 403, 'FORBIDDEN', 'You do not have permission to access this resource.');
   }
 

@@ -27,8 +27,13 @@ export const createUser = async (req, res) => {
     });
   }
 
-  if (role === ROLES.EMPLOYEE) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'Use /api/employees to create employee accounts.');
+  if (role !== ROLES.SUPER_ADMIN) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Only SUPER_ADMIN accounts can be created from this interface.'
+    );
   }
 
   const created = await createPrincipal({
@@ -54,6 +59,7 @@ export const getAllUsers = async (_req, res) => {
     `
       SELECT id, email, role, name, principal_type, is_active, created_at
       FROM auth_principals
+      WHERE role IN ('SUPER_ADMIN', 'LEARNING_ADMIN')
       ORDER BY created_at DESC
     `
   );
@@ -65,6 +71,27 @@ export const deleteUser = async (req, res) => {
   const { id } = req.params;
   if (id === req.user.id) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'You cannot deactivate your own account.');
+  }
+
+  const target = await query(
+    `
+      SELECT id, role
+      FROM auth_principals
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id]
+  );
+  if (target.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'User not found.');
+  }
+  if (!['SUPER_ADMIN', 'LEARNING_ADMIN'].includes(target.rows[0].role)) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'Only SUPER_ADMIN and LEARNING_ADMIN accounts can be deactivated from this interface.'
+    );
   }
 
   const result = await query(
@@ -89,6 +116,219 @@ export const deleteUser = async (req, res) => {
   });
 
   return res.status(200).json({ user: result.rows[0] });
+};
+
+export const assignLearningAdmin = async (req, res) => {
+  const { employeeNumber } = req.body;
+  const normalizedEmployeeNumber = String(employeeNumber || '').trim();
+  if (!normalizedEmployeeNumber) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNumber is required.');
+  }
+
+  const employee = await query(
+    `
+      SELECT
+        e.employee_number,
+        e.principal_id,
+        ap.name,
+        ap.email,
+        ap.is_active
+      FROM employees e
+      JOIN auth_principals ap ON ap.id = e.principal_id
+      WHERE e.employee_number = $1
+      LIMIT 1
+    `,
+    [normalizedEmployeeNumber]
+  );
+
+  if (employee.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learner not found for given employeeNumber.');
+  }
+
+  if (!employee.rows[0].is_active) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Learner account is inactive.');
+  }
+
+  await query(
+    `
+      INSERT INTO learning_admin_assignments (employee_number, assigned_by_principal_id)
+      VALUES ($1, $2)
+      ON CONFLICT (employee_number)
+      DO UPDATE SET assigned_by_principal_id = EXCLUDED.assigned_by_principal_id, updated_at = NOW()
+    `,
+    [normalizedEmployeeNumber, req.user.id]
+  );
+
+  await logAudit({
+    actorPrincipalId: req.user.id,
+    action: 'ASSIGN_LEARNING_ADMIN',
+    resourceType: 'EMPLOYEE',
+    resourceId: employee.rows[0].principal_id,
+    metadata: { employeeNumber: normalizedEmployeeNumber }
+  });
+
+  return res.status(200).json({
+    assignment: {
+      employeeNumber: normalizedEmployeeNumber,
+      principalId: employee.rows[0].principal_id,
+      name: employee.rows[0].name,
+      email: employee.rows[0].email,
+      isLearningAdmin: true
+    }
+  });
+};
+
+export const removeLearningAdmin = async (req, res) => {
+  const normalizedEmployeeNumber = String(req.params.employeeNumber || '').trim();
+  if (!normalizedEmployeeNumber) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNumber is required.');
+  }
+
+  const result = await query(
+    `
+      DELETE FROM learning_admin_assignments
+      WHERE employee_number = $1
+      RETURNING employee_number
+    `,
+    [normalizedEmployeeNumber]
+  );
+
+  if (result.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learning admin assignment not found.');
+  }
+
+  await logAudit({
+    actorPrincipalId: req.user.id,
+    action: 'REMOVE_LEARNING_ADMIN',
+    resourceType: 'EMPLOYEE',
+    resourceId: normalizedEmployeeNumber,
+    metadata: { employeeNumber: normalizedEmployeeNumber }
+  });
+
+  return res.status(200).json({ success: true });
+};
+
+export const getAllLearners = async (_req, res) => {
+  const result = await query(
+    `
+      SELECT
+        ap.id AS principal_id,
+        ap.name,
+        ap.email,
+        ap.is_active,
+        e.employee_number,
+        e.designation,
+        e.grade_name,
+        (la.employee_number IS NOT NULL) AS is_learning_admin,
+        COUNT(en.id)::int AS total_learning_paths,
+        COUNT(en.id) FILTER (WHERE en.status = 'COMPLETED')::int AS completed_learning_paths,
+        COALESCE(AVG(en.progress), 0)::numeric(5,2) AS average_progress
+      FROM auth_principals ap
+      JOIN employees e ON e.principal_id = ap.id
+      LEFT JOIN learning_admin_assignments la ON la.employee_number = e.employee_number
+      LEFT JOIN enrollments en ON en.principal_id = ap.id
+      WHERE ap.role = 'EMPLOYEE'
+      GROUP BY ap.id, ap.name, ap.email, ap.is_active, e.employee_number, e.designation, e.grade_name, la.employee_number
+      ORDER BY ap.name ASC
+    `
+  );
+
+  return res.status(200).json({ learners: result.rows });
+};
+
+export const getLearnerLearningPaths = async (req, res) => {
+  const { principalId } = req.params;
+
+  const principal = await query(
+    `
+      SELECT id, name, email, role
+      FROM auth_principals
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [principalId]
+  );
+  if (principal.rowCount === 0 || principal.rows[0].role !== 'EMPLOYEE') {
+    return sendError(res, 404, 'NOT_FOUND', 'Learner not found.');
+  }
+
+  const result = await query(
+    `
+      SELECT
+        en.id AS enrollment_id,
+        en.status,
+        en.progress,
+        en.enrolled_at,
+        en.completed_at,
+        lp.id AS learning_path_id,
+        lp.title,
+        lp.description,
+        lp.category,
+        lp.total_duration
+      FROM enrollments en
+      JOIN learning_paths lp ON lp.id = en.learning_path_id
+      WHERE en.principal_id = $1
+        AND lp.is_deleted = FALSE
+      ORDER BY en.enrolled_at DESC
+    `,
+    [principalId]
+  );
+
+  return res.status(200).json({
+    learner: {
+      id: principal.rows[0].id,
+      name: principal.rows[0].name,
+      email: principal.rows[0].email
+    },
+    learningPaths: result.rows
+  });
+};
+
+export const getLearningPathEnrollments = async (req, res) => {
+  const { learningPathId } = req.params;
+
+  const learningPathResult = await query(
+    `
+      SELECT id, title, description, category, total_duration, status
+      FROM learning_paths
+      WHERE id = $1
+        AND is_deleted = FALSE
+      LIMIT 1
+    `,
+    [learningPathId]
+  );
+
+  if (learningPathResult.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+  }
+
+  const enrollmentsResult = await query(
+    `
+      SELECT
+        en.id AS enrollment_id,
+        en.status,
+        en.progress,
+        en.enrolled_at,
+        en.completed_at,
+        ap.id AS principal_id,
+        ap.name,
+        ap.email,
+        e.employee_number,
+        e.designation,
+        e.grade_name
+      FROM enrollments en
+      JOIN auth_principals ap ON ap.id = en.principal_id
+      JOIN employees e ON e.principal_id = ap.id
+      WHERE en.learning_path_id = $1
+      ORDER BY en.enrolled_at DESC, ap.name ASC
+    `,
+    [learningPathId]
+  );
+
+  return res.status(200).json({
+    learningPath: learningPathResult.rows[0],
+    enrollments: enrollmentsResult.rows
+  });
 };
 
 export const createEmployee = async (req, res) => {

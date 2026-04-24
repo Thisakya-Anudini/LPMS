@@ -3,13 +3,13 @@ import { Role } from '../types';
 export function getDefaultRouteForRole(role: Role) {
   switch (role) {
     case 'SUPER_ADMIN':
-      return '/admin';
+      return '/admin/learners';
     case 'LEARNING_ADMIN':
       return '/learning-admin';
     case 'SUPERVISOR':
-      return '/supervisor';
+      return '/learner/my-progress';
     case 'EMPLOYEE':
-      return '/employee';
+      return '/learner/my-progress';
     default:
       return '/login';
   }
