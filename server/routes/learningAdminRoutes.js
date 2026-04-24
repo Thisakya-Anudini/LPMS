@@ -3,11 +3,12 @@ import {
   createEnrollments,
   createLearningPath,
   deleteLearningPath,
-  getAssignableEmployees,
+  getAssignableEmployeeSearchOptions,
   getCertificateCustomizationPaths,
   getLearningSummaryReport,
   getLearningPathById,
   getLearningPaths,
+  searchAssignableEmployees,
   updateLearningPathCertificateSignature,
   updateLearningPath
 } from '../controllers/learningAdminController.js';
@@ -33,10 +34,11 @@ router.post(
   '/enrollments',
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['learningPathId', 'employeePrincipalIds']),
+  requireFields(['learningPathId', 'selectedLearners']),
   createEnrollments
 );
-router.get('/employees', protect, requireRole([ROLES.LEARNING_ADMIN]), getAssignableEmployees);
+router.get('/employee-search-options', protect, requireRole([ROLES.LEARNING_ADMIN]), getAssignableEmployeeSearchOptions);
+router.post('/employee-search', protect, requireRole([ROLES.LEARNING_ADMIN]), searchAssignableEmployees);
 router.get('/reports/summary', protect, requireRole([ROLES.LEARNING_ADMIN]), getLearningSummaryReport);
 router.get('/certificate-settings', protect, requireRole([ROLES.LEARNING_ADMIN]), getCertificateCustomizationPaths);
 router.put(
