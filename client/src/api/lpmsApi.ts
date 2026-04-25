@@ -206,12 +206,68 @@ export const learningApi = {
       token
     });
   },
-  getAssignableEmployees(token: string) {
-    return request<{ employees: Array<{ id: string; name: string; email: string; employee_number: string; designation: string; grade_name: string }> }>('/employees', { token });
+  getAssignableEmployeeSearchOptions(token: string) {
+    return request<{
+      designations: string[];
+      grades: string[];
+      organizations: Array<{
+        organizationId: string;
+        organizationName: string;
+        parentOrganizationId: string;
+        parentOrganizationName: string;
+      }>;
+      payrolls: Array<{ value: 'EXECUTIVE' | 'NON_EXECUTIVE'; label: string }>;
+    }>('/employee-search-options', { token });
+  },
+  searchAssignableEmployees(
+    token: string,
+    payload: {
+      employeeNo?: string;
+      surname?: string;
+      designation?: string;
+      grade?: string;
+      organizationId?: string;
+      payrollType?: 'EXECUTIVE' | 'NON_EXECUTIVE' | '';
+    }
+  ) {
+    return request<{
+      employees: Array<{
+        employeeNumber: string;
+        employeeName: string;
+        employeeSurname: string;
+        designation: string;
+        gradeName: string;
+        email: string;
+        organizationName: string;
+        costCenterCode: string;
+        costCenterName: string;
+        employeeInitials: string;
+        employeeSupervisorNumber: string;
+      }>;
+    }>('/employee-search', {
+      method: 'POST',
+      token,
+      body: payload
+    });
   },
   createEnrollments(
     token: string,
-    payload: { learningPathId: string; employeePrincipalIds: string[]; notifyAll?: boolean }
+    payload: {
+      learningPathId: string;
+      selectedLearners: Array<{
+        employeeNumber: string;
+        employeeName: string;
+        employeeSurname: string;
+        designation: string;
+        gradeName: string;
+        email: string;
+        organizationName: string;
+        costCenterCode: string;
+        costCenterName: string;
+        employeeInitials: string;
+        employeeSupervisorNumber: string;
+      }>;
+    }
   ) {
     return request<{ enrollments: Array<{ id: string }> }>('/enrollments', {
       method: 'POST',
