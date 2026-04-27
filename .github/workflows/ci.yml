@@ -84,83 +84,68 @@ jobs:
       - name: Run Unit Tests
         run: npm test
 
-  debug-ssh:
-    name: Debug SSH Credentials
+  deploy-test:
+    name: Deploy to Server (Feature-ci-deploy test)
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Feature-ci-deploy')
-
-    steps:
-      - name: Check secrets are set
-        run: |
-          echo "SERVER_HOST set:     ${{ secrets.SERVER_HOST != '' }}"
-          echo "SERVER_PORT set:     ${{ secrets.SERVER_PORT != '' }}"
-          echo "SERVER_USERNAME set: ${{ secrets.SERVER_USERNAME != '' }}"
-          echo "SERVER_SSH_KEY set:  ${{ secrets.SERVER_SSH_KEY != '' }}"
-
-      - name: Validate SSH key format
-        run: |
-          KEY="${{ secrets.SERVER_SSH_KEY }}"
-          echo "Key length (chars): ${#KEY}"
-          echo "Key line count:     $(echo "$KEY" | wc -l)"
-          echo "First line:         $(echo "$KEY" | head -1)"
-          echo "Last line:          $(echo "$KEY" | tail -1)"
-
-      - name: Write key to file and parse with ssh-keygen
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/debug_key
-          chmod 600 ~/.ssh/debug_key
-          ssh-keygen -y -f ~/.ssh/debug_key > /dev/null \
-            && echo "KEY PARSE: OK — key is valid and readable" \
-            || echo "KEY PARSE: FAILED — key format is invalid"
-
-      - name: Test TCP connectivity to server
-        run: |
-          nc -zv -w 10 ${{ secrets.SERVER_HOST }} ${{ secrets.SERVER_PORT }} \
-            && echo "TCP CONNECTION: OK" \
-            || echo "TCP CONNECTION: FAILED — host/port unreachable"
-
-  deploy:
-    name: Deploy to Server
-    runs-on: ubuntu-latest
-    needs: [client-ci, server-ci, debug-ssh]
-    # Only deploy on direct pushes (not PRs), on main or Feature-ci-deploy
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/Feature-ci-deploy')
+    needs: [client-ci, server-ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/Feature-ci-deploy'
 
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DATABASE_URL }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           port: ${{ secrets.SERVER_PORT }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: PROD_DB_URL
           script: |
-            set -e
-
-            # Navigate to the app directory — update this path to match your server layout
-            APP_DIR=~/lpms
-            cd "$APP_DIR"
-
-            # Pull latest code for the triggering branch
+            cd ~/LPMS
             git fetch origin
-            git checkout ${{ github.ref_name }}
-            git pull origin ${{ github.ref_name }}
+            git checkout Feature-ci-deploy
+            git pull origin Feature-ci-deploy
 
-            # Build the React frontend
-            cd "$APP_DIR/client"
+            cd client
             npm install --legacy-peer-deps
             npm run build
+            cp -r dist/* /var/www/lpms-client/
 
-            # Install server dependencies and run migrations
-            cd "$APP_DIR/server"
+            cd ../server
             npm install --legacy-peer-deps
-            npm run migrate
+            DATABASE_URL=$PROD_DB_URL npm run migrate
 
-            # Restart (or start) the backend with PM2
-            cd "$APP_DIR/server"
-            pm2 describe lpms-server > /dev/null 2>&1 \
-              && pm2 restart lpms-server \
-              || pm2 start index.js --name lpms-server
+            pm2 restart lpms-api
 
-            pm2 save
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    needs: [client-ci, server-ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DATABASE_URL }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: ${{ secrets.SERVER_PORT }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: PROD_DB_URL
+          script: |
+            cd ~/LPMS
+            git pull origin main
+
+            cd client
+            npm install --legacy-peer-deps
+            npm run build
+            cp -r dist/* /var/www/lpms-client/
+
+            cd ../server
+            npm install --legacy-peer-deps
+            DATABASE_URL=$PROD_DB_URL npm run migrate
+
+            pm2 restart lpms-api
