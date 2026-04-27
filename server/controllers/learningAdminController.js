@@ -1,9 +1,9 @@
 import { query } from '../db.js';
 import { sendError } from '../utils/http.js';
 import { logAudit } from '../utils/audit.js';
-import { getMockCourseById } from '../utils/mockLearningStore.js';
 import bcrypt from 'bcryptjs';
 import {
+  fetchAllCourses,
   fetchAllDesignations,
   fetchAllSalaryGrades,
   fetchEmployeesByDesignation,
@@ -14,6 +14,7 @@ import {
   fetchEmployeesBySalaryGrade,
   fetchOrganizationList
 } from '../utils/erpClient.js';
+import { renderCertificatePdf } from '../utils/certificatePdf.js';
 
 const parseCategory = (value) => {
   const allowed = ['RESTRICTED', 'SEMI_RESTRICTED', 'PUBLIC'];
@@ -29,6 +30,8 @@ const isStructuredStagePayload = (stages) =>
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EXECUTIVE_PAYROLL = 'SLT Executive Payroll';
 const NON_EXECUTIVE_PAYROLL = 'SLT Non Executive Payroll';
+const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
+const MAX_SIGNATURE_SIZE_BYTES = 2 * 1024 * 1024;
 
 const normalizeEmployeeDisplayName = (row, employeeNo) => {
   if (row?.employeeName && String(row.employeeName).trim()) {
@@ -78,6 +81,79 @@ const normalizeOptionList = (rows, key) =>
     )
   ).sort((a, b) => a.localeCompare(b));
 
+const normalizeSignaturePngDataUrl = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized.startsWith(PNG_DATA_URL_PREFIX)) {
+    return { error: 'Signature must be a PNG image.' };
+  }
+
+  try {
+    const binary = Buffer.from(normalized.slice(PNG_DATA_URL_PREFIX.length), 'base64');
+    if (binary.length === 0) {
+      return { error: 'Signature image is empty.' };
+    }
+    if (binary.length > MAX_SIGNATURE_SIZE_BYTES) {
+      return { error: 'Signature image must be 2 MB or smaller.' };
+    }
+  } catch {
+    return { error: 'Signature image is invalid.' };
+  }
+
+  return { value: normalized };
+};
+
+const hasCertificateSignatureColumn = async () => {
+  const result = await query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'learning_paths'
+          AND column_name = 'certificate_signature_png'
+      ) AS present
+    `
+  );
+
+  return Boolean(result.rows[0]?.present);
+};
+
+const hasTable = async (tableName) => {
+  const result = await query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = $1
+      ) AS present
+    `,
+    [tableName]
+  );
+
+  return Boolean(result.rows[0]?.present);
+};
+
+const hasColumn = async (tableName, columnName) => {
+  const result = await query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+      ) AS present
+    `,
+    [tableName, columnName]
+  );
+
+  return Boolean(result.rows[0]?.present);
+};
+
 const getSearchErrorStatus = (error) => (typeof error?.status === 'number' ? error.status : 502);
 
 const resolveActorPrincipalId = async (user) => {
@@ -104,7 +180,18 @@ const resolveActorPrincipalId = async (user) => {
   return mapped.rows[0]?.principal_id || null;
 };
 
-const resolveCourseUuid = async (courseId) => {
+const normalizeErpCourseCatalog = (rows) =>
+  new Map(
+    (Array.isArray(rows) ? rows : [])
+      .map((row, index) => {
+        const code = String(row?.courseCode || '').trim();
+        const title = String(row?.courseName || '').trim() || code || `Course ${index + 1}`;
+        return code ? [code, { code, title }] : null;
+      })
+      .filter(Boolean)
+  );
+
+const resolveCourseUuid = async (courseId, courseCatalogByCode = new Map()) => {
   const raw = String(courseId || '').trim();
   if (!raw) {
     return null;
@@ -114,12 +201,6 @@ const resolveCourseUuid = async (courseId) => {
     return raw;
   }
 
-  const mockCourse = getMockCourseById(raw);
-  if (!mockCourse) {
-    return null;
-  }
-
-  const code = `MOCK_${mockCourse.id.replace(/[^a-z0-9]/gi, '_').toUpperCase()}`;
   const existing = await query(
     `
       SELECT id
@@ -127,24 +208,34 @@ const resolveCourseUuid = async (courseId) => {
       WHERE code = $1
       LIMIT 1
     `,
-    [code]
+    [raw]
   );
   if (existing.rowCount > 0) {
     return existing.rows[0].id;
+  }
+
+  const courseFromCatalog = courseCatalogByCode.get(raw);
+  if (!courseFromCatalog) {
+    return null;
   }
 
   const created = await query(
     `
       INSERT INTO courses (code, title, description, duration, type)
       VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (code) DO UPDATE
+      SET title = EXCLUDED.title,
+          description = EXCLUDED.description,
+          duration = EXCLUDED.duration,
+          type = EXCLUDED.type
       RETURNING id
     `,
     [
-      code,
-      mockCourse.title,
-      mockCourse.description || `${mockCourse.title} (mock catalog course)`,
-      `${mockCourse.durationHours || 2} hours`,
-      mockCourse.deliveryMode === 'ONLINE' ? 'ONLINE' : 'CLASSROOM'
+      courseFromCatalog.code,
+      courseFromCatalog.title,
+      courseFromCatalog.title,
+      '-',
+      'ONLINE'
     ]
   );
 
@@ -219,6 +310,20 @@ const insertLearningPathStages = async ({ learningPathId, stages = [] }) => {
     return;
   }
 
+  const usesCourseReferenceTable =
+    (await hasTable('courses')) &&
+    (await hasColumn('stage_courses', 'course_id'));
+
+  const needsCourseCatalogLookup = stages.some((stage) =>
+    Array.isArray(stage?.courses) &&
+    stage.courses.some((course) => course?.courseId && !UUID_LIKE.test(String(course.courseId).trim()))
+  );
+  let courseCatalogByCode = new Map();
+  if (needsCourseCatalogLookup) {
+    const courseResponse = await fetchAllCourses();
+    courseCatalogByCode = normalizeErpCourseCatalog(courseResponse?.data);
+  }
+
   if (!isStructuredStagePayload(stages)) {
     for (const stage of stages) {
       await query(
@@ -248,16 +353,48 @@ const insertLearningPathStages = async ({ learningPathId, stages = [] }) => {
       if (!stageCourse?.courseId) {
         continue;
       }
-      const resolvedCourseId = await resolveCourseUuid(stageCourse.courseId);
-      if (!resolvedCourseId) {
+      const courseCode = String(stageCourse.courseId).trim();
+      const courseFromCatalog = courseCatalogByCode.get(courseCode) || null;
+
+      if (usesCourseReferenceTable) {
+        const resolvedCourseId = await resolveCourseUuid(stageCourse.courseId, courseCatalogByCode);
+        if (!resolvedCourseId) {
+          continue;
+        }
+        await query(
+          `
+            INSERT INTO stage_courses (stage_id, course_id, course_order)
+            VALUES ($1, $2, $3)
+          `,
+          [stageId, resolvedCourseId, stageCourse.order || courseIndex + 1]
+        );
         continue;
       }
+
       await query(
         `
-          INSERT INTO stage_courses (stage_id, course_id, course_order)
-          VALUES ($1, $2, $3)
+          INSERT INTO stage_courses (
+            stage_id,
+            course_code,
+            course_title,
+            course_duration,
+            delivery_mode,
+            video_url,
+            venue,
+            course_order
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `,
-        [stageId, resolvedCourseId, stageCourse.order || courseIndex + 1]
+        [
+          stageId,
+          courseCode || null,
+          courseFromCatalog?.title || courseCode || `Course ${courseIndex + 1}`,
+          '-',
+          'ONLINE',
+          null,
+          null,
+          stageCourse.order || courseIndex + 1
+        ]
       );
     }
   }
@@ -365,23 +502,40 @@ export const getLearningPathById = async (req, res) => {
     [id]
   );
 
+  const usesCourseReferenceTable =
+    (await hasTable('courses')) &&
+    (await hasColumn('stage_courses', 'course_id'));
+
   const stageCourseResult = await query(
-    `
-      SELECT
-        lps.id AS stage_id,
-        c.id AS course_id,
-        c.title AS course_title,
-        sc.course_order,
-        CASE
-          WHEN c.type = 'ONLINE' THEN 'ONLINE'
-          ELSE 'PHYSICAL'
-        END AS delivery_mode
-      FROM learning_path_stages lps
-      JOIN stage_courses sc ON sc.stage_id = lps.id
-      JOIN courses c ON c.id = sc.course_id
-      WHERE lps.learning_path_id = $1
-      ORDER BY lps.stage_order ASC, sc.course_order ASC
-    `,
+    usesCourseReferenceTable
+      ? `
+          SELECT
+            lps.id AS stage_id,
+            c.id AS course_id,
+            c.title AS course_title,
+            sc.course_order,
+            CASE
+              WHEN c.type = 'ONLINE' THEN 'ONLINE'
+              ELSE 'PHYSICAL'
+            END AS delivery_mode
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          JOIN courses c ON c.id = sc.course_id
+          WHERE lps.learning_path_id = $1
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `
+      : `
+          SELECT
+            lps.id AS stage_id,
+            COALESCE(sc.course_code, sc.course_title) AS course_id,
+            sc.course_title AS course_title,
+            sc.course_order,
+            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          WHERE lps.learning_path_id = $1
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `,
     [id]
   );
 
@@ -473,6 +627,7 @@ export const updateLearningPath = async (req, res) => {
 };
 
 export const getCertificateCustomizationPaths = async (_req, res) => {
+  const includeSignatureColumn = await hasCertificateSignatureColumn();
   const result = await query(
     `
       SELECT
@@ -480,6 +635,7 @@ export const getCertificateCustomizationPaths = async (_req, res) => {
         title,
         certificate_signer_name,
         certificate_signer_title,
+        ${includeSignatureColumn ? 'certificate_signature_png' : 'NULL::text AS certificate_signature_png'},
         updated_at
       FROM learning_paths
       WHERE is_deleted = FALSE
@@ -495,9 +651,22 @@ export const updateLearningPathCertificateSignature = async (req, res) => {
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
   const signerName = String(req.body.signerName || '').trim();
   const signerTitle = String(req.body.signerTitle || '').trim();
+  const signaturePngInput = normalizeSignaturePngDataUrl(req.body.signaturePngDataUrl);
+  const includeSignatureColumn = await hasCertificateSignatureColumn();
 
   if (!signerName || !signerTitle) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'signerName and signerTitle are required.');
+  }
+  if (signaturePngInput?.error) {
+    return sendError(res, 400, 'VALIDATION_ERROR', signaturePngInput.error);
+  }
+  if (signaturePngInput?.value && !includeSignatureColumn) {
+    return sendError(
+      res,
+      500,
+      'MIGRATION_REQUIRED',
+      'PNG signature storage is not ready. Run the latest database migration and try again.'
+    );
   }
 
   const result = await query(
@@ -505,12 +674,15 @@ export const updateLearningPathCertificateSignature = async (req, res) => {
       UPDATE learning_paths
       SET certificate_signer_name = $2,
           certificate_signer_title = $3,
+          ${includeSignatureColumn ? 'certificate_signature_png = COALESCE($4, certificate_signature_png),' : ''}
           updated_at = NOW()
       WHERE id = $1
         AND is_deleted = FALSE
-      RETURNING id, title, certificate_signer_name, certificate_signer_title, updated_at
+      RETURNING id, title, certificate_signer_name, certificate_signer_title,
+        ${includeSignatureColumn ? 'certificate_signature_png' : 'NULL::text AS certificate_signature_png'},
+        updated_at
     `,
-    [id, signerName, signerTitle]
+    [id, signerName, signerTitle, signaturePngInput?.value ?? null]
   );
 
   if (result.rowCount === 0) {
@@ -522,10 +694,122 @@ export const updateLearningPathCertificateSignature = async (req, res) => {
     action: 'UPDATE_CERTIFICATE_SIGNATURE',
     resourceType: 'LEARNING_PATH',
     resourceId: id,
-    metadata: { signerName, signerTitle }
+    metadata: { signerName, signerTitle, hasSignaturePng: Boolean(signaturePngInput?.value) }
   });
 
   return res.status(200).json({ learningPath: result.rows[0] });
+};
+
+export const previewLearningPathCertificate = async (req, res) => {
+  const { id } = req.params;
+  const includeSignatureColumn = await hasCertificateSignatureColumn();
+  const usesCourseReferenceTable =
+    (await hasTable('courses')) &&
+    (await hasColumn('stage_courses', 'course_id'));
+  const signerNameOverride = typeof req.body?.signerName === 'string' ? req.body.signerName.trim() : '';
+  const signerTitleOverride = typeof req.body?.signerTitle === 'string' ? req.body.signerTitle.trim() : '';
+  const signaturePngInput = normalizeSignaturePngDataUrl(req.body?.signaturePngDataUrl);
+
+  if (signaturePngInput?.error) {
+    return sendError(res, 400, 'VALIDATION_ERROR', signaturePngInput.error);
+  }
+  if (signaturePngInput?.value && !includeSignatureColumn) {
+    return sendError(
+      res,
+      500,
+      'MIGRATION_REQUIRED',
+      'PNG signature storage is not ready. Run the latest database migration and try again.'
+    );
+  }
+
+  const pathResult = await query(
+    `
+      SELECT
+        id,
+        title,
+        total_duration,
+        certificate_signer_name,
+        certificate_signer_title,
+        ${includeSignatureColumn ? 'certificate_signature_png' : 'NULL::text AS certificate_signature_png'}
+      FROM learning_paths
+      WHERE id = $1
+        AND is_deleted = FALSE
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  const learningPath = pathResult.rows[0];
+  if (!learningPath) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+  }
+
+  const coursesResult = usesCourseReferenceTable
+    ? await query(
+        `
+          SELECT
+            course.title AS course_title,
+            course.duration AS course_duration,
+            lps.stage_order,
+            sc.course_order
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          JOIN courses course ON course.id = sc.course_id
+          WHERE lps.learning_path_id = $1
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `,
+        [id]
+      )
+    : await query(
+        `
+          SELECT
+            sc.course_title AS course_title,
+            sc.course_duration AS course_duration,
+            lps.stage_order,
+            sc.course_order
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          WHERE lps.learning_path_id = $1
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `,
+        [id]
+      );
+
+  const previewDate = new Date();
+  const previewYear = previewDate.getFullYear();
+  const learnerIdentifier = 'PREVIEW-0001';
+  const certificateNumber = `${learningPath.id || 'LP'}/${learnerIdentifier}/${previewYear}`;
+  const safeTitle = String(learningPath.title || 'learning_path')
+    .replace(/[^a-z0-9]+/gi, '_')
+    .toLowerCase();
+  const filename = `certificate_preview_${safeTitle}.pdf`;
+  const courses = coursesResult.rows.map((row) => ({
+    title: String(row.course_title || '').trim(),
+    duration: String(row.course_duration || '').trim() || '-'
+  }));
+
+  try {
+    await renderCertificatePdf({
+      res,
+      filename,
+      certificateTitle: learningPath.title,
+      learnerName: 'Sample Learner',
+      learnerIdentifier,
+      finishedDate: previewDate,
+      learningPathDuration: learningPath.total_duration || '-',
+      signerName: signerNameOverride || learningPath.certificate_signer_name || 'Learning Administrator',
+      signerTitle: signerTitleOverride || learningPath.certificate_signer_title || 'LPMS',
+      signaturePngDataUrl: signaturePngInput?.value ?? learningPath.certificate_signature_png ?? '',
+      certificateNumber,
+      courses
+    });
+    return undefined;
+  } catch (error) {
+    if (error?.code === 'PDF_ENGINE_NOT_AVAILABLE') {
+      return sendError(res, 500, error.code, error.message);
+    }
+    return sendError(res, 500, 'CERTIFICATE_RENDER_FAILED', 'Failed to generate certificate preview.');
+  }
 };
 
 export const deleteLearningPath = async (req, res) => {

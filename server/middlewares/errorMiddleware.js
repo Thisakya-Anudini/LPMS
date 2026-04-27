@@ -10,5 +10,11 @@ export const errorHandler = (error, req, res, next) => {
     return next(error);
   }
 
-  return sendError(res, 500, 'INTERNAL_SERVER_ERROR', 'An unexpected error occurred.');
+  return sendError(
+    res,
+    typeof error?.status === 'number' ? error.status : 500,
+    error?.code || 'INTERNAL_SERVER_ERROR',
+    error?.message || 'An unexpected error occurred.',
+    error?.details
+  );
 };

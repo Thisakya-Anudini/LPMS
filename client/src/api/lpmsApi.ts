@@ -101,12 +101,18 @@ export const userApi = {
   }
 };
 
-const requestBlob = async (path: string, token: string) => {
+const requestBlob = async (
+  path: string,
+  token: string,
+  options: { method?: 'GET' | 'POST'; body?: unknown } = {}
+) => {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: 'GET',
+    method: options.method || 'GET',
     headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {})
-    }
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
   });
 
   if (!response.ok) {
@@ -294,6 +300,7 @@ export const learningApi = {
         title: string;
         certificate_signer_name: string | null;
         certificate_signer_title: string | null;
+        certificate_signature_png: string | null;
         updated_at: string;
       }>;
     }>('/certificate-settings', { token });
@@ -301,7 +308,7 @@ export const learningApi = {
   updateCertificateSignature(
     token: string,
     learningPathId: string,
-    payload: { signerName: string; signerTitle: string }
+    payload: { signerName: string; signerTitle: string; signaturePngDataUrl?: string | null }
   ) {
     return request<{
       learningPath: {
@@ -309,12 +316,23 @@ export const learningApi = {
         title: string;
         certificate_signer_name: string;
         certificate_signer_title: string;
+        certificate_signature_png: string | null;
         updated_at: string;
       };
     }>(`/learning-paths/${learningPathId}/certificate-signature`, {
       method: 'PUT',
       token,
       body: payload
+    });
+  },
+  previewCertificate(
+    token: string,
+    learningPathId: string,
+    payload?: { signerName?: string; signerTitle?: string; signaturePngDataUrl?: string | null }
+  ) {
+    return requestBlob(`/learning-paths/${learningPathId}/certificate-preview`, token, {
+      method: 'POST',
+      body: payload || {}
     });
   }
 };
@@ -486,10 +504,11 @@ export const courseApi = {
     return request<{
       courses: Array<{
         id: string;
+        code: string;
         title: string;
-        description: string;
-        durationHours: number;
-        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        description: string | null;
+        durationHours: number | null;
+        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
         videoUrl: string | null;
         venue: string | null;
       }>;

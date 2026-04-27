@@ -12,7 +12,12 @@ import {
 } from '../utils/auth.js';
 import { sendError } from '../utils/http.js';
 import { fetchEmployeeDetailsForServiceNo, fetchEmployeeSubordinates } from '../utils/erpClient.js';
-import { findMockLearnerByIdentifier, isValidMockLearnerPassword } from '../users/learner.js';
+import {
+  buildTemporaryErpLearner,
+  ERP_LEARNER_AUTH_SOURCE,
+  isTemporaryErpLearnerAuth,
+  isValidTemporaryErpLearnerPassword
+} from '../users/learner.js';
 
 const mapPrincipal = (row) => ({
   id: row.id,
@@ -146,30 +151,34 @@ export const login = async (req, res) => {
 
   const principal = await getPrincipalByEmail(identifier.toLowerCase());
   if (!principal) {
-    const mockLearner = findMockLearnerByIdentifier(identifier);
-    if (!mockLearner || !isValidMockLearnerPassword(mockLearner, password)) {
+    const temporaryLearner = buildTemporaryErpLearner(identifier);
+    if (!temporaryLearner || !isValidTemporaryErpLearnerPassword(identifier, password)) {
       return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
     }
 
     let detailsResponse = null;
     try {
-      detailsResponse = await fetchEmployeeDetailsForServiceNo(mockLearner.employeeNo);
+      detailsResponse = await fetchEmployeeDetailsForServiceNo(temporaryLearner.employeeNo);
     } catch {
-      // keep login available even if ERP temporarily fails
+      // Keep temporary learner login available until external auth is integrated.
     }
-    const mockEmployeeContext = await resolveEmployeeContextByNumber(mockLearner.employeeNo);
+    const temporaryEmployeeContext = await resolveEmployeeContextByNumber(temporaryLearner.employeeNo);
+    const resolvedEmail =
+      detailsResponse?.data?.[0]?.email && String(detailsResponse.data[0].email).trim()
+        ? String(detailsResponse.data[0].email).trim().toLowerCase()
+        : temporaryLearner.email;
 
     const normalizedPrincipal = {
-      id: mockLearner.id,
-      email: mockLearner.email,
+      id: temporaryLearner.id,
+      email: resolvedEmail,
       role: ROLES.EMPLOYEE,
-      name: mapLearnerName(detailsResponse, mockLearner.email.split('@')[0]),
+      name: mapLearnerName(detailsResponse, temporaryLearner.employeeNo),
       principalType: 'EMPLOYEE',
       mustChangePassword: false,
-      authSource: 'MOCK_LEARNER',
-      employeeNo: mockEmployeeContext.employeeNo,
-      isSupervisor: mockEmployeeContext.isSupervisor,
-      isLearningAdmin: mockEmployeeContext.isLearningAdmin
+      authSource: ERP_LEARNER_AUTH_SOURCE,
+      employeeNo: temporaryEmployeeContext.employeeNo,
+      isSupervisor: temporaryEmployeeContext.isSupervisor,
+      isLearningAdmin: temporaryEmployeeContext.isLearningAdmin
     };
 
     const accessToken = signAccessToken(normalizedPrincipal);
@@ -217,7 +226,7 @@ export const refresh = async (req, res) => {
     return sendError(res, 401, 'INVALID_REFRESH_TOKEN', 'Refresh token is invalid or expired.');
   }
 
-  if (decoded.authSource === 'MOCK_LEARNER') {
+  if (isTemporaryErpLearnerAuth(decoded.authSource)) {
     const principal = {
       id: decoded.sub,
       email: decoded.email,
@@ -287,7 +296,7 @@ export const logout = async (req, res) => {
     return sendError(res, 200, 'OK', 'Already logged out.');
   }
 
-  if (decoded.authSource === 'MOCK_LEARNER') {
+  if (isTemporaryErpLearnerAuth(decoded.authSource)) {
     return res.status(200).json({ success: true });
   }
 
@@ -304,7 +313,7 @@ export const logout = async (req, res) => {
 };
 
 export const me = async (req, res) => {
-  if (req.user.authSource === 'MOCK_LEARNER') {
+  if (isTemporaryErpLearnerAuth(req.user)) {
     return res.status(200).json({
       user: {
         id: req.user.id,
@@ -353,12 +362,12 @@ export const me = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {
-  if (req.user.authSource === 'MOCK_LEARNER') {
+  if (isTemporaryErpLearnerAuth(req.user)) {
     return sendError(
       res,
       400,
       'NOT_SUPPORTED',
-      'Password change is not enabled for mock learner authentication.'
+      'Password change is not enabled for temporary ERP learner authentication.'
     );
   }
 

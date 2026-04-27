@@ -1,11 +1,13 @@
-import { sendError } from '../utils/http.js';
-import { getMockCourseByTitle, getMockCourseVideoUrlByTitle, MOCK_COURSES } from '../utils/mockLearningStore.js';
 import bcrypt from 'bcryptjs';
+import { query } from '../db.js';
+import { sendError } from '../utils/http.js';
 import {
+  fetchAllCourses,
   fetchEmployeeDetailsForServiceNo,
   fetchEmployeeSubordinates
 } from '../utils/erpClient.js';
-import { query } from '../db.js';
+import { isTemporaryErpLearnerAuth } from '../users/learner.js';
+import { renderCertificatePdf } from '../utils/certificatePdf.js';
 
 const normalizeEmployeeNo = (user, requestBody = {}) => {
   if (user.employeeNo) {
@@ -20,13 +22,106 @@ const normalizeEmployeeNo = (user, requestBody = {}) => {
 const isSupervisorFromSubordinateResponse = (response) =>
   Boolean(Array.isArray(response?.data) && response.data.length > 0);
 
-const resolveDashboardPrincipalId = async (user, employeeNo) => {
-  // DB users already carry UUID principal IDs.
-  if (user.authSource !== 'MOCK_LEARNER') {
-    return user.id;
+const normalizeNameFromRow = (row, employeeNo) => {
+  if (row?.employeeName && String(row.employeeName).trim()) {
+    return String(row.employeeName).trim();
+  }
+  const initials = row?.employeeInitials ? String(row.employeeInitials).trim() : '';
+  const surname = row?.employeeSurname ? String(row.employeeSurname).trim() : '';
+  const merged = `${initials} ${surname}`.trim();
+  return merged || `Learner ${employeeNo}`;
+};
+
+const normalizeCourseDeliveryMode = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'PHYSICAL' || normalized === 'CLASSROOM') {
+    return 'PHYSICAL';
+  }
+  if (normalized === 'HYBRID') {
+    return 'ONLINE';
+  }
+  return 'ONLINE';
+};
+
+const normalizeErpCourse = (row, index = 0) => {
+  const courseCode = String(row?.courseCode || '').trim();
+  const courseName = String(row?.courseName || '').trim();
+  const title = courseName || courseCode || `Course ${index + 1}`;
+  return {
+    id: courseCode || `ERP-COURSE-${index + 1}`,
+    code: courseCode || `ERP-COURSE-${index + 1}`,
+    title,
+    description: null,
+    durationHours: null,
+    deliveryMode: null,
+    venue: null,
+    videoUrl: null
+  };
+};
+
+const hasCertificateSignatureColumn = async () => {
+  const result = await query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_name = 'learning_paths'
+          AND column_name = 'certificate_signature_png'
+      ) AS present
+    `
+  );
+
+  return Boolean(result.rows[0]?.present);
+};
+
+const hasTable = async (tableName) => {
+  const result = await query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = $1
+      ) AS present
+    `,
+    [tableName]
+  );
+
+  return Boolean(result.rows[0]?.present);
+};
+
+const hasColumn = async (tableName, columnName) => {
+  const result = await query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+      ) AS present
+    `,
+    [tableName, columnName]
+  );
+
+  return Boolean(result.rows[0]?.present);
+};
+
+const usesCourseReferenceTable = async () =>
+  (await hasTable('courses')) &&
+  (await hasColumn('stage_courses', 'course_id')) &&
+  (await hasColumn('enrollment_progress', 'course_id'));
+
+const resolveDashboardPrincipalId = async (user) => {
+  if (!isTemporaryErpLearnerAuth(user)) {
+    return String(user?.id || '').trim() || null;
   }
 
-  // Mock users are keyed by employee number; map to real principal if imported.
+  const employeeNo = String(user?.employeeNo || '').trim();
+  if (!employeeNo) {
+    return null;
+  }
+
   const result = await query(
     `
       SELECT principal_id
@@ -40,11 +135,88 @@ const resolveDashboardPrincipalId = async (user, employeeNo) => {
   return result.rows[0]?.principal_id || null;
 };
 
-const resolvePrincipalForLearner = async (user, employeeNo) => {
-  if (user.authSource !== 'MOCK_LEARNER') {
-    return user.id;
+const resolvePrincipalForLearner = async (user) => resolveDashboardPrincipalId(user);
+
+const getOrCreateLearnerPrincipal = async (employeeNo, employeeRow = null) => {
+  const normalizedEmployeeNo = String(employeeNo || '').trim();
+  if (!normalizedEmployeeNo) {
+    return null;
   }
-  return resolveDashboardPrincipalId(user, employeeNo);
+
+  const existingEmployee = await query(
+    `
+      SELECT principal_id
+      FROM employees
+      WHERE employee_number = $1
+      LIMIT 1
+    `,
+    [normalizedEmployeeNo]
+  );
+  if (existingEmployee.rowCount > 0) {
+    return existingEmployee.rows[0].principal_id;
+  }
+
+  let learnerRow = employeeRow;
+  if (!learnerRow) {
+    try {
+      const detailsResponse = await fetchEmployeeDetailsForServiceNo(normalizedEmployeeNo);
+      learnerRow = detailsResponse?.data?.[0] || null;
+    } catch {
+      learnerRow = null;
+    }
+  }
+
+  const fallbackDomain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || 'erp.local';
+  const normalizedEmail =
+    learnerRow?.email && String(learnerRow.email).trim()
+      ? String(learnerRow.email).trim().toLowerCase()
+      : `${normalizedEmployeeNo}@${fallbackDomain}`;
+  const learnerName = normalizeNameFromRow(learnerRow, normalizedEmployeeNo);
+  const designation =
+    learnerRow?.designation && String(learnerRow.designation).trim()
+      ? String(learnerRow.designation).trim()
+      : 'Learner';
+  const gradeName =
+    learnerRow?.gradeName && String(learnerRow.gradeName).trim()
+      ? String(learnerRow.gradeName).trim()
+      : 'N/A';
+
+  let principalId = null;
+  const existingPrincipal = await query(
+    `
+      SELECT id
+      FROM auth_principals
+      WHERE email = $1
+      LIMIT 1
+    `,
+    [normalizedEmail]
+  );
+
+  if (existingPrincipal.rowCount > 0) {
+    principalId = existingPrincipal.rows[0].id;
+  } else {
+    const passwordHash = await bcrypt.hash(normalizedEmployeeNo, 10);
+    const createdPrincipal = await query(
+      `
+        INSERT INTO auth_principals (email, password_hash, role, name, principal_type, must_change_password)
+        VALUES ($1, $2, 'EMPLOYEE', $3, 'EMPLOYEE', FALSE)
+        RETURNING id
+      `,
+      [normalizedEmail, passwordHash, learnerName]
+    );
+    principalId = createdPrincipal.rows[0].id;
+  }
+
+  await query(
+    `
+      INSERT INTO employees (principal_id, employee_number, designation, grade_name, supervisor_id)
+      VALUES ($1, $2, $3, $4, NULL)
+      ON CONFLICT (employee_number) DO NOTHING
+    `,
+    [principalId, normalizedEmployeeNo, designation, gradeName]
+  );
+
+  return principalId;
 };
 
 const recalculateEnrollmentFromStageProgress = async ({
@@ -52,32 +224,59 @@ const recalculateEnrollmentFromStageProgress = async ({
   learningPathId,
   principalId
 }) => {
+  const useCourseReference = await usesCourseReferenceTable();
   const aggregate = await query(
-    `
-      WITH scoped_courses AS (
-        SELECT sc.course_id AS activity_id
-        FROM learning_path_stages lps
-        JOIN stage_courses sc ON sc.stage_id = lps.id
-        WHERE lps.learning_path_id = $2
-        UNION ALL
-        SELECT lps.id AS activity_id
-        FROM learning_path_stages lps
-        WHERE lps.learning_path_id = $2
-          AND NOT EXISTS (
-            SELECT 1
-            FROM stage_courses sc2
-            JOIN learning_path_stages lps2 ON lps2.id = sc2.stage_id
-            WHERE lps2.learning_path_id = $2
+    useCourseReference
+      ? `
+          WITH scoped_activities AS (
+            SELECT sc.course_id AS activity_id
+            FROM learning_path_stages lps
+            JOIN stage_courses sc ON sc.stage_id = lps.id
+            WHERE lps.learning_path_id = $2
+            UNION
+            SELECT lps.id AS activity_id
+            FROM learning_path_stages lps
+            WHERE lps.learning_path_id = $2
+              AND NOT EXISTS (
+                SELECT 1
+                FROM stage_courses sc2
+                JOIN learning_path_stages lps2 ON lps2.id = sc2.stage_id
+                WHERE lps2.learning_path_id = $2
+              )
           )
-      )
-      SELECT
-        COUNT(*)::int AS total_courses,
-        COUNT(*) FILTER (WHERE COALESCE(ep.progress, 0) >= 100)::int AS completed_courses
-      FROM scoped_courses sc
-      LEFT JOIN enrollment_progress ep
-        ON ep.enrollment_id = $1
-       AND (ep.course_id = sc.activity_id OR ep.stage_id = sc.activity_id)
-    `,
+          SELECT
+            COUNT(*)::int AS total_courses,
+            COUNT(*) FILTER (WHERE COALESCE(ep.progress, 0) >= 100)::int AS completed_courses
+          FROM scoped_activities sa
+          LEFT JOIN enrollment_progress ep
+            ON ep.enrollment_id = $1
+           AND (ep.course_id = sa.activity_id OR ep.stage_id = sa.activity_id)
+        `
+      : `
+          WITH scoped_activities AS (
+            SELECT COALESCE(sc.course_code, sc.course_title) AS activity_id
+            FROM learning_path_stages lps
+            JOIN stage_courses sc ON sc.stage_id = lps.id
+            WHERE lps.learning_path_id = $2
+            UNION
+            SELECT lps.id::text AS activity_id
+            FROM learning_path_stages lps
+            WHERE lps.learning_path_id = $2
+              AND NOT EXISTS (
+                SELECT 1
+                FROM stage_courses sc2
+                JOIN learning_path_stages lps2 ON lps2.id = sc2.stage_id
+                WHERE lps2.learning_path_id = $2
+              )
+          )
+          SELECT
+            COUNT(*)::int AS total_courses,
+            COUNT(*) FILTER (WHERE COALESCE(ep.progress, 0) >= 100)::int AS completed_courses
+          FROM scoped_activities sa
+          LEFT JOIN enrollment_progress ep
+            ON ep.enrollment_id = $1
+           AND (ep.course_code = sa.activity_id OR ep.stage_id::text = sa.activity_id)
+        `,
     [enrollmentId, learningPathId]
   );
 
@@ -107,89 +306,6 @@ const recalculateEnrollmentFromStageProgress = async ({
     completedCourses,
     computedProgress
   };
-};
-
-const normalizeNameFromRow = (row, employeeNo) => {
-  if (row?.employeeName && String(row.employeeName).trim()) {
-    return String(row.employeeName).trim();
-  }
-  const initials = row?.employeeInitials ? String(row.employeeInitials).trim() : '';
-  const surname = row?.employeeSurname ? String(row.employeeSurname).trim() : '';
-  const merged = `${initials} ${surname}`.trim();
-  return merged || `Learner ${employeeNo}`;
-};
-
-const getOrCreateLearnerPrincipal = async ({
-  employeeNo,
-  profileRow = null,
-  defaultDesignation = 'Learner',
-  defaultGradeName = 'N/A',
-  supervisorPrincipalId = null
-}) => {
-  const employeeNumber = String(employeeNo).trim();
-  if (!employeeNumber) {
-    return null;
-  }
-
-  const existingEmployee = await query(
-    `
-      SELECT principal_id
-      FROM employees
-      WHERE employee_number = $1
-      LIMIT 1
-    `,
-    [employeeNumber]
-  );
-  if (existingEmployee.rowCount > 0) {
-    return existingEmployee.rows[0].principal_id;
-  }
-
-  const fallbackDomain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || 'erp.local';
-  const email = (
-    (profileRow?.email ? String(profileRow.email).trim().toLowerCase() : '') ||
-    `${employeeNumber}@${fallbackDomain}`
-  );
-  const name = normalizeNameFromRow(profileRow, employeeNumber);
-  const designation = profileRow?.designation
-    ? String(profileRow.designation).trim()
-    : defaultDesignation;
-  const gradeName = profileRow?.gradeName ? String(profileRow.gradeName).trim() : defaultGradeName;
-
-  let principalId = null;
-  const existingPrincipal = await query(
-    `
-      SELECT id
-      FROM auth_principals
-      WHERE email = $1
-      LIMIT 1
-    `,
-    [email]
-  );
-  if (existingPrincipal.rowCount > 0) {
-    principalId = existingPrincipal.rows[0].id;
-  } else {
-    const passwordHash = await bcrypt.hash(employeeNumber, 10);
-    const createdPrincipal = await query(
-      `
-        INSERT INTO auth_principals (email, password_hash, role, name, principal_type, must_change_password)
-        VALUES ($1, $2, 'EMPLOYEE', $3, 'EMPLOYEE', FALSE)
-        RETURNING id
-      `,
-      [email, passwordHash, name]
-    );
-    principalId = createdPrincipal.rows[0].id;
-  }
-
-  await query(
-    `
-      INSERT INTO employees (principal_id, employee_number, designation, grade_name, supervisor_id)
-      VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (employee_number) DO NOTHING
-    `,
-    [principalId, employeeNumber, designation || 'Learner', gradeName || 'N/A', supervisorPrincipalId]
-  );
-
-  return principalId;
 };
 
 export const getLearnerProfile = async (req, res) => {
@@ -225,7 +341,7 @@ export const getLearnerDashboard = async (req, res) => {
     return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
   }
 
-  const principalId = await resolveDashboardPrincipalId(req.user, employeeNo);
+  const principalId = await resolveDashboardPrincipalId(req.user);
   if (!principalId) {
     return res.status(200).json({
       assignedLearningPaths: [],
@@ -237,9 +353,9 @@ export const getLearnerDashboard = async (req, res) => {
       notifications: [
         {
           id: 'mock-dashboard-info',
-          title: 'No LPMS records yet',
+          title: 'Learner access ready',
           message:
-            'This learner is authenticated by mock ERP credentials but is not yet imported into LPMS.',
+            'This learner is authenticated by temporary ERP credentials but is not yet imported into LPMS.',
           type: 'INFO'
         }
       ]
@@ -339,10 +455,9 @@ export const enrollLearnerTeam = async (req, res) => {
 
   try {
     const subordinates = await fetchEmployeeSubordinates(supervisorEmployeeNo);
+    const subordinateRows = Array.isArray(subordinates?.data) ? subordinates.data : [];
     const subordinateNumbers = new Set(
-      Array.isArray(subordinates?.data)
-        ? subordinates.data.map((employee) => String(employee.employeeNumber).trim())
-        : []
+      subordinateRows.map((employee) => String(employee.employeeNumber || '').trim()).filter(Boolean)
     );
 
     if (subordinateNumbers.size === 0) {
@@ -360,43 +475,6 @@ export const enrollLearnerTeam = async (req, res) => {
         'VALIDATION_ERROR',
         'No valid subordinate employeeNumbers were provided.'
       );
-    }
-
-    const employeeLookup = await query(
-      `
-        SELECT e.employee_number, e.principal_id
-        FROM employees e
-        WHERE e.employee_number = ANY($1::text[])
-      `,
-      [scopedEmployeeNumbers]
-    );
-    const principalByEmployeeNo = new Map(
-      employeeLookup.rows.map((row) => [String(row.employee_number), row.principal_id])
-    );
-
-    // Auto-provision missing learners into LPMS so supervisor assignment works without manual ERP import.
-    const subordinateByEmployeeNo = new Map(
-      Array.isArray(subordinates?.data)
-        ? subordinates.data.map((row) => [String(row.employeeNumber).trim(), row])
-        : []
-    );
-
-    const supervisorPrincipalId = await resolvePrincipalForLearner(req.user, supervisorEmployeeNo);
-    for (const employeeNo of scopedEmployeeNumbers) {
-      if (principalByEmployeeNo.has(employeeNo)) {
-        continue;
-      }
-      const subordinateRow = subordinateByEmployeeNo.get(employeeNo) || null;
-      const createdPrincipalId = await getOrCreateLearnerPrincipal({
-        employeeNo,
-        profileRow: subordinateRow,
-        defaultDesignation: subordinateRow?.designation || 'Learner',
-        defaultGradeName: subordinateRow?.gradeName || 'N/A',
-        supervisorPrincipalId: supervisorPrincipalId || null
-      });
-      if (createdPrincipalId) {
-        principalByEmployeeNo.set(employeeNo, createdPrincipalId);
-      }
     }
 
     const pathsResult = await query(
@@ -425,8 +503,11 @@ export const enrollLearnerTeam = async (req, res) => {
     const assignments = [];
     let assignedCount = 0;
     for (const employeeNo of scopedEmployeeNumbers) {
-      const principalId = principalByEmployeeNo.get(employeeNo);
+      const subordinateRow =
+        subordinateRows.find((row) => String(row?.employeeNumber || '').trim() === employeeNo) || null;
+      const principalId = await getOrCreateLearnerPrincipal(employeeNo, subordinateRow);
       if (!principalId) {
+        assignments.push({ employeeNo, assignedLearningPathIds: [] });
         continue;
       }
 
@@ -434,7 +515,14 @@ export const enrollLearnerTeam = async (req, res) => {
       for (const path of validPaths) {
         const created = await query(
           `
-            INSERT INTO enrollments (principal_id, learning_path_id, status, progress, enrolled_at, enrollment_source)
+            INSERT INTO enrollments (
+              principal_id,
+              learning_path_id,
+              status,
+              progress,
+              enrolled_at,
+              enrollment_source
+            )
             VALUES ($1, $2, 'NOT_STARTED', 0, NOW(), 'SUPERVISOR')
             ON CONFLICT (principal_id, learning_path_id) DO NOTHING
             RETURNING id
@@ -479,9 +567,23 @@ export const enrollLearnerTeam = async (req, res) => {
 };
 
 export const getCourses = async (_req, res) => {
-  return res.status(200).json({
-    courses: MOCK_COURSES
-  });
+  try {
+    const response = await fetchAllCourses();
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    return res.status(200).json({
+      courses: rows
+        .map((row, index) => normalizeErpCourse(row, index))
+        .filter((course) => Boolean(course.code) && Boolean(course.title))
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      typeof error.status === 'number' ? error.status : 502,
+      'ERP_REQUEST_FAILED',
+      'Failed to fetch courses from ERP.',
+      error.details || error.message
+    );
+  }
 };
 
 export const getLearningPaths = async (_req, res) => {
@@ -501,22 +603,16 @@ export const getLearningPaths = async (_req, res) => {
 };
 
 export const getPublicLearningPaths = async (req, res) => {
-  const employeeNo = normalizeEmployeeNo(req.user, req.body);
-  if (!employeeNo) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
-  }
-
-  const principalId = await resolvePrincipalForLearner(req.user, employeeNo);
+  const principalId = await resolvePrincipalForLearner(req.user);
   if (!principalId) {
     const result = await query(
       `
-        SELECT lp.id, lp.title, lp.description, lp.category, lp.total_duration, lp.status,
-               FALSE AS already_enrolled
-        FROM learning_paths lp
-        WHERE lp.is_deleted = FALSE
-          AND lp.status = 'ACTIVE'
-          AND lp.category = 'PUBLIC'
-        ORDER BY lp.created_at DESC
+        SELECT id, title, description, category, total_duration, status, FALSE AS already_enrolled
+        FROM learning_paths
+        WHERE is_deleted = FALSE
+          AND status = 'ACTIVE'
+          AND category = 'PUBLIC'
+        ORDER BY created_at DESC
       `
     );
 
@@ -544,6 +640,7 @@ export const getPublicLearningPaths = async (req, res) => {
 
 export const getPublicLearningPathById = async (req, res) => {
   const { id } = req.params;
+  const useCourseReference = await usesCourseReferenceTable();
 
   const pathResult = await query(
     `
@@ -574,22 +671,35 @@ export const getPublicLearningPathById = async (req, res) => {
   );
 
   const stageCourseResult = await query(
-    `
-      SELECT
-        lps.id AS stage_id,
-        c.id AS course_id,
-        c.title AS course_title,
-        sc.course_order,
-        CASE
-          WHEN c.type = 'ONLINE' THEN 'ONLINE'
-          ELSE 'PHYSICAL'
-        END AS delivery_mode
-      FROM learning_path_stages lps
-      JOIN stage_courses sc ON sc.stage_id = lps.id
-      JOIN courses c ON c.id = sc.course_id
-      WHERE lps.learning_path_id = $1
-      ORDER BY lps.stage_order ASC, sc.course_order ASC
-    `,
+    useCourseReference
+      ? `
+          SELECT
+            lps.id AS stage_id,
+            course.id AS course_id,
+            course.title AS course_title,
+            sc.course_order,
+            CASE
+              WHEN course.type = 'ONLINE' THEN 'ONLINE'
+              ELSE 'PHYSICAL'
+            END AS delivery_mode
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          JOIN courses course ON course.id = sc.course_id
+          WHERE lps.learning_path_id = $1
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `
+      : `
+          SELECT
+            lps.id AS stage_id,
+            COALESCE(sc.course_code, sc.course_title) AS course_id,
+            sc.course_title AS course_title,
+            sc.course_order,
+            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          WHERE lps.learning_path_id = $1
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `,
     [id]
   );
 
@@ -630,28 +740,6 @@ export const selfEnrollPublicLearningPath = async (req, res) => {
     return sendError(res, 400, 'VALIDATION_ERROR', 'learningPathId is required.');
   }
 
-  let principalId = await resolvePrincipalForLearner(req.user, employeeNo);
-  if (!principalId) {
-    let detailsRow = null;
-    try {
-      const detailsResponse = await fetchEmployeeDetailsForServiceNo(employeeNo);
-      detailsRow = detailsResponse?.data?.[0] || null;
-    } catch {
-      detailsRow = null;
-    }
-
-    principalId = await getOrCreateLearnerPrincipal({
-      employeeNo,
-      profileRow: detailsRow,
-      defaultDesignation: 'Learner',
-      defaultGradeName: 'N/A',
-      supervisorPrincipalId: null
-    });
-  }
-  if (!principalId) {
-    return sendError(res, 500, 'INTERNAL_ERROR', 'Failed to initialize learner profile.');
-  }
-
   const pathResult = await query(
     `
       SELECT id, title, category, status
@@ -669,9 +757,21 @@ export const selfEnrollPublicLearningPath = async (req, res) => {
     return sendError(res, 403, 'FORBIDDEN', 'This learning path is not open for self-enrollment.');
   }
 
+  const principalId = await getOrCreateLearnerPrincipal(employeeNo);
+  if (!principalId) {
+    return sendError(res, 500, 'ENROLLMENT_FAILED', 'Unable to provision learner account.');
+  }
+
   const created = await query(
     `
-      INSERT INTO enrollments (principal_id, learning_path_id, status, progress, enrolled_at, enrollment_source)
+      INSERT INTO enrollments (
+        principal_id,
+        learning_path_id,
+        status,
+        progress,
+        enrolled_at,
+        enrollment_source
+      )
       VALUES ($1, $2, 'NOT_STARTED', 0, NOW(), 'SELF')
       ON CONFLICT (principal_id, learning_path_id) DO NOTHING
       RETURNING id, principal_id, learning_path_id, status, progress, enrolled_at
@@ -695,17 +795,13 @@ export const selfEnrollPublicLearningPath = async (req, res) => {
 };
 
 export const getLearnerPathCourses = async (req, res) => {
-  const employeeNo = normalizeEmployeeNo(req.user, req.body);
-  if (!employeeNo) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
-  }
-
-  const { enrollmentId } = req.params;
-  const principalId = await resolvePrincipalForLearner(req.user, employeeNo);
+  const principalId = await resolvePrincipalForLearner(req.user);
   if (!principalId) {
     return sendError(res, 404, 'NOT_FOUND', 'Enrollment not found.');
   }
+  const useCourseReference = await usesCourseReferenceTable();
 
+  const { enrollmentId } = req.params;
   const enrollmentResult = await query(
     `
       SELECT en.id, en.learning_path_id, en.progress, en.status, lp.title
@@ -724,31 +820,56 @@ export const getLearnerPathCourses = async (req, res) => {
   }
 
   const coursesResult = await query(
-    `
-      SELECT
-        COALESCE(c.id, lps.id) AS course_id,
-        COALESCE(c.title, lps.title) AS title,
-        lps.title AS stage_title,
-        lps.stage_order,
-        COALESCE(sc.course_order, lps.stage_order) AS course_order,
-        COALESCE(ep.progress, 0) >= 100 AS is_completed
-      FROM learning_path_stages lps
-      LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
-      LEFT JOIN courses c ON c.id = sc.course_id
-      LEFT JOIN enrollment_progress ep
-        ON ep.enrollment_id = $1
-       AND (
-         ep.course_id = COALESCE(c.id, lps.id)
-         OR ep.stage_id = COALESCE(c.id, lps.id)
-       )
-      WHERE lps.learning_path_id = $2
-      ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
-    `,
+    useCourseReference
+      ? `
+          SELECT
+            COALESCE(course.id, lps.id) AS course_id,
+            COALESCE(course.title, lps.title) AS title,
+            lps.title AS stage_title,
+            lps.stage_order,
+            COALESCE(sc.course_order, lps.stage_order) AS course_order,
+            CASE
+              WHEN course.type = 'CLASSROOM' THEN 'PHYSICAL'
+              WHEN course.type = 'HYBRID' THEN 'ONLINE'
+              ELSE 'ONLINE'
+            END AS delivery_mode,
+            COALESCE(ep.progress, 0) >= 100 AS is_completed
+          FROM learning_path_stages lps
+          LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+          LEFT JOIN courses course ON course.id = sc.course_id
+          LEFT JOIN enrollment_progress ep
+            ON ep.enrollment_id = $1
+           AND (
+             ep.course_id = course.id
+             OR (course.id IS NULL AND ep.stage_id = lps.id)
+           )
+          WHERE lps.learning_path_id = $2
+          ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+        `
+      : `
+          SELECT
+            COALESCE(sc.course_code, lps.id::text) AS course_id,
+            COALESCE(sc.course_title, lps.title) AS title,
+            lps.title AS stage_title,
+            lps.stage_order,
+            COALESCE(sc.course_order, lps.stage_order) AS course_order,
+            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+            COALESCE(ep.progress, 0) >= 100 AS is_completed
+          FROM learning_path_stages lps
+          LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+          LEFT JOIN enrollment_progress ep
+            ON ep.enrollment_id = $1
+           AND (
+             ep.course_code = sc.course_code
+             OR (sc.course_code IS NULL AND ep.stage_id = lps.id)
+           )
+          WHERE lps.learning_path_id = $2
+          ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+        `,
     [enrollmentId, enrollment.learning_path_id]
   );
 
   const courses = coursesResult.rows.map((row) => {
-    const mockCourse = getMockCourseByTitle(row.title);
     return {
       courseId: row.course_id,
       title: row.title,
@@ -756,9 +877,9 @@ export const getLearnerPathCourses = async (req, res) => {
       stageTitle: row.stage_title,
       stageOrder: Number(row.stage_order),
       isCompleted: Boolean(row.is_completed),
-      deliveryMode: mockCourse?.deliveryMode || 'ONLINE',
-      venue: mockCourse?.venue || null,
-      videoUrl: getMockCourseVideoUrlByTitle(row.title)
+      deliveryMode: normalizeCourseDeliveryMode(row.delivery_mode),
+      venue: null,
+      videoUrl: null
     };
   });
   const totalCourses = courses.length;
@@ -784,15 +905,16 @@ export const updateLearnerCourseCompletion = async (req, res) => {
     return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
   }
 
+  const principalId = await resolvePrincipalForLearner(req.user);
+  if (!principalId) {
+    return sendError(res, 404, 'NOT_FOUND', 'Enrollment not found.');
+  }
+  const useCourseReference = await usesCourseReferenceTable();
+
   const { enrollmentId, courseId } = req.params;
   const { completed } = req.body;
   if (typeof completed !== 'boolean') {
     return sendError(res, 400, 'VALIDATION_ERROR', 'completed must be a boolean.');
-  }
-
-  const principalId = await resolvePrincipalForLearner(req.user, employeeNo);
-  if (!principalId) {
-    return sendError(res, 404, 'NOT_FOUND', 'Enrollment not found.');
   }
 
   const enrollmentResult = await query(
@@ -812,46 +934,67 @@ export const updateLearnerCourseCompletion = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'Enrollment not found.');
   }
 
-  const stageCheck = await query(
-    `
-      SELECT
-        COALESCE(c.id, lps.id) AS activity_id,
-        c.id IS NOT NULL AS is_catalog_course
-      FROM learning_path_stages lps
-      LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
-      LEFT JOIN courses c ON c.id = sc.course_id
-      WHERE lps.learning_path_id = $2
-        AND COALESCE(c.id, lps.id) = $1
-      LIMIT 1
-    `,
+  const courseCheck = await query(
+    useCourseReference
+      ? `
+          SELECT
+            course.id AS course_id,
+            lps.id AS stage_id,
+            NULL::text AS course_code
+          FROM learning_path_stages lps
+          LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+          LEFT JOIN courses course ON course.id = sc.course_id
+          WHERE lps.learning_path_id = $2
+            AND (course.id = $1 OR lps.id = $1)
+          LIMIT 1
+        `
+      : `
+          SELECT
+            NULL::uuid AS course_id,
+            lps.id AS stage_id,
+            sc.course_code
+          FROM learning_path_stages lps
+          LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+          WHERE lps.learning_path_id = $2
+            AND (sc.course_code = $1 OR lps.id::text = $1)
+          LIMIT 1
+        `,
     [courseId, enrollment.learning_path_id]
   );
-  if (stageCheck.rowCount === 0) {
+  if (courseCheck.rowCount === 0) {
     return sendError(res, 404, 'NOT_FOUND', 'Course not found in this learning path.');
   }
 
-  const match = stageCheck.rows[0];
-  const isCatalogCourse = Boolean(match.is_catalog_course);
-
-  if (isCatalogCourse) {
+  const match = courseCheck.rows[0];
+  if (useCourseReference && match.course_id) {
     await query(
       `
-        INSERT INTO enrollment_progress (enrollment_id, stage_id, course_id, progress, created_at)
-        VALUES ($1, NULL, $2, $3, NOW())
+        INSERT INTO enrollment_progress (enrollment_id, course_id, stage_id, progress, created_at)
+        VALUES ($1, $2, NULL, $3, NOW())
         ON CONFLICT (enrollment_id, course_id) WHERE course_id IS NOT NULL
         DO UPDATE SET progress = EXCLUDED.progress, created_at = NOW()
       `,
-      [enrollmentId, courseId, completed ? 100 : 0]
+      [enrollmentId, match.course_id, completed ? 100 : 0]
+    );
+  } else if (!useCourseReference && match.course_code) {
+    await query(
+      `
+        INSERT INTO enrollment_progress (enrollment_id, course_code, stage_id, progress, created_at)
+        VALUES ($1, $2, NULL, $3, NOW())
+        ON CONFLICT (enrollment_id, course_code) WHERE course_code IS NOT NULL
+        DO UPDATE SET progress = EXCLUDED.progress, created_at = NOW()
+      `,
+      [enrollmentId, match.course_code, completed ? 100 : 0]
     );
   } else {
     await query(
       `
-        INSERT INTO enrollment_progress (enrollment_id, stage_id, course_id, progress, created_at)
-        VALUES ($1, $2, NULL, $3, NOW())
+        INSERT INTO enrollment_progress (enrollment_id, stage_id, progress, created_at)
+        VALUES ($1, $2, $3, NOW())
         ON CONFLICT (enrollment_id, stage_id) WHERE stage_id IS NOT NULL
         DO UPDATE SET progress = EXCLUDED.progress, created_at = NOW()
       `,
-      [enrollmentId, courseId, completed ? 100 : 0]
+      [enrollmentId, match.stage_id, completed ? 100 : 0]
     );
   }
 
@@ -863,13 +1006,26 @@ export const updateLearnerCourseCompletion = async (req, res) => {
   });
 
   if (previousProgress < 100 && computed.computedProgress >= 100) {
+    let learnerProfile = null;
+    try {
+      const detailsResponse = await fetchEmployeeDetailsForServiceNo(employeeNo);
+      learnerProfile = detailsResponse?.data?.[0] || null;
+    } catch {
+      learnerProfile = null;
+    }
+
     await query(
       `
-        INSERT INTO certificates (principal_id, learning_path_id, scope, issued_by)
-        VALUES ($1, $2, 'FULL', $1)
+        INSERT INTO certificates (principal_id, learning_path_id, scope, issued_by, learner_name, learner_email)
+        VALUES ($1, $2, 'FULL', $1, $3, $4)
         ON CONFLICT (principal_id, learning_path_id, scope) DO NOTHING
       `,
-      [principalId, enrollment.learning_path_id]
+      [
+        principalId,
+        enrollment.learning_path_id,
+        normalizeNameFromRow(learnerProfile, employeeNo),
+        learnerProfile?.email ? String(learnerProfile.email).trim().toLowerCase() : null
+      ]
     );
 
     await query(
@@ -884,26 +1040,52 @@ export const updateLearnerCourseCompletion = async (req, res) => {
   }
 
   const coursesResult = await query(
-    `
-      SELECT
-        COALESCE(c.id, lps.id) AS course_id,
-        COALESCE(c.title, lps.title) AS title,
-        lps.title AS stage_title,
-        lps.stage_order,
-        COALESCE(sc.course_order, lps.stage_order) AS course_order,
-        COALESCE(ep.progress, 0) >= 100 AS is_completed
-      FROM learning_path_stages lps
-      LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
-      LEFT JOIN courses c ON c.id = sc.course_id
-      LEFT JOIN enrollment_progress ep
-        ON ep.enrollment_id = $1
-       AND (
-         ep.course_id = COALESCE(c.id, lps.id)
-         OR ep.stage_id = COALESCE(c.id, lps.id)
-       )
-      WHERE lps.learning_path_id = $2
-      ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
-    `,
+    useCourseReference
+      ? `
+          SELECT
+            COALESCE(course.id, lps.id) AS course_id,
+            COALESCE(course.title, lps.title) AS title,
+            lps.title AS stage_title,
+            lps.stage_order,
+            COALESCE(sc.course_order, lps.stage_order) AS course_order,
+            CASE
+              WHEN course.type = 'CLASSROOM' THEN 'PHYSICAL'
+              WHEN course.type = 'HYBRID' THEN 'ONLINE'
+              ELSE 'ONLINE'
+            END AS delivery_mode,
+            COALESCE(ep.progress, 0) >= 100 AS is_completed
+          FROM learning_path_stages lps
+          LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+          LEFT JOIN courses course ON course.id = sc.course_id
+          LEFT JOIN enrollment_progress ep
+            ON ep.enrollment_id = $1
+           AND (
+             ep.course_id = course.id
+             OR (course.id IS NULL AND ep.stage_id = lps.id)
+           )
+          WHERE lps.learning_path_id = $2
+          ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+        `
+      : `
+          SELECT
+            COALESCE(sc.course_code, lps.id::text) AS course_id,
+            COALESCE(sc.course_title, lps.title) AS title,
+            lps.title AS stage_title,
+            lps.stage_order,
+            COALESCE(sc.course_order, lps.stage_order) AS course_order,
+            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+            COALESCE(ep.progress, 0) >= 100 AS is_completed
+          FROM learning_path_stages lps
+          LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+          LEFT JOIN enrollment_progress ep
+            ON ep.enrollment_id = $1
+           AND (
+             ep.course_code = sc.course_code
+             OR (sc.course_code IS NULL AND ep.stage_id = lps.id)
+           )
+          WHERE lps.learning_path_id = $2
+          ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+        `,
     [enrollmentId, enrollment.learning_path_id]
   );
 
@@ -918,7 +1100,6 @@ export const updateLearnerCourseCompletion = async (req, res) => {
       completedCourses: computed.completedCourses
     },
     courses: coursesResult.rows.map((row) => {
-      const mockCourse = getMockCourseByTitle(row.title);
       return {
         courseId: row.course_id,
         title: row.title,
@@ -926,21 +1107,16 @@ export const updateLearnerCourseCompletion = async (req, res) => {
         stageTitle: row.stage_title,
         stageOrder: Number(row.stage_order),
         isCompleted: Boolean(row.is_completed),
-        deliveryMode: mockCourse?.deliveryMode || 'ONLINE',
-        venue: mockCourse?.venue || null,
-        videoUrl: getMockCourseVideoUrlByTitle(row.title)
+        deliveryMode: normalizeCourseDeliveryMode(row.delivery_mode),
+        venue: null,
+        videoUrl: null
       };
     })
   });
 };
 
 export const getLearnerCertificates = async (req, res) => {
-  const employeeNo = normalizeEmployeeNo(req.user, req.body);
-  if (!employeeNo) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
-  }
-
-  const principalId = await resolvePrincipalForLearner(req.user, employeeNo);
+  const principalId = await resolvePrincipalForLearner(req.user);
   if (!principalId) {
     return res.status(200).json({ certificates: [] });
   }
@@ -948,24 +1124,24 @@ export const getLearnerCertificates = async (req, res) => {
   const result = await query(
     `
       SELECT
-        c.id,
-        c.scope,
-        c.issued_at,
+        cert.id,
+        cert.scope,
+        cert.issued_at,
         lp.id AS learning_path_id,
         lp.title AS learning_path_title,
         lp.description AS learning_path_description,
         lp.total_duration AS learning_path_duration,
-        ap.name AS learner_name,
-        ap.email AS learner_email,
+        COALESCE(cert.learner_name, ap.name) AS learner_name,
+        COALESCE(cert.learner_email, ap.email) AS learner_email,
         en.completed_at
-      FROM certificates c
-      JOIN learning_paths lp ON lp.id = c.learning_path_id
-      JOIN auth_principals ap ON ap.id = c.principal_id
+      FROM certificates cert
+      JOIN learning_paths lp ON lp.id = cert.learning_path_id
+      LEFT JOIN auth_principals ap ON ap.id = cert.principal_id
       LEFT JOIN enrollments en
-        ON en.principal_id = c.principal_id
-       AND en.learning_path_id = c.learning_path_id
-      WHERE c.principal_id = $1
-      ORDER BY c.issued_at DESC
+        ON en.principal_id = cert.principal_id
+       AND en.learning_path_id = cert.learning_path_id
+      WHERE cert.principal_id = $1
+      ORDER BY cert.issued_at DESC
     `,
     [principalId]
   );
@@ -979,33 +1155,40 @@ export const downloadLearnerCertificate = async (req, res) => {
     return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
   }
 
-  const principalId = await resolvePrincipalForLearner(req.user, employeeNo);
+  const principalId = await resolvePrincipalForLearner(req.user);
   if (!principalId) {
     return sendError(res, 404, 'NOT_FOUND', 'Certificate not found.');
   }
 
   const { certificateId } = req.params;
+  const includeSignatureColumn = await hasCertificateSignatureColumn();
+  const useCourseReference = await usesCourseReferenceTable();
   const result = await query(
     `
       SELECT
-        c.id,
-        c.scope,
-        c.issued_at,
+        cert.id,
+        cert.principal_id,
+        e.employee_number,
+        cert.learning_path_id,
+        cert.scope,
+        cert.issued_at,
         lp.title AS learning_path_title,
         lp.description AS learning_path_description,
         lp.total_duration AS learning_path_duration,
         lp.certificate_signer_name,
         lp.certificate_signer_title,
-        ap.name AS learner_name,
+        ${includeSignatureColumn ? 'lp.certificate_signature_png' : 'NULL::text AS certificate_signature_png'},
+        COALESCE(cert.learner_name, ap.name) AS learner_name,
         en.completed_at
-      FROM certificates c
-      JOIN learning_paths lp ON lp.id = c.learning_path_id
-      JOIN auth_principals ap ON ap.id = c.principal_id
+      FROM certificates cert
+      JOIN learning_paths lp ON lp.id = cert.learning_path_id
+      LEFT JOIN auth_principals ap ON ap.id = cert.principal_id
+      LEFT JOIN employees e ON e.principal_id = cert.principal_id
       LEFT JOIN enrollments en
-        ON en.principal_id = c.principal_id
-       AND en.learning_path_id = c.learning_path_id
-      WHERE c.id = $1
-        AND c.principal_id = $2
+        ON en.principal_id = cert.principal_id
+       AND en.learning_path_id = cert.learning_path_id
+      WHERE cert.id = $1
+        AND cert.principal_id = $2
       LIMIT 1
     `,
     [certificateId, principalId]
@@ -1016,81 +1199,82 @@ export const downloadLearnerCertificate = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'Certificate not found.');
   }
 
+  const coursesResult = await query(
+    useCourseReference
+      ? `
+          SELECT
+            lps.title AS stage_title,
+            lps.stage_order,
+            course.title AS course_title,
+            course.duration AS course_duration,
+            sc.course_order
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          JOIN courses course ON course.id = sc.course_id
+          WHERE lps.learning_path_id = (
+            SELECT learning_path_id
+            FROM certificates
+            WHERE id = $1
+            LIMIT 1
+          )
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `
+      : `
+          SELECT
+            lps.title AS stage_title,
+            lps.stage_order,
+            sc.course_title AS course_title,
+            sc.course_duration AS course_duration,
+            sc.course_order
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          WHERE lps.learning_path_id = (
+            SELECT learning_path_id
+            FROM certificates
+            WHERE id = $1
+            LIMIT 1
+          )
+          ORDER BY lps.stage_order ASC, sc.course_order ASC
+        `,
+    [certificateId]
+  );
+
   const finishedDate = certificate.completed_at || certificate.issued_at;
-  const issuedDateText = new Date(certificate.issued_at).toLocaleDateString();
-  const finishedDateText = new Date(finishedDate).toLocaleDateString();
+  const awardedYear = new Date(finishedDate).getFullYear();
   const safeTitle = String(certificate.learning_path_title || 'learning_path')
     .replace(/[^a-z0-9]+/gi, '_')
     .toLowerCase();
   const signerName = String(certificate.certificate_signer_name || '').trim() || 'Learning Administrator';
   const signerTitle = String(certificate.certificate_signer_title || '').trim() || 'LPMS';
-
-  let PDFDocument;
-  try {
-    ({ default: PDFDocument } = await import('pdfkit'));
-  } catch {
-    return sendError(
-      res,
-      500,
-      'PDF_ENGINE_NOT_AVAILABLE',
-      'PDF generation library is not installed. Run npm install in server.'
-    );
-  }
+  const learnerIdentifier = String(certificate.employee_number || employeeNo).trim();
+  const certificateNumber = `${certificate.learning_path_id || 'LP'}/${learnerIdentifier}/${awardedYear}`;
+  const signaturePngDataUrl = String(certificate.certificate_signature_png || '').trim();
 
   const filename = `certificate_${safeTitle}_${certificate.id}.pdf`;
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-  const doc = new PDFDocument({ size: 'A4', margin: 48 });
-  doc.pipe(res);
-
-  doc.rect(36, 36, 523, 770).lineWidth(2).stroke('#2563eb');
-  doc.moveDown();
-  doc.fontSize(26).fillColor('#0f172a').text('Certificate of Completion', {
-    align: 'center'
-  });
-  doc.moveDown(0.4);
-  doc.fontSize(14).fillColor('#334155').text('Learning Path Management System (LPMS)', {
-    align: 'center'
-  });
-
-  doc.moveDown(2);
-  doc.fontSize(12).fillColor('#475569').text('This certifies that', { align: 'center' });
-  doc.moveDown(0.4);
-  doc.fontSize(22).fillColor('#0f172a').text(certificate.learner_name, { align: 'center' });
-  doc.moveDown(0.2);
-  doc.fontSize(11).fillColor('#475569').text(`Employee Number: ${employeeNo}`, { align: 'center' });
-  doc.moveDown(1.2);
-  doc.fontSize(12).fillColor('#475569').text('has successfully completed', { align: 'center' });
-  doc.moveDown(0.4);
-  doc.fontSize(18).fillColor('#0f172a').text(certificate.learning_path_title, { align: 'center' });
-  doc.moveDown(0.8);
-  doc.fontSize(11).fillColor('#475569').text(`Duration: ${certificate.learning_path_duration || '-'}`, {
-    align: 'center'
-  });
-  doc.moveDown(2);
-
-  doc.fontSize(11).fillColor('#334155');
-  doc.text(`Certificate ID: ${certificate.id}`);
-  doc.text(`Completion Scope: ${certificate.scope}`);
-  doc.text(`Finished Date: ${finishedDateText}`);
-  doc.text(`Issued Date: ${issuedDateText}`);
-  doc.moveDown(1.5);
-  doc.text('Generated by LPMS', { align: 'right' });
-  doc.moveDown(2);
-  const pageWidth = doc.page.width;
-  const rightBlockStart = pageWidth - 210;
-  doc.moveTo(rightBlockStart, doc.y).lineTo(pageWidth - 48, doc.y).stroke('#94a3b8');
-  doc.moveDown(0.3);
-  doc.fontSize(12).fillColor('#0f172a').text(signerName, rightBlockStart, doc.y, {
-    width: 162,
-    align: 'center'
-  });
-  doc.fontSize(10).fillColor('#475569').text(signerTitle, rightBlockStart, doc.y, {
-    width: 162,
-    align: 'center'
-  });
-
-  doc.end();
-  return undefined;
+  const courses = coursesResult.rows.map((row) => ({
+    title: String(row.course_title || '').trim(),
+    duration: String(row.course_duration || '').trim() || '-'
+  }));
+  try {
+    await renderCertificatePdf({
+      res,
+      filename,
+      certificateTitle: certificate.learning_path_title,
+      learnerName: certificate.learner_name || '-',
+      learnerIdentifier,
+      finishedDate,
+      learningPathDuration: certificate.learning_path_duration || '-',
+      signerName,
+      signerTitle,
+      signaturePngDataUrl,
+      certificateNumber,
+      courses
+    });
+    return undefined;
+  } catch (error) {
+    if (error?.code === 'PDF_ENGINE_NOT_AVAILABLE') {
+      return sendError(res, 500, error.code, error.message);
+    }
+    return sendError(res, 500, 'CERTIFICATE_RENDER_FAILED', 'Failed to generate certificate preview.');
+  }
 };

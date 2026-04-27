@@ -8,6 +8,7 @@ import {
   getLearningSummaryReport,
   getLearningPathById,
   getLearningPaths,
+  previewLearningPathCertificate,
   searchAssignableEmployees,
   updateLearningPathCertificateSignature,
   updateLearningPath
@@ -47,6 +48,12 @@ router.put(
   requireRole([ROLES.LEARNING_ADMIN]),
   requireFields(['signerName', 'signerTitle']),
   updateLearningPathCertificateSignature
+);
+router.post(
+  '/learning-paths/:id/certificate-preview',
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  previewLearningPathCertificate
 );
 
 export default router;

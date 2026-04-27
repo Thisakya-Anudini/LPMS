@@ -20,7 +20,7 @@ export const createApp = () => {
   app.use(cors({
     origin: allowedOrigins.length > 0 ? allowedOrigins : true
   }));
-  app.use(express.json());
+  app.use(express.json({ limit: '5mb' }));
 
   app.get('/api/health', (_req, res) => {
     res.status(200).json({ status: 'ok' });

@@ -47,7 +47,7 @@ export function LoginPage() {
       <div className="relative w-full max-w-md">
         <div className="mb-12 text-center">
           <img
-            src="/assets/slt-mobitel-logo.png"
+            src="/assets/logo.png"
             alt="SLT Mobitel"
             className="mx-auto h-20 w-auto"
           />

@@ -1,30 +1,36 @@
-import { ERP_MOCK_EMPLOYEE_NUMBERS } from '../mock/erpMockData.js';
+export const ERP_LEARNER_AUTH_SOURCE = 'ERP_LEARNER';
 
-const mockLearners = ERP_MOCK_EMPLOYEE_NUMBERS.map((employeeNo) => ({
-  id: `mock-learner-${employeeNo}`,
-  email: `${employeeNo}@mock.slt.com.lk`,
-  password: employeeNo,
-  employeeNo,
-  username: employeeNo
-}));
+const normalizeIdentifier = (identifier) => String(identifier || '').trim();
 
-export const findMockLearnerByIdentifier = (identifier) => {
-  if (!identifier) {
+export const buildTemporaryErpLearner = (identifier) => {
+  const employeeNo = normalizeIdentifier(identifier);
+  if (!employeeNo) {
     return null;
   }
 
-  const raw = String(identifier).trim();
-  const normalized = raw.toLowerCase();
+  const fallbackDomain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || 'erp.local';
+  const normalizedEmail = employeeNo.includes('@')
+    ? employeeNo.toLowerCase()
+    : `${employeeNo}@${fallbackDomain}`;
 
-  return (
-    mockLearners.find(
-      (learner) =>
-        learner.email.toLowerCase() === normalized ||
-        learner.employeeNo === raw ||
-        learner.username === raw
-    ) || null
+  return {
+    id: `erp-learner-${employeeNo}`,
+    employeeNo,
+    email: normalizedEmail
+  };
+};
+
+export const isValidTemporaryErpLearnerPassword = (identifier, password) => {
+  const normalizedIdentifier = normalizeIdentifier(identifier);
+  return Boolean(
+    normalizedIdentifier &&
+      typeof password === 'string' &&
+      normalizedIdentifier === password.trim()
   );
 };
 
-export const isValidMockLearnerPassword = (learner, password) =>
-  Boolean(learner && typeof password === 'string' && password === learner.employeeNo);
+export const isTemporaryErpLearnerAuth = (value) => {
+  const authSource =
+    typeof value === 'string' ? value : value?.authSource;
+  return authSource === ERP_LEARNER_AUTH_SOURCE;
+};

@@ -6,8 +6,7 @@ import {
   Users,
   BookOpen,
   ChevronRight,
-  UserCog,
-  Shield } from
+  UserCog } from
 'lucide-react';
 export function Sidebar({
   isOpen,
@@ -166,12 +165,13 @@ export function Sidebar({
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
 
-        <div className="flex h-16 items-center px-6 border-b border-white/20">
-          <div className="flex items-center space-x-2">
-            <div className="bg-[#57c84d] p-1.5 rounded-lg">
-              <Shield className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-lg font-bold tracking-tight">LPMS</span>
+        <div className="flex h-16 items-center px-6  border-b border-white/20">
+          <div className="flex items-center">
+            <img
+              src="/assets/logo-whitenew.png"
+              alt="LPMS"
+              className="h-12 w-auto "
+            />
           </div>
         </div>
 

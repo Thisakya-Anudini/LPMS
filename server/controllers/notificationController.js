@@ -1,8 +1,9 @@
 import { query } from '../db.js';
 import { sendError } from '../utils/http.js';
+import { isTemporaryErpLearnerAuth } from '../users/learner.js';
 
 const resolvePrincipalId = async (user) => {
-  if (user.authSource !== 'MOCK_LEARNER') {
+  if (!isTemporaryErpLearnerAuth(user)) {
     return user.id;
   }
 
