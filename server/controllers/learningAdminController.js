@@ -480,16 +480,12 @@ export const getCertificateCustomizationPaths = async (_req, res) => {
         title,
         certificate_signer_name,
         certificate_signer_title,
-        certificate_signature_file,
-        certificate_signature_file_type,
         updated_at
       FROM learning_paths
       WHERE is_deleted = FALSE
       ORDER BY title ASC
     `
   );
-
-  console.log('certificate-settings rows:', result.rows.length); // add this
 
   return res.status(200).json({ learningPaths: result.rows });
 };
@@ -499,8 +495,6 @@ export const updateLearningPathCertificateSignature = async (req, res) => {
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
   const signerName = String(req.body.signerName || '').trim();
   const signerTitle = String(req.body.signerTitle || '').trim();
-  const signatureFile = req.body.signatureFile || null;
-  const signatureFileType = req.body.signatureFileType || null;
 
   if (!signerName || !signerTitle) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'signerName and signerTitle are required.');
@@ -511,18 +505,12 @@ export const updateLearningPathCertificateSignature = async (req, res) => {
       UPDATE learning_paths
       SET certificate_signer_name = $2,
           certificate_signer_title = $3,
-          certificate_signature_file = $4,
-          certificate_signature_file_type = $5,
           updated_at = NOW()
       WHERE id = $1
         AND is_deleted = FALSE
-      RETURNING
-        id, title,
-        certificate_signer_name, certificate_signer_title,
-        certificate_signature_file, certificate_signature_file_type,
-        updated_at
+      RETURNING id, title, certificate_signer_name, certificate_signer_title, updated_at
     `,
-    [id, signerName, signerTitle, signatureFile, signatureFileType]
+    [id, signerName, signerTitle]
   );
 
   if (result.rowCount === 0) {
@@ -568,17 +556,10 @@ export const deleteLearningPath = async (req, res) => {
 };
 
 export const createEnrollments = async (req, res) => {
-  const { learningPathId, employeePrincipalIds } = req.body;
+  const { learningPathId, selectedLearners } = req.body;
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
-  if (!Array.isArray(employeePrincipalIds) || employeePrincipalIds.length === 0) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeePrincipalIds must be a non-empty array.');
-  }
-  if (shouldNotifyAll) {
-    try {
-      ensureMailerConfigured();
-    } catch (err) {
-      return sendError(res, 500, 'EMAIL_NOT_CONFIGURED', err instanceof Error ? err.message : 'Email not configured.');
-    }
+  if (!Array.isArray(selectedLearners) || selectedLearners.length === 0) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'selectedLearners must be a non-empty array.');
   }
 
   const inserted = [];
@@ -611,7 +592,7 @@ export const createEnrollments = async (req, res) => {
       `,
       [principalId, learningPathId]
     );
-      if (created.rowCount > 0) {
+    if (created.rowCount > 0) {
       inserted.push(created.rows[0]);
       await query(
         `
@@ -623,44 +604,14 @@ export const createEnrollments = async (req, res) => {
     }
   }
 
-  let emailFailures = 0;
-  if (shouldNotifyAll && inserted.length > 0) {
-    const principalIds = inserted.map((row) => row.principal_id);
-    const principalsResult = await query(
-      `
-        SELECT id, name, email
-        FROM auth_principals
-        WHERE id = ANY($1)
-      `,
-      [principalIds]
-    );
-    const principalMap = new Map(principalsResult.rows.map((row) => [row.id, row]));
-    const emailResults = await Promise.allSettled(
-      inserted.map((row) => {
-        const principal = principalMap.get(row.principal_id);
-        const email = principal?.email;
-        if (!email) {
-          emailFailures += 1;
-          return Promise.resolve();
-        }
-        return sendLearningPathAssignmentEmail({
-          to: email,
-          learnerName: principal?.name,
-          learningPathTitle: learningPath.title
-        });
-      })
-    );
-    emailFailures += emailResults.filter((result) => result.status === 'rejected').length;
-  }
-
   await logAudit({
     actorPrincipalId,
     action: 'CREATE_ENROLLMENTS',
     resourceType: 'ENROLLMENT',
-    metadata: { learningPathId, inserted: inserted.length, notifyAll: shouldNotifyAll }
+    metadata: { learningPathId, inserted: inserted.length }
   });
 
-  return res.status(201).json({ enrollments: inserted, emailFailures: shouldNotifyAll ? emailFailures : 0 });
+  return res.status(201).json({ enrollments: inserted });
 };
 
 export const getAssignableEmployeeSearchOptions = async (_req, res) => {
