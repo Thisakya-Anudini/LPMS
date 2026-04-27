@@ -6,49 +6,41 @@ on:
   pull_request:
     branches: ["main", "test", "dev", "Feature-ci-deploy"]
 
-# Cancel any in-progress run on the same branch when a new push arrives
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-# Least-privilege default: jobs only get read access unless they declare more
-permissions:
-  contents: read
-
 jobs:
   client-ci:
     name: Frontend CI (React + Vite)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./client
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: client/package-lock.json
+          cache: 'npm'
+          cache-dependency-path: './client/package-lock.json'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
 
-      - name: Install ESLint 8 (required for .eslintrc.cjs)
+      - name: Fix ESLint Version for Legacy Config
+        # ESLint 8 is required for .eslintrc.cjs — avoids permanent file changes
         run: npm install eslint@8.57.0 --no-save --legacy-peer-deps
 
-      - name: Lint
+      - name: Run Linter
         run: npm run lint
 
-      - name: Build
+      - name: Build Production Bundle
         run: npm run build
 
   server-ci:
     name: Backend CI (Express + Node)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     defaults:
       run:
         working-directory: ./server
@@ -73,30 +65,30 @@ jobs:
       SECRET_KEY: test-secret
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: server/package-lock.json
+          cache: 'npm'
+          cache-dependency-path: './server/package-lock.json'
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
 
-      - name: Run migrations
+      - name: Run Database Migrations
         run: npm run migrate
 
-      - name: Run tests
+      - name: Run Unit Tests
         run: npm test
 
   deploy-test:
-    name: Deploy Test
+    name: Deploy to Server Test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     needs: [client-ci, server-ci]
     if: github.event_name == 'push' && github.ref == 'refs/heads/Feature-ci-deploy'
-    environment: staging
 
     steps:
       - name: Deploy via SSH
@@ -109,33 +101,28 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           envs: PROD_DB_URL
-          script_stop: true
           script: |
-            set -euo pipefail 
             cd ~/LPMS
             git fetch origin
             git checkout Feature-ci-deploy
             git pull origin Feature-ci-deploy
 
             cd client
-            npm ci --legacy-peer-deps
+            npm install --legacy-peer-deps
             npm run build
             cp -r dist/* /var/www/lpms-client/
 
             cd ../server
-            npm ci --legacy-peer-deps
+            npm install --legacy-peer-deps
             DATABASE_URL=$PROD_DB_URL npm run migrate
+
             pm2 restart lpms-api
 
-#npm ci installs exactly what's in the lockfile
-#
   deploy:
-    name: Deploy to Production
+    name: Deploy to Production Server
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     needs: [client-ci, server-ci]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
 
     steps:
       - name: Deploy via SSH
@@ -148,20 +135,17 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           envs: PROD_DB_URL
-          script_stop: true
           script: |
-            set -euo pipefail
             cd ~/LPMS
             git pull origin main
 
             cd client
-            npm ci --legacy-peer-deps
+            npm install --legacy-peer-deps
             npm run build
             cp -r dist/* /var/www/lpms-client/
 
             cd ../server
-            npm ci --legacy-peer-deps
+            npm install --legacy-peer-deps
             DATABASE_URL=$PROD_DB_URL npm run migrate
-            pm2 restart lpms-api
-# pipefail to catch failures in the pipecommands
 
+            pm2 restart lpms-api
