@@ -91,7 +91,7 @@ jobs:
         run: npm test
 
   deploy-test:
-    name: Deploy (Feature-ci-deploy)
+    name: Deploy Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [client-ci, server-ci]
@@ -111,7 +111,7 @@ jobs:
           envs: PROD_DB_URL
           script_stop: true
           script: |
-            set -euo pipefail
+            set -euo pipefail 
             cd ~/LPMS
             git fetch origin
             git checkout Feature-ci-deploy
@@ -127,6 +127,8 @@ jobs:
             DATABASE_URL=$PROD_DB_URL npm run migrate
             pm2 restart lpms-api
 
+#npm ci installs exactly what's in the lockfile
+#
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
@@ -161,3 +163,5 @@ jobs:
             npm ci --legacy-peer-deps
             DATABASE_URL=$PROD_DB_URL npm run migrate
             pm2 restart lpms-api
+# pipefail to catch failures in the pipecommands
+
