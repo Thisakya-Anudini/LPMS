@@ -232,7 +232,7 @@ export const learningApi = {
       surname?: string;
       designation?: string;
       grade?: string;
-      organizationId?: string;
+      organizationName?: string;
       payrollType?: 'EXECUTIVE' | 'NON_EXECUTIVE' | '';
     }
   ) {

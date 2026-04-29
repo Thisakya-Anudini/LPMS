@@ -4,12 +4,9 @@ const getErpConfig = () => ({
   hierarchyUrl: process.env.ERP_HIERARCHY_URL,
   partNameUrl: process.env.ERP_PART_NAME_URL,
   designationsUrl: process.env.ERP_DESIGNATIONS_URL,
-  designationEmployeesUrl: process.env.ERP_DESIGNATION_EMPLOYEES_URL,
   salaryGradesUrl: process.env.ERP_SALARY_GRADES_URL,
-  salaryGradeEmployeesUrl: process.env.ERP_SALARY_GRADE_EMPLOYEES_URL,
   organizationsUrl: process.env.ERP_ORGANIZATIONS_URL,
-  organizationEmployeesUrl: process.env.ERP_ORGANIZATION_EMPLOYEES_URL,
-  payrollEmployeesUrl: process.env.ERP_PAYROLL_EMPLOYEES_URL,
+  employeeFilterUrl: process.env.ERP_EMPLOYEE_FILTER_URL,
   coursesUrl: process.env.ERP_COURSES_URL,
   username: process.env.ERP_USERNAME,
   password: process.env.ERP_PASSWORD,
@@ -136,16 +133,6 @@ export const fetchAllDesignations = async () => {
   });
 };
 
-export const fetchEmployeesByDesignation = async (designation) => {
-  const config = getErpConfig();
-  return postErp({
-    url: config.designationEmployeesUrl,
-    username: config.searchUsername,
-    password: config.searchPassword,
-    body: { designation }
-  });
-};
-
 export const fetchAllSalaryGrades = async () => {
   const config = getErpConfig();
   return postErp({
@@ -153,16 +140,6 @@ export const fetchAllSalaryGrades = async () => {
     username: config.searchUsername,
     password: config.searchPassword,
     body: {}
-  });
-};
-
-export const fetchEmployeesBySalaryGrade = async (salaryGrade) => {
-  const config = getErpConfig();
-  return postErp({
-    url: config.salaryGradeEmployeesUrl,
-    username: config.searchUsername,
-    password: config.searchPassword,
-    body: { salaryGrade }
   });
 };
 
@@ -176,26 +153,23 @@ export const fetchOrganizationList = async () => {
   });
 };
 
-export const fetchEmployeesByOrganization = async (organizationID) => {
+export const fetchEmployeesByFilters = async ({
+  designation,
+  gradeName,
+  orgName,
+  payroll
+}) => {
   const config = getErpConfig();
   return postErp({
-    url: config.organizationEmployeesUrl,
-    username: config.username,
-    password: config.password,
-    body: {
-      organizationID,
-      costCenterCode: 'string'
-    }
-  });
-};
-
-export const fetchEmployeesByPayroll = async (payroll) => {
-  const config = getErpConfig();
-  return postErp({
-    url: config.payrollEmployeesUrl,
+    url: config.employeeFilterUrl,
     username: config.searchUsername,
     password: config.searchPassword,
-    body: { payroll }
+    body: {
+      designation,
+      gradeName,
+      orgName,
+      payroll
+    }
   });
 };
 

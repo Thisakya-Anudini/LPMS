@@ -6,12 +6,9 @@ import {
   fetchAllCourses,
   fetchAllDesignations,
   fetchAllSalaryGrades,
-  fetchEmployeesByDesignation,
+  fetchEmployeesByFilters,
   fetchEmployeeDetailsForServiceNo,
-  fetchEmployeesByOrganization,
   fetchEmployeesByPartialName,
-  fetchEmployeesByPayroll,
-  fetchEmployeesBySalaryGrade,
   fetchOrganizationList
 } from '../utils/erpClient.js';
 import { renderCertificatePdf } from '../utils/certificatePdf.js';
@@ -30,6 +27,10 @@ const isStructuredStagePayload = (stages) =>
 const UUID_LIKE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EXECUTIVE_PAYROLL = 'SLT Executive Payroll';
 const NON_EXECUTIVE_PAYROLL = 'SLT Non Executive Payroll';
+const ALL_DESIGNATIONS_FILTER = 'alldes';
+const ALL_GRADES_FILTER = 'allgra';
+const ALL_ORGANIZATIONS_FILTER = 'allorg';
+const ALL_PAYROLLS_FILTER = 'allpay';
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
 const MAX_SIGNATURE_SIZE_BYTES = 2 * 1024 * 1024;
 
@@ -939,10 +940,10 @@ export const searchAssignableEmployees = async (req, res) => {
   const surname = String(req.body.surname || '').trim();
   const designation = String(req.body.designation || '').trim();
   const grade = String(req.body.grade || '').trim();
-  const organizationId = String(req.body.organizationId || '').trim();
+  const organizationName = String(req.body.organizationName || req.body.organizationId || '').trim();
   const payrollType = String(req.body.payrollType || '').trim().toUpperCase();
 
-  if (!employeeNo && !surname && !designation && !grade && !organizationId && !payrollType) {
+  if (!employeeNo && !surname && !designation && !grade && !organizationName && !payrollType) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'At least one search or filter value is required.');
   }
 
@@ -953,20 +954,21 @@ export const searchAssignableEmployees = async (req, res) => {
   if (surname) {
     calls.push(fetchEmployeesByPartialName(surname));
   }
-  if (designation) {
-    calls.push(fetchEmployeesByDesignation(designation));
-  }
-  if (grade) {
-    calls.push(fetchEmployeesBySalaryGrade(grade));
-  }
-  if (organizationId) {
-    calls.push(fetchEmployeesByOrganization(organizationId));
-  }
-  if (payrollType) {
+  if (designation || grade || organizationName || payrollType) {
+    const payroll =
+      payrollType === 'EXECUTIVE'
+        ? EXECUTIVE_PAYROLL
+        : payrollType === 'NON_EXECUTIVE'
+          ? NON_EXECUTIVE_PAYROLL
+          : ALL_PAYROLLS_FILTER;
+
     calls.push(
-      fetchEmployeesByPayroll(
-        payrollType === 'EXECUTIVE' ? EXECUTIVE_PAYROLL : NON_EXECUTIVE_PAYROLL
-      )
+      fetchEmployeesByFilters({
+        designation: designation || ALL_DESIGNATIONS_FILTER,
+        gradeName: grade || ALL_GRADES_FILTER,
+        orgName: organizationName || ALL_ORGANIZATIONS_FILTER,
+        payroll
+      })
     );
   }
 
@@ -1016,7 +1018,7 @@ export const searchAssignableEmployees = async (req, res) => {
         surname: surname || null,
         designation: designation || null,
         grade: grade || null,
-        organizationId: organizationId || null,
+        organizationName: organizationName || null,
         payrollType: payrollType || null,
         matched: employees.length
       }

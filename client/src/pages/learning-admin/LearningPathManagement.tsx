@@ -157,6 +157,71 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [organizationOptions, setOrganizationOptions] = useState<
     Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
   >([]);
+  const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
+  const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
+  const hasAssignFilterSearch =
+    Boolean(assignDesignationFilter) ||
+    Boolean(assignGradeFilter) ||
+    Boolean(assignOrganizationFilter) ||
+    Boolean(assignPayrollFilter);
+  const isEmployeeNoDisabled = hasAssignNameSearch || hasAssignFilterSearch;
+  const isNameSearchDisabled = hasAssignEmployeeNoSearch || hasAssignFilterSearch;
+  const areAssignFiltersDisabled = hasAssignEmployeeNoSearch || hasAssignNameSearch;
+
+  const clearAssignFilters = () => {
+    setAssignDesignationFilter('');
+    setAssignGradeFilter('');
+    setAssignOrganizationFilter('');
+    setAssignPayrollFilter('');
+  };
+
+  const handleAssignEmployeeNoChange = (value: string) => {
+    setAssignEmployeeNoSearch(value);
+    if (value.trim()) {
+      setAssignSurnameSearch('');
+      clearAssignFilters();
+    }
+  };
+
+  const handleAssignNameSearchChange = (value: string) => {
+    setAssignSurnameSearch(value);
+    if (value.trim()) {
+      setAssignEmployeeNoSearch('');
+      clearAssignFilters();
+    }
+  };
+
+  const handleAssignDesignationChange = (value: string) => {
+    setAssignDesignationFilter(value);
+    if (value) {
+      setAssignEmployeeNoSearch('');
+      setAssignSurnameSearch('');
+    }
+  };
+
+  const handleAssignGradeChange = (value: string) => {
+    setAssignGradeFilter(value);
+    if (value) {
+      setAssignEmployeeNoSearch('');
+      setAssignSurnameSearch('');
+    }
+  };
+
+  const handleAssignOrganizationChange = (value: string) => {
+    setAssignOrganizationFilter(value);
+    if (value) {
+      setAssignEmployeeNoSearch('');
+      setAssignSurnameSearch('');
+    }
+  };
+
+  const handleAssignPayrollChange = (value: string) => {
+    setAssignPayrollFilter(value);
+    if (value) {
+      setAssignEmployeeNoSearch('');
+      setAssignSurnameSearch('');
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -699,7 +764,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         surname: assignSurnameSearch,
         designation: assignDesignationFilter,
         grade: assignGradeFilter,
-        organizationId: assignOrganizationFilter,
+        organizationName: assignOrganizationFilter,
         payrollType: assignPayrollFilter as '' | 'EXECUTIVE' | 'NON_EXECUTIVE'
       });
 
@@ -900,19 +965,22 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Input
                     label="Search by Employee No"
                     value={assignEmployeeNoSearch}
-                    onChange={(event) => setAssignEmployeeNoSearch(event.target.value)}
+                    onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
                     placeholder="e.g. 011338"
+                    disabled={isEmployeeNoDisabled}
                   />
                   <Input
-                    label="Search by Surname"
+                    label="Search by Name"
                     value={assignSurnameSearch}
-                    onChange={(event) => setAssignSurnameSearch(event.target.value)}
+                    onChange={(event) => handleAssignNameSearchChange(event.target.value)}
                     placeholder="e.g. Mohamed"
+                    disabled={isNameSearchDisabled}
                   />
                   <Select
                     label="Filter by Designation"
                     value={assignDesignationFilter}
-                    onChange={(event) => setAssignDesignationFilter(event.target.value)}
+                    onChange={(event) => handleAssignDesignationChange(event.target.value)}
+                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Designations' },
                       ...designationOptions.map((option) => ({ value: option, label: option }))
@@ -921,7 +989,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Select
                     label="Filter by Grade"
                     value={assignGradeFilter}
-                    onChange={(event) => setAssignGradeFilter(event.target.value)}
+                    onChange={(event) => handleAssignGradeChange(event.target.value)}
+                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Grades' },
                       ...gradeOptions.map((option) => ({ value: option, label: option }))
@@ -930,11 +999,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Select
                     label="Filter by Organization"
                     value={assignOrganizationFilter}
-                    onChange={(event) => setAssignOrganizationFilter(event.target.value)}
+                    onChange={(event) => handleAssignOrganizationChange(event.target.value)}
+                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Organizations' },
                       ...organizationOptions.map((option) => ({
-                        value: option.organizationId,
+                        value: option.organizationName,
                         label: option.parentOrganizationName
                           ? `${option.organizationName} (${option.parentOrganizationName})`
                           : option.organizationName
@@ -944,7 +1014,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Select
                     label="Executive / Non Executive"
                     value={assignPayrollFilter}
-                    onChange={(event) => setAssignPayrollFilter(event.target.value)}
+                    onChange={(event) => handleAssignPayrollChange(event.target.value)}
+                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Payrolls' },
                       { value: 'EXECUTIVE', label: 'Executive' },
@@ -997,34 +1068,40 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   </div>
                 </div>
 
-                <div className="max-h-[26rem] overflow-y-auto p-2">
+                <div className="max-h-[26rem] overflow-y-auto">
                   {learners.length === 0 ? (
                     <p className="text-sm text-slate-500 p-2">Search ERP to load learners.</p>
                   ) : (
-                    learners.map((learner) => (
-                      <label
-                        key={learner.employeeNumber}
-                        className="flex items-start gap-3 p-2 rounded-md hover:bg-slate-50"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)}
-                          onChange={() => toggleLearnerSelection(learner.employeeNumber)}
-                          className="mt-1"
-                        />
-                        <span>
-                          <span className="block text-sm font-medium text-slate-900">
-                            {learner.employeeName} ({learner.employeeNumber})
-                          </span>
-                          <span className="block text-xs text-slate-500">
-                            {learner.employeeSurname || '-'} | {learner.designation || '-'} | {learner.gradeName || '-'}
-                          </span>
-                          <span className="block text-xs text-slate-500">
-                            {learner.organizationName || '-'} | {learner.email || '-'}
-                          </span>
-                        </span>
-                      </label>
-                    ))
+                    <div className="min-w-[980px]">
+                      <div className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <span>Select</span>
+                        <span>Name</span>
+                        <span>Emp No</span>
+                        <span>Designation</span>
+                        <span>Grade</span>
+                        <span>Organization</span>
+                        <span>Email</span>
+                      </div>
+                      {learners.map((learner) => (
+                        <label
+                          key={learner.employeeNumber}
+                          className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)}
+                            onChange={() => toggleLearnerSelection(learner.employeeNumber)}
+                            className="shrink-0"
+                          />
+                          <span className="font-medium text-slate-900">{learner.employeeName}</span>
+                          <span>{learner.employeeNumber}</span>
+                          <span>{learner.designation || '-'}</span>
+                          <span>{learner.gradeName || '-'}</span>
+                          <span>{learner.organizationName || '-'}</span>
+                          <span>{learner.email || '-'}</span>
+                        </label>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
