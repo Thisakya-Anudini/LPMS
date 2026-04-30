@@ -17,11 +17,11 @@ export function Button({
   ...props
 }: ButtonProps) {
   const baseStyles =
-    'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98]';
+    'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none active:scale-[0.98]';
 
   const variants = {
     primary:
-      'bg-primary-600 text-white hover:bg-primary-800 focus-visible:ring-primary-700 shadow-sm hover:shadow-md',
+      'bg-primary-700 text-white hover:bg-primary-800 focus-visible:ring-primary-800 shadow-sm hover:shadow-md',
     secondary:
       'bg-secondary-100 text-secondary-900 border border-secondary-200 hover:bg-secondary-200 focus-visible:ring-secondary-500',
     outline:

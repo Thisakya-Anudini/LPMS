@@ -273,7 +273,7 @@ export function SupervisorDashboard() {
             isLoading={saving}
             disabled={!selectedLearningPathId || selectedTeamNumbers.length === 0}
           >
-            Assign Learning Path to Selected Learners
+            Assign Enrollments
           </Button>
         </div>
       </Card>
