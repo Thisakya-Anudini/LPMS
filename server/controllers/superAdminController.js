@@ -70,7 +70,7 @@ export const getAllUsers = async (_req, res) => {
 export const deleteUser = async (req, res) => {
   const { id } = req.params;
   if (id === req.user.id) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'You cannot deactivate your own account.');
+    return sendError(res, 400, 'VALIDATION_ERROR', 'You cannot delete your own account.');
   }
 
   const target = await query(
@@ -90,16 +90,15 @@ export const deleteUser = async (req, res) => {
       res,
       400,
       'VALIDATION_ERROR',
-      'Only SUPER_ADMIN and LEARNING_ADMIN accounts can be deactivated from this interface.'
+      'Only SUPER_ADMIN and LEARNING_ADMIN accounts can be deleted from this interface.'
     );
   }
 
   const result = await query(
     `
-      UPDATE auth_principals
-      SET is_active = FALSE, updated_at = NOW()
+      DELETE FROM auth_principals
       WHERE id = $1
-      RETURNING id, email, role, name, principal_type, is_active, updated_at
+      RETURNING id, email, role, name, principal_type
     `,
     [id]
   );

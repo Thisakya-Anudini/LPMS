@@ -5,6 +5,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { Select } from '../../components/ui/Select';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
@@ -142,6 +143,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     stages: [] as StageForm[]
   });
   const [editLoading, setEditLoading] = useState(false);
+  const [pendingDeletePath, setPendingDeletePath] = useState<LearningPathRow | null>(null);
 
   const [assignForm, setAssignForm] = useState(initialAssignForm);
   const [assignLoading, setAssignLoading] = useState(false);
@@ -390,10 +392,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const handleDeletePath = async (id: string) => {
-    const confirmed = window.confirm('Delete this learning path?');
-    if (!confirmed) {
-      return;
-    }
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -402,6 +400,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       }
       await learningApi.deleteLearningPath(token, id);
       showToast('Learning path deleted successfully.', 'success');
+      setPendingDeletePath(null);
       await loadData();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to delete learning path.', 'error');
@@ -1190,7 +1189,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                           <button
                             type="button"
                             className="p-1 text-slate-500 hover:text-red-600"
-                            onClick={() => handleDeletePath(path.id)}
+                            onClick={() => setPendingDeletePath(path)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -1205,8 +1204,35 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         </Card>
       ) : null}
 
+      {section === 'manage' && pendingDeletePath ? (
+        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-6 py-4">
+              <h2 className="text-lg font-semibold text-slate-900">Delete Learning Path</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                This action will permanently remove the learning path and related records.
+              </p>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-slate-700">
+                Are you sure you want to delete{' '}
+                <span className="font-semibold text-slate-900">{pendingDeletePath.title}</span>?
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+              <Button type="button" variant="outline" onClick={() => setPendingDeletePath(null)}>
+                Cancel
+              </Button>
+              <Button type="button" variant="danger" onClick={() => handleDeletePath(pendingDeletePath.id)}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </ModalOverlay>
+      ) : null}
+
       {section === 'manage' && editPathId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
               <h2 className="text-lg font-semibold text-slate-900">Edit Learning Path</h2>
@@ -1278,7 +1304,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
               </form>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );

@@ -272,16 +272,58 @@ const getOrCreateLearnerPrincipalForEnrollment = async (employee) => {
   let principalId = null;
   const existingPrincipal = await query(
     `
-      SELECT id
+      SELECT ap.id, e.employee_number
       FROM auth_principals
+      ap
+      LEFT JOIN employees e ON e.principal_id = ap.id
       WHERE email = $1
       LIMIT 1
     `,
     [email]
   );
   if (existingPrincipal.rowCount > 0) {
-    principalId = existingPrincipal.rows[0].id;
+    const matchedEmployeeNumber = String(existingPrincipal.rows[0].employee_number || '').trim();
+    if (!matchedEmployeeNumber || matchedEmployeeNumber === employeeNumber) {
+      principalId = existingPrincipal.rows[0].id;
+    }
   } else {
+    principalId = null;
+  }
+
+  let principalEmail = email;
+  if (!principalId) {
+    const fallbackEmailBase = `${employeeNumber}@${fallbackDomain}`;
+    principalEmail = fallbackEmailBase;
+    let emailSuffix = 1;
+
+    while (true) {
+      const fallbackPrincipal = await query(
+        `
+          SELECT ap.id, e.employee_number
+          FROM auth_principals ap
+          LEFT JOIN employees e ON e.principal_id = ap.id
+          WHERE ap.email = $1
+          LIMIT 1
+        `,
+        [principalEmail]
+      );
+
+      if (fallbackPrincipal.rowCount === 0) {
+        break;
+      }
+
+      const fallbackEmployeeNumber = String(fallbackPrincipal.rows[0].employee_number || '').trim();
+      if (!fallbackEmployeeNumber || fallbackEmployeeNumber === employeeNumber) {
+        principalId = fallbackPrincipal.rows[0].id;
+        break;
+      }
+
+      emailSuffix += 1;
+      principalEmail = `${employeeNumber}+${emailSuffix}@${fallbackDomain}`;
+    }
+  }
+
+  if (!principalId) {
     const passwordHash = await bcrypt.hash(employeeNumber, 10);
     const createdPrincipal = await query(
       `
@@ -289,9 +331,44 @@ const getOrCreateLearnerPrincipalForEnrollment = async (employee) => {
         VALUES ($1, $2, 'EMPLOYEE', $3, 'EMPLOYEE', FALSE)
         RETURNING id
       `,
-      [email, passwordHash, name]
+      [principalEmail, passwordHash, name]
     );
     principalId = createdPrincipal.rows[0].id;
+  }
+
+  const existingEmployeeForPrincipal = await query(
+    `
+      SELECT id, employee_number
+      FROM employees
+      WHERE principal_id = $1
+      LIMIT 1
+    `,
+    [principalId]
+  );
+
+  if (existingEmployeeForPrincipal.rowCount > 0) {
+    const currentEmployeeNumber = String(existingEmployeeForPrincipal.rows[0].employee_number || '').trim();
+    if (currentEmployeeNumber === employeeNumber) {
+      await query(
+        `
+          UPDATE employees
+          SET designation = $2, grade_name = $3, updated_at = NOW()
+          WHERE principal_id = $1
+        `,
+        [principalId, designation || 'Learner', gradeName || 'N/A']
+      );
+      return principalId;
+    }
+
+    await query(
+      `
+        UPDATE employees
+        SET designation = $2, grade_name = $3, updated_at = NOW()
+        WHERE principal_id = $1
+      `,
+      [principalId, designation || 'Learner', gradeName || 'N/A']
+    );
+    return principalId;
   }
 
   await query(
@@ -818,9 +895,8 @@ export const deleteLearningPath = async (req, res) => {
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
   const result = await query(
     `
-      UPDATE learning_paths
-      SET is_deleted = TRUE, updated_at = NOW()
-      WHERE id = $1 AND is_deleted = FALSE
+      DELETE FROM learning_paths
+      WHERE id = $1
       RETURNING id
     `,
     [id]

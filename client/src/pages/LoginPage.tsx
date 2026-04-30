@@ -42,7 +42,7 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-100 p-4">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-primary-50 via-white to-secondary-50 p-4">
 
       <div className="relative w-full max-w-md">
         <div className="mb-12 text-center">
@@ -53,13 +53,13 @@ export function LoginPage() {
           />
         </div>
 
-        <Card className="w-full border-white/50 bg-white/80 shadow-xl shadow-[#034c96]/10 backdrop-blur-md">
+        <Card className="w-full border-secondary-200/50 bg-white/90 shadow-large backdrop-blur-sm">
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#034c96_0%,#0563bb_55%,#3faa45_100%)] shadow-lg shadow-[#0563bb]/30">
-              <Shield className="h-7 w-7 text-white" />
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/30">
+              <Shield className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">Welcome to LPMS</h1>
-            <p className="mt-2 text-slate-700">Learning Path Management System</p>
+            <h1 className="text-3xl font-bold tracking-tight text-secondary-900">Welcome to LPMS</h1>
+            <p className="mt-2 text-secondary-600">Learning Path Management System</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>

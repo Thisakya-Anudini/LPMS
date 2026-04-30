@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -142,10 +143,11 @@ export function LearnerPublicPathsPage() {
                   <Button variant="outline" onClick={() => handleOpenDetails(path.id)}>
                     View Details
                   </Button>
-                  <Button
+                  <Button 
                     onClick={() => handleSelfEnroll(path.id)}
                     isLoading={selfEnrollLoadingId === path.id}
                     disabled={path.already_enrolled}
+                    className="w-40"
                   >
                     {path.already_enrolled ? 'Already Enrolled' : 'Self Enroll'}
                   </Button>
@@ -157,7 +159,7 @@ export function LearnerPublicPathsPage() {
       </Card>
 
       {selectedPathId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
               <h2 className="text-lg font-semibold text-slate-900">
@@ -226,7 +228,7 @@ export function LearnerPublicPathsPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );

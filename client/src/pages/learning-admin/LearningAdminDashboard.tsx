@@ -74,46 +74,54 @@ export function LearningAdminDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Learning Administration</h1>
-        <p className="text-slate-500">Manage learning paths and enrollment readiness.</p>
+        <h1 className="text-3xl font-bold text-secondary-900">Learning Administration</h1>
+        <p className="text-secondary-600 mt-2">Manage learning paths and enrollment readiness.</p>
       </div>
 
-      {error ? <Card className="text-red-600">{error}</Card> : null}
+      {error ? <Card className="text-error-600 border-error-200 bg-error-50">{error}</Card> : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-5 w-5 text-blue-600" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
+              <BookOpen className="h-6 w-6 text-primary-600" />
+            </div>
             <div>
-              <p className="text-sm text-slate-500">Total LPs</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary?.totalPaths ?? stats.total}</p>
+              <p className="text-sm font-medium text-secondary-600">Total LPs</p>
+              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : summary?.totalPaths ?? stats.total}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <Globe2 className="h-5 w-5 text-green-600" />
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success-100">
+              <Globe2 className="h-6 w-6 text-success-600" />
+            </div>
             <div>
-              <p className="text-sm text-slate-500">Public LPs</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.publicCount}</p>
+              <p className="text-sm font-medium text-secondary-600">Public LPs</p>
+              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : stats.publicCount}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <Layers className="h-5 w-5 text-amber-600" />
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning-100">
+              <Layers className="h-6 w-6 text-warning-600" />
+            </div>
             <div>
-              <p className="text-sm text-slate-500">Semi-restricted LPs</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.semiRestricted}</p>
+              <p className="text-sm font-medium text-secondary-600">Semi-restricted LPs</p>
+              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : stats.semiRestricted}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-emerald-600" />
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary-100">
+              <ShieldCheck className="h-6 w-6 text-secondary-600" />
+            </div>
             <div>
-              <p className="text-sm text-slate-500">Restricted LPs</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.restricted}</p>
+              <p className="text-sm font-medium text-secondary-600">Restricted LPs</p>
+              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : stats.restricted}</p>
             </div>
           </div>
         </Card>

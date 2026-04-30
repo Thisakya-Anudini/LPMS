@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
@@ -203,59 +204,67 @@ export function LearnerMyProgressPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Welcome {learnerName}</h1>
-        <p className="text-slate-500">
+        <h1 className="text-3xl font-bold text-secondary-900">Welcome {learnerName}</h1>
+        <p className="text-secondary-600 mt-2">
           My learning progress
           {isSupervisor ? ' | You also have Supervisor Dashboard access from the sidebar.' : ''}
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Assigned Learning Paths</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.totalLearningPaths}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6">
+          <p className="text-sm font-medium text-secondary-600">Assigned Learning Paths</p>
+          <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : summary.totalLearningPaths}</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Completed Learning Paths</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.completedLearningPaths}</p>
+        <Card className="p-6">
+          <p className="text-sm font-medium text-secondary-600">Completed Learning Paths</p>
+          <p className="text-3xl font-bold text-success-600">{loading ? '...' : summary.completedLearningPaths}</p>
         </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Pending Learning Paths</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.remainingLearningPaths}</p>
+        <Card className="p-6">
+          <p className="text-sm font-medium text-secondary-600">Pending Learning Paths</p>
+          <p className="text-3xl font-bold text-warning-600">{loading ? '...' : summary.remainingLearningPaths}</p>
         </Card>
       </div>
 
-      <Card title="My Learning Progress">
+      <Card title="My Learning Progress" className="animate-fade-in">
         <div className="space-y-4">
           {assignedLearningPaths.map((path) => (
             <button
               key={path.enrollmentId}
               type="button"
               onClick={() => openLearningPathModal(path.enrollmentId)}
-              className="w-full text-left p-2 rounded-lg border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-colors"
+              className="w-full text-left p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200 group"
             >
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-medium text-slate-900">{path.title}</p>
-                <span className="text-xs text-slate-500">{path.status.replace('_', ' ')}</span>
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-semibold text-secondary-900 group-hover:text-primary-700">{path.title}</p>
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                  path.status === 'COMPLETED'
+                    ? 'bg-success-100 text-success-700'
+                    : path.status === 'IN_PROGRESS'
+                    ? 'bg-warning-100 text-warning-700'
+                    : 'bg-secondary-100 text-secondary-700'
+                }`}>
+                  {path.status.replace('_', ' ')}
+                </span>
               </div>
               <ProgressBar progress={path.progress} showLabel size="sm" />
             </button>
           ))}
           {!loading && assignedLearningPaths.length === 0 ? (
-            <p className="text-sm text-slate-500">No assigned learning paths yet.</p>
+            <p className="text-sm text-secondary-500 text-center py-8">No assigned learning paths yet.</p>
           ) : null}
         </div>
       </Card>
 
       {selectedEnrollmentId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-              <h2 className="text-lg font-semibold text-slate-900">Learning Path Details</h2>
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-large">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-secondary-200 bg-white px-6 py-4 rounded-t-2xl">
+              <h2 className="text-xl font-semibold text-secondary-900">Learning Path Details</h2>
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                className="rounded-lg p-2 text-secondary-500 hover:bg-secondary-100 hover:text-secondary-800 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -266,44 +275,56 @@ export function LearnerMyProgressPage() {
                 <p className="text-sm text-slate-500">Loading course details...</p>
               ) : selectedPathMeta ? (
                 <div className="space-y-4">
-                  <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
-                    <p className="font-semibold text-slate-900">{selectedPathMeta.learningPathTitle}</p>
-                    <p className="text-xs text-slate-600 mt-1">
+                  <div className="p-4 rounded-xl border border-secondary-200 bg-secondary-50">
+                    <p className="font-semibold text-secondary-900 text-lg">{selectedPathMeta.learningPathTitle}</p>
+                    <p className="text-sm text-secondary-600 mt-1">
                       {selectedPathMeta.completedCourses}/{selectedPathMeta.totalCourses} courses completed
                       {' | '}
-                      {selectedPathMeta.status.replace('_', ' ')}
+                      <span className={`font-medium ${
+                        selectedPathMeta.status === 'COMPLETED'
+                          ? 'text-success-600'
+                          : selectedPathMeta.status === 'IN_PROGRESS'
+                          ? 'text-warning-600'
+                          : 'text-secondary-600'
+                      }`}>
+                        {selectedPathMeta.status.replace('_', ' ')}
+                      </span>
                     </p>
-                    <div className="mt-2">
-                      <ProgressBar progress={selectedPathMeta.progress} showLabel size="sm" />
+                    <div className="mt-3">
+                      <ProgressBar progress={selectedPathMeta.progress} showLabel size="md" />
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     {groupedCoursesByStage.map((stage) => (
                       <div key={`${stage.stageOrder}-${stage.stageTitle}`} className="space-y-2">
-                        <p className="text-sm font-semibold text-slate-800">
+                        <p className="text-sm font-semibold text-secondary-800 mb-3">
                           Stage {stage.stageOrder}: {stage.stageTitle}
                         </p>
                         {stage.courses.map((course) => (
                           <div
                             key={course.courseId}
-                            className="flex items-start gap-3 p-3 rounded border border-slate-200 bg-white hover:bg-slate-50"
+                            className="flex items-start gap-4 p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200"
                           >
                             <input
                               type="checkbox"
                               checked={course.isCompleted}
                               disabled={courseUpdateLoadingId === course.courseId}
                               onChange={(event) => handleToggleCourse(course, event.target.checked)}
-                              className="mt-1"
+                              className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
                             />
                             <div className="flex-1">
-                              <span className="block text-sm font-medium text-slate-900">
+                              <span className="block text-sm font-semibold text-secondary-900">
                                 {course.order}. {course.title}
                               </span>
-                              <span className="block text-xs text-slate-500">
+                              <span className={`block text-xs px-2 py-1 rounded-full font-medium w-fit mt-1 ${
+                                course.isCompleted
+                                  ? 'bg-success-100 text-success-700'
+                                  : 'bg-secondary-100 text-secondary-700'
+                              }`}>
                                 {course.isCompleted ? 'Completed' : 'Pending'}
                               </span>
-                              <span className="block text-xs text-slate-500">
+                              <span className="block text-xs text-secondary-500 mt-2">
                                 {course.deliveryMode === 'ONLINE'
                                   ? 'Mode: Online'
                                   : `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`}
@@ -322,7 +343,7 @@ export function LearnerMyProgressPage() {
                                 Learn Now
                               </Button>
                             ) : (
-                              <span className="text-xs text-slate-500 border border-slate-200 rounded px-2 py-1">
+                              <span className="text-xs text-secondary-500 border border-secondary-200 rounded-lg px-3 py-1 bg-secondary-50">
                                 Physical Course
                               </span>
                             )}
@@ -340,13 +361,13 @@ export function LearnerMyProgressPage() {
               )}
             </div>
 
-            <div className="border-t border-slate-200 px-4 py-3 flex justify-end">
+            <div className="border-t border-secondary-200 px-6 py-4 flex justify-end bg-secondary-50 rounded-b-2xl">
               <Button type="button" variant="outline" onClick={closeModal}>
                 Close
               </Button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );

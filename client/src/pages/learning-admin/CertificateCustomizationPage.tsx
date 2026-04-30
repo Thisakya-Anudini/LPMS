@@ -3,6 +3,7 @@ import { learningApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -233,7 +234,7 @@ export function CertificateCustomizationPage() {
       </Card>
 
       {editingId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4">
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 px-4">
           <Card className="w-full max-w-lg">
             <div className="space-y-4">
               <h2 className="text-lg font-semibold text-slate-900">Update Certificate Signature</h2>
@@ -302,11 +303,11 @@ export function CertificateCustomizationPage() {
               </div>
             </div>
           </Card>
-        </div>
+        </ModalOverlay>
       ) : null}
 
       {previewState ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6">
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 px-4 py-6">
           <Card className="max-h-full w-full max-w-6xl overflow-y-auto">
             <div className="space-y-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -339,7 +340,7 @@ export function CertificateCustomizationPage() {
               ) : null}
             </div>
           </Card>
-        </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );

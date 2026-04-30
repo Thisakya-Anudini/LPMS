@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -194,7 +195,7 @@ export function LearnerCertificatesPage() {
       </Card>
 
       {previewState ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4 py-6">
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 px-4 py-6">
           <Card className="max-h-full w-full max-w-6xl overflow-y-auto">
             <div className="space-y-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -226,7 +227,7 @@ export function LearnerCertificatesPage() {
               )}
             </div>
           </Card>
-        </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );

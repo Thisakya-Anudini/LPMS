@@ -4,6 +4,7 @@ import { User } from '../types';
 import { AuthContext } from './AuthContextStore';
 
 const REFRESH_TOKEN_KEY = 'lpms_refresh_token';
+const ACCESS_TOKEN_REFRESH_BUFFER_MS = 30 * 1000;
 
 const getStoredRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
 
@@ -13,6 +14,30 @@ const setStoredRefreshToken = (token: string | null) => {
     return;
   }
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
+const parseJwtPayload = (token: string) => {
+  try {
+    const [, payload] = token.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const paddedPayload = normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '=');
+    return JSON.parse(window.atob(paddedPayload)) as { exp?: number };
+  } catch {
+    return null;
+  }
+};
+
+const isAccessTokenExpired = (token: string) => {
+  const payload = parseJwtPayload(token);
+  if (!payload?.exp) {
+    return true;
+  }
+
+  return payload.exp * 1000 <= Date.now() + ACCESS_TOKEN_REFRESH_BUFFER_MS;
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -62,7 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const changePassword = useCallback(async (oldPassword: string, newPassword: string) => {
-    const token = accessToken || (await refreshAccessToken());
+    const token = accessToken && !isAccessTokenExpired(accessToken)
+      ? accessToken
+      : await refreshAccessToken();
     if (!token) {
       throw new Error('Session expired. Please login again.');
     }
@@ -84,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearSession]);
 
   const getAccessToken = useCallback(async () => {
-    if (accessToken) {
+    if (accessToken && !isAccessTokenExpired(accessToken)) {
       return accessToken;
     }
 
