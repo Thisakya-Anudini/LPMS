@@ -145,11 +145,11 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
   }, [unreadCount]);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-primary-600 bg-gradient-to-r from-primary-500 to-primary-600 shadow-medium px-4 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] px-4 lg:px-8 shadow-md">
       <div className="flex items-center">
         <button
           onClick={onMenuClick}
-          className="mr-4 text-white hover:text-primary-100 lg:hidden transition-colors"
+          className="mr-4 text-white/85 hover:text-white lg:hidden transition-colors"
         >
           <Menu className="h-6 w-6" />
         </button>
@@ -160,12 +160,12 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
         <button
           ref={bellRef}
           onClick={togglePopup}
-          className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/30 bg-white/20 text-white transition-colors hover:bg-white/30"
+          className="relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/35 bg-white/10 text-white transition-colors hover:bg-white/20"
           aria-label="Notifications"
         >
           <Bell className="h-4 w-4" />
           {unreadLabel ? (
-            <span className="absolute -right-1 -top-1 min-w-[14px] h-[14px] px-0.5 rounded-full bg-error-500 text-[9px] leading-[14px] text-white text-center font-bold ring-2 ring-white">
+            <span className="absolute -right-1 -top-1 min-w-[16px] h-4 px-1 rounded-full bg-[#3faa45] text-[10px] leading-4 text-white text-center font-bold ring-2 ring-[#034c96]">
               {unreadLabel}
             </span>
           ) : null}
@@ -173,10 +173,10 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
         {isPopupOpen ? (
           <div
             ref={popupRef}
-            className="absolute right-0 top-12 w-[360px] max-w-[90vw] rounded-xl border border-secondary-200 bg-white shadow-large z-50"
+            className="absolute right-0 top-12 z-50 w-[360px] max-w-[90vw] rounded-lg border border-slate-200 bg-white shadow-xl"
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-secondary-200">
-              <p className="text-sm font-semibold text-secondary-900">Notifications</p>
+            <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+              <p className="text-sm font-semibold text-slate-900">Notifications</p>
               <Button
                 size="sm"
                 variant="outline"
@@ -198,17 +198,13 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
                 notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`px-4 py-3 border-b border-secondary-100 ${
-                      notification.is_read
-                        ? 'bg-white'
-                        : 'bg-primary-100/90 shadow-sm'
-                    }`}
+                    className={`border-b border-slate-100 px-3 py-3 ${notification.is_read ? 'bg-white' : 'bg-blue-50'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-secondary-900">{notification.title}</p>
-                        <p className="text-xs text-secondary-600 mt-1">{notification.message}</p>
-                        <p className="text-[11px] text-secondary-500 mt-1">
+                        <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
+                        <p className="mt-1 text-xs text-slate-600">{notification.message}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">
                           {new Date(notification.created_at).toLocaleString()}
                         </p>
                       </div>

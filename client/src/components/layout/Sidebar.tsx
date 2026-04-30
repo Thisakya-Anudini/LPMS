@@ -6,7 +6,8 @@ import {
   Users,
   BookOpen,
   ChevronRight,
-  UserCog } from
+  UserCog,
+  Shield } from
 'lucide-react';
 export function Sidebar({
   isOpen,
@@ -161,17 +162,16 @@ export function Sidebar({
       {/* Sidebar */}
       <aside
         className={`
-        fixed top-0 left-0 z-50 h-screen w-64 bg-primary-700 border-r border-primary-800 shadow-medium transition-transform duration-300 ease-in-out
+        fixed top-0 left-0 z-50 h-screen w-64 bg-[#034c96] text-white transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
 
-        <div className="flex h-16 items-center px-6 border-b border-primary-600 bg-primary-800">
-          <div className="flex items-center">
-            <img
-              src="/assets/logo-whitenew.png"
-              alt="LPMS"
-              className="h-12 w-auto"
-            />
+        <div className="flex h-16 items-center border-b border-white/20 px-6">
+          <div className="flex items-center space-x-2">
+            <div className="rounded-lg bg-[#57c84d] p-1.5">
+              <Shield className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-bold tracking-tight">LPMS</span>
           </div>
         </div>
 
@@ -182,7 +182,7 @@ export function Sidebar({
             link.isHeader ? (
               <div
                 key={`hdr-${link.label}`}
-                className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-primary-300"
+                className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-300"
               >
                 {link.label}
               </div>
@@ -193,13 +193,9 @@ export function Sidebar({
                 end
                 onClick={() => window.innerWidth < 1024 && onClose()}
                 className={({ isActive }) => `
-                  flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
+                  flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
                   ${link.isSubmenu ? 'ml-3' : ''}
-                  ${
-                    isActive
-                      ? 'bg-primary-600 text-white border-l-2 border-white'
-                      : 'text-primary-200 hover:bg-primary-600 hover:text-white'
-                  }
+                  ${isActive ? 'bg-slate-200 text-slate-900' : 'text-white hover:bg-white/15'}
                 `}>
 
                 <link.icon className="mr-3 h-5 w-5" />
@@ -210,9 +206,9 @@ export function Sidebar({
           </nav>
         </div>
 
-        <div className="absolute bottom-0 left-0 w-full p-4 border-t border-primary-600 bg-primary-800">
+        <div className="absolute bottom-0 left-0 w-full border-t border-white/20 p-4">
           <div className="flex items-center px-2">
-            <div className="h-8 w-8 rounded-full bg-white text-primary-700 flex items-center justify-center text-sm font-bold">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#57c84d] text-sm font-bold text-[#034c96]">
               {user.name.charAt(0)}
             </div>
             <div className="ml-3">
