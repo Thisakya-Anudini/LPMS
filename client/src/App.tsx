@@ -4,6 +4,7 @@ import { DashboardLayout } from './components/layout/DashboardLayout';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/useAuth';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { AdminEmployeeHierarchyPage } from './pages/admin/AdminEmployeeHierarchyPage';
 import { AdminLearnersPage } from './pages/admin/AdminLearnersPage';
 import { AdminLearnerDetailsPage } from './pages/admin/AdminLearnerDetailsPage';
 import { AdminLearningPathsPage } from './pages/admin/AdminLearningPathsPage';
@@ -139,6 +140,14 @@ export function App() {
               element={
                 <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
                   <AdminDashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/hierarchy"
+              element={
+                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                  <AdminEmployeeHierarchyPage />
                 </ProtectedRoute>
               }
             />

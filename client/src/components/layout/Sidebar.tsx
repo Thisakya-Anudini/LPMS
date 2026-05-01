@@ -7,7 +7,8 @@ import {
   BookOpen,
   ChevronRight,
   UserCog,
-  Shield } from
+  Shield,
+  GitBranch } from
 'lucide-react';
 export function Sidebar({
   isOpen,
@@ -31,6 +32,11 @@ export function Sidebar({
           to: '/admin/accounts',
           icon: LayoutDashboard,
           label: 'System Accounts'
+        },
+        {
+          to: '/admin/hierarchy',
+          icon: GitBranch,
+          label: 'Employee Hierarchy'
         },
         {
           to: '/admin/learning-paths',
