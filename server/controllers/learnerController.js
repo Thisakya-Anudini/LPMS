@@ -8,6 +8,10 @@ import {
 } from '../utils/erpClient.js';
 import { isTemporaryErpLearnerAuth } from '../users/learner.js';
 import { renderCertificatePdf } from '../utils/certificatePdf.js';
+import {
+  ASSIGNMENT_REPORT_SOURCE,
+  createAssignmentReport
+} from '../utils/assignmentReports.js';
 
 const normalizeEmployeeNo = (user, requestBody = {}) => {
   if (user.employeeNo) {
@@ -17,6 +21,26 @@ const normalizeEmployeeNo = (user, requestBody = {}) => {
     return requestBody.employeeNo.trim();
   }
   return '';
+};
+
+const resolveActorPrincipalId = async (user) => {
+  const employeeNo = normalizeEmployeeNo(user);
+  if (employeeNo) {
+    const result = await query(
+      `
+        SELECT principal_id
+        FROM employees
+        WHERE employee_number = $1
+        LIMIT 1
+      `,
+      [employeeNo]
+    );
+    if (result.rowCount > 0) {
+      return result.rows[0].principal_id;
+    }
+  }
+
+  return String(user?.id || '').trim() || null;
 };
 
 const isSupervisorFromSubordinateResponse = (response) =>
@@ -203,7 +227,8 @@ const getOrCreateLearnerPrincipal = async (employeeNo, employeeRow = null) => {
   let principalEmail = normalizedEmail;
   if (!principalId) {
     const fallbackEmailBase = `${normalizedEmployeeNo}@${fallbackDomain}`;
-    principalEmail = fallbackEmailBase;
+    const hasProvidedEmail = Boolean(normalizedEmail);
+    principalEmail = hasProvidedEmail ? normalizedEmail : fallbackEmailBase;
     let emailSuffix = 1;
 
     while (true) {
@@ -244,6 +269,45 @@ const getOrCreateLearnerPrincipal = async (employeeNo, employeeRow = null) => {
       [principalEmail, passwordHash, learnerName]
     );
     principalId = createdPrincipal.rows[0].id;
+  }
+
+  if (principalId && normalizedEmail) {
+    const principalResult = await query(
+      `
+        SELECT email
+        FROM auth_principals
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [principalId]
+    );
+    const currentPrincipalEmail = String(principalResult.rows[0]?.email || '').trim().toLowerCase();
+    const usesFallbackEmail =
+      currentPrincipalEmail.endsWith(`@${fallbackDomain}`) ||
+      currentPrincipalEmail.includes(`+`) && currentPrincipalEmail.endsWith(`@${fallbackDomain}`);
+
+    if (usesFallbackEmail && currentPrincipalEmail !== normalizedEmail) {
+      const emailOwner = await query(
+        `
+          SELECT id
+          FROM auth_principals
+          WHERE email = $1
+          LIMIT 1
+        `,
+        [normalizedEmail]
+      );
+
+      if (emailOwner.rowCount === 0 || emailOwner.rows[0].id === principalId) {
+        await query(
+          `
+            UPDATE auth_principals
+            SET email = $2
+            WHERE id = $1
+          `,
+          [principalId, normalizedEmail]
+        );
+      }
+    }
   }
 
   const existingEmployeeForPrincipal = await query(
@@ -576,6 +640,7 @@ export const enrollLearnerTeam = async (req, res) => {
 
     const assignments = [];
     let assignedCount = 0;
+    const insertedLearnersByPathId = new Map();
     for (const employeeNo of scopedEmployeeNumbers) {
       const subordinateRow =
         subordinateRows.find((row) => String(row?.employeeNumber || '').trim() === employeeNo) || null;
@@ -607,6 +672,26 @@ export const enrollLearnerTeam = async (req, res) => {
         if (created.rowCount > 0) {
           assignedLearningPathIds.push(String(path.id));
           assignedCount += 1;
+          const pathId = String(path.id);
+          const currentLearners = insertedLearnersByPathId.get(pathId) || [];
+          currentLearners.push({
+            principalId,
+            employeeNumber: employeeNo,
+            learnerName: normalizeNameFromRow(subordinateRow, employeeNo),
+            learnerEmail:
+              subordinateRow?.email && String(subordinateRow.email).trim()
+                ? String(subordinateRow.email).trim().toLowerCase()
+                : '',
+            designation:
+              subordinateRow?.designation && String(subordinateRow.designation).trim()
+                ? String(subordinateRow.designation).trim()
+                : 'Learner',
+            gradeName:
+              subordinateRow?.gradeName && String(subordinateRow.gradeName).trim()
+                ? String(subordinateRow.gradeName).trim()
+                : 'N/A'
+          });
+          insertedLearnersByPathId.set(pathId, currentLearners);
           await query(
             `
               INSERT INTO notifications (principal_id, title, message, type, is_read)
@@ -620,6 +705,24 @@ export const enrollLearnerTeam = async (req, res) => {
       assignments.push({
         employeeNo,
         assignedLearningPathIds
+      });
+    }
+
+    const actorPrincipalId = await resolveActorPrincipalId(req.user);
+    for (const path of validPaths) {
+      const pathLearners = insertedLearnersByPathId.get(String(path.id)) || [];
+      if (pathLearners.length === 0) {
+        continue;
+      }
+
+      await createAssignmentReport({
+        learningPathId: String(path.id),
+        learningPathTitle: String(path.title || '').trim() || 'Learning Path',
+        assignedByPrincipalId: actorPrincipalId,
+        assignedByName: req.user.name || 'Supervisor',
+        assignedByRole: req.user.role || 'EMPLOYEE',
+        assignmentSource: ASSIGNMENT_REPORT_SOURCE.SUPERVISOR,
+        learners: pathLearners
       });
     }
 

@@ -3,7 +3,7 @@ import { AuthResponse, Role, User } from '../types';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string | null;
 };
@@ -249,6 +249,7 @@ export const learningApi = {
         costCenterName: string;
         employeeInitials: string;
         employeeSupervisorNumber: string;
+        isLearningAdmin?: boolean;
       }>;
     }>('/employee-search', {
       method: 'POST',
@@ -280,6 +281,43 @@ export const learningApi = {
       token,
       body: payload
     });
+  },
+  getAssignmentReports(token: string) {
+    return request<{
+      reports: Array<{
+        id: string;
+        learning_path_id: string | null;
+        learning_path_title: string;
+        assigned_by_name: string;
+        assigned_by_role: string;
+        assignment_source: 'LEARNING_ADMIN' | 'SUPERVISOR';
+        report_status: 'ASSIGNED_IN_LPMS' | 'ENROLLED_IN_ERP';
+        assigned_at: string;
+        learners: Array<{
+          id: string;
+          principalId: string | null;
+          employeeNumber: string;
+          learnerName: string;
+          learnerEmail: string | null;
+          designation: string | null;
+          gradeName: string | null;
+        }>;
+      }>;
+    }>('/assignment-reports', { token });
+  },
+  updateAssignmentReportStatus(
+    token: string,
+    reportId: string,
+    status: 'ASSIGNED_IN_LPMS' | 'ENROLLED_IN_ERP'
+  ) {
+    return request<{ report: { id: string; report_status: 'ASSIGNED_IN_LPMS' | 'ENROLLED_IN_ERP' } }>(
+      `/assignment-reports/${reportId}/status`,
+      {
+        method: 'PATCH',
+        token,
+        body: { status }
+      }
+    );
   },
   getSummaryReport(token: string) {
     return request<{
@@ -693,7 +731,35 @@ export const learnerApi = {
 };
 
 export const superAdminApi = {
-  getLearners(token: string) {
+  getLearners(
+    token: string,
+    params?: {
+      page?: number;
+      pageSize?: number;
+      employeeNo?: string;
+      name?: string;
+      designation?: string;
+    }
+  ) {
+    const searchParams = new URLSearchParams();
+
+    if (params?.page) {
+      searchParams.set('page', String(params.page));
+    }
+    if (params?.pageSize) {
+      searchParams.set('pageSize', String(params.pageSize));
+    }
+    if (params?.employeeNo?.trim()) {
+      searchParams.set('employeeNo', params.employeeNo.trim());
+    }
+    if (params?.name?.trim()) {
+      searchParams.set('name', params.name.trim());
+    }
+    if (params?.designation && params.designation !== 'ALL') {
+      searchParams.set('designation', params.designation);
+    }
+
+    const query = searchParams.toString();
     return request<{
       learners: Array<{
         principal_id: string;
@@ -708,7 +774,29 @@ export const superAdminApi = {
         completed_learning_paths: number;
         average_progress: string;
       }>;
-    }>('/users/learners', { token });
+      designationOptions: string[];
+      pagination: {
+        page: number;
+        pageSize: number;
+        total: number;
+        totalPages: number;
+      };
+    }>(`/users/learners${query ? `?${query}` : ''}`, { token });
+  },
+  getAssignedLearningAdmins(token: string) {
+    return request<{
+      learningAdmins: Array<{
+        employee_number: string;
+        principal_id: string;
+        designation: string;
+        grade_name: string;
+        name: string;
+        email: string;
+        is_active: boolean;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>('/users/learning-admin-assignments', { token });
   },
   getLearnerLearningPaths(token: string, principalId: string) {
     return request<{
@@ -752,7 +840,24 @@ export const superAdminApi = {
       }>;
     }>(`/users/learning-paths/${learningPathId}/enrollments`, { token });
   },
-  assignLearningAdmin(token: string, employeeNumber: string) {
+  assignLearningAdmin(
+    token: string,
+    employeeNumber: string,
+    employee?: {
+      employeeNumber: string;
+      employeeName: string;
+      employeeSurname: string;
+      designation: string;
+      gradeName: string;
+      email: string;
+      organizationName: string;
+      costCenterCode: string;
+      costCenterName: string;
+      employeeInitials: string;
+      employeeSupervisorNumber: string;
+      isLearningAdmin?: boolean;
+    }
+  ) {
     return request<{
       assignment: {
         employeeNumber: string;
@@ -764,7 +869,7 @@ export const superAdminApi = {
     }>('/users/learning-admin-assignments', {
       method: 'POST',
       token,
-      body: { employeeNumber }
+      body: { employeeNumber, employee }
     });
   },
   removeLearningAdmin(token: string, employeeNumber: string) {

@@ -166,9 +166,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     Boolean(assignGradeFilter) ||
     Boolean(assignOrganizationFilter) ||
     Boolean(assignPayrollFilter);
-  const isEmployeeNoDisabled = hasAssignNameSearch || hasAssignFilterSearch;
-  const isNameSearchDisabled = hasAssignEmployeeNoSearch || hasAssignFilterSearch;
-  const areAssignFiltersDisabled = hasAssignEmployeeNoSearch || hasAssignNameSearch;
 
   const clearAssignFilters = () => {
     setAssignDesignationFilter('');
@@ -177,52 +174,73 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     setAssignPayrollFilter('');
   };
 
-  const handleAssignEmployeeNoChange = (value: string) => {
-    setAssignEmployeeNoSearch(value);
-    if (value.trim()) {
+  const activateAssignEmployeeSearch = () => {
+    if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
+    }
+    if (hasAssignFilterSearch) {
       clearAssignFilters();
     }
+  };
+
+  const activateAssignNameSearch = () => {
+    if (hasAssignEmployeeNoSearch) {
+      setAssignEmployeeNoSearch('');
+    }
+    if (hasAssignFilterSearch) {
+      clearAssignFilters();
+    }
+  };
+
+  const activateAssignFilterSearch = () => {
+    if (hasAssignEmployeeNoSearch) {
+      setAssignEmployeeNoSearch('');
+    }
+    if (hasAssignNameSearch) {
+      setAssignSurnameSearch('');
+    }
+  };
+
+  const handleAssignEmployeeNoChange = (value: string) => {
+    if (value.trim()) {
+      activateAssignEmployeeSearch();
+    }
+    setAssignEmployeeNoSearch(value);
   };
 
   const handleAssignNameSearchChange = (value: string) => {
-    setAssignSurnameSearch(value);
     if (value.trim()) {
-      setAssignEmployeeNoSearch('');
-      clearAssignFilters();
+      activateAssignNameSearch();
     }
+    setAssignSurnameSearch(value);
   };
 
   const handleAssignDesignationChange = (value: string) => {
-    setAssignDesignationFilter(value);
     if (value) {
-      setAssignEmployeeNoSearch('');
-      setAssignSurnameSearch('');
+      activateAssignFilterSearch();
     }
+    setAssignDesignationFilter(value);
   };
 
   const handleAssignGradeChange = (value: string) => {
-    setAssignGradeFilter(value);
     if (value) {
-      setAssignEmployeeNoSearch('');
-      setAssignSurnameSearch('');
+      activateAssignFilterSearch();
     }
+    setAssignGradeFilter(value);
   };
 
   const handleAssignOrganizationChange = (value: string) => {
-    setAssignOrganizationFilter(value);
     if (value) {
-      setAssignEmployeeNoSearch('');
-      setAssignSurnameSearch('');
+      activateAssignFilterSearch();
     }
+    setAssignOrganizationFilter(value);
   };
 
   const handleAssignPayrollChange = (value: string) => {
-    setAssignPayrollFilter(value);
     if (value) {
-      setAssignEmployeeNoSearch('');
-      setAssignSurnameSearch('');
+      activateAssignFilterSearch();
     }
+    setAssignPayrollFilter(value);
   };
 
   const loadData = useCallback(async () => {
@@ -964,22 +982,22 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Input
                     label="Search by Employee No"
                     value={assignEmployeeNoSearch}
+                    onFocus={activateAssignEmployeeSearch}
                     onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
                     placeholder="e.g. 011338"
-                    disabled={isEmployeeNoDisabled}
                   />
                   <Input
                     label="Search by Name"
                     value={assignSurnameSearch}
+                    onFocus={activateAssignNameSearch}
                     onChange={(event) => handleAssignNameSearchChange(event.target.value)}
                     placeholder="e.g. Mohamed"
-                    disabled={isNameSearchDisabled}
                   />
                   <Select
                     label="Filter by Designation"
                     value={assignDesignationFilter}
+                    onFocus={activateAssignFilterSearch}
                     onChange={(event) => handleAssignDesignationChange(event.target.value)}
-                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Designations' },
                       ...designationOptions.map((option) => ({ value: option, label: option }))
@@ -988,8 +1006,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Select
                     label="Filter by Grade"
                     value={assignGradeFilter}
+                    onFocus={activateAssignFilterSearch}
                     onChange={(event) => handleAssignGradeChange(event.target.value)}
-                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Grades' },
                       ...gradeOptions.map((option) => ({ value: option, label: option }))
@@ -998,8 +1016,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Select
                     label="Filter by Organization"
                     value={assignOrganizationFilter}
+                    onFocus={activateAssignFilterSearch}
                     onChange={(event) => handleAssignOrganizationChange(event.target.value)}
-                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Organizations' },
                       ...organizationOptions.map((option) => ({
@@ -1013,8 +1031,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Select
                     label="Executive / Non Executive"
                     value={assignPayrollFilter}
+                    onFocus={activateAssignFilterSearch}
                     onChange={(event) => handleAssignPayrollChange(event.target.value)}
-                    disabled={areAssignFiltersDisabled}
                     options={[
                       { value: '', label: 'All Payrolls' },
                       { value: 'EXECUTIVE', label: 'Executive' },

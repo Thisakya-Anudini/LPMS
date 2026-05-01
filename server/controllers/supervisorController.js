@@ -1,6 +1,10 @@
 import { query } from '../db.js';
 import { logAudit } from '../utils/audit.js';
 import { sendError } from '../utils/http.js';
+import {
+  ASSIGNMENT_REPORT_SOURCE,
+  createAssignmentReport
+} from '../utils/assignmentReports.js';
 
 export const getTeam = async (req, res) => {
   const result = await query(
@@ -105,19 +109,22 @@ export const enrollTeamMembers = async (req, res) => {
 
   const teamResult = await query(
     `
-      SELECT principal_id
-      FROM employees
-      WHERE supervisor_id = $1
+      SELECT e.principal_id, e.employee_number, e.designation, e.grade_name, ap.name, ap.email
+      FROM employees e
+      JOIN auth_principals ap ON ap.id = e.principal_id
+      WHERE e.supervisor_id = $1
     `,
     [req.user.id]
   );
   const teamPrincipalIds = new Set(teamResult.rows.map((row) => row.principal_id));
 
   const inserted = [];
+  const insertedLearners = [];
   for (const principalId of employeePrincipalIds) {
     if (!teamPrincipalIds.has(principalId)) {
       continue;
     }
+    const teamMember = teamResult.rows.find((row) => row.principal_id === principalId) || null;
     const created = await query(
       `
         INSERT INTO enrollments (principal_id, learning_path_id, status, progress, enrolled_at, enrollment_source)
@@ -129,6 +136,14 @@ export const enrollTeamMembers = async (req, res) => {
     );
     if (created.rowCount > 0) {
       inserted.push(created.rows[0]);
+      insertedLearners.push({
+        principalId,
+        employeeNumber: String(teamMember?.employee_number || '').trim(),
+        learnerName: String(teamMember?.name || '').trim() || 'Learner',
+        learnerEmail: String(teamMember?.email || '').trim().toLowerCase(),
+        designation: String(teamMember?.designation || '').trim() || 'Learner',
+        gradeName: String(teamMember?.grade_name || '').trim() || 'N/A'
+      });
       await query(
         `
           INSERT INTO notifications (principal_id, title, message, type, is_read)
@@ -137,6 +152,18 @@ export const enrollTeamMembers = async (req, res) => {
         [principalId, `Your supervisor enrolled you in "${path.title}".`]
       );
     }
+  }
+
+  if (insertedLearners.length > 0) {
+    await createAssignmentReport({
+      learningPathId,
+      learningPathTitle: path.title,
+      assignedByPrincipalId: req.user.id || null,
+      assignedByName: req.user.name || 'Supervisor',
+      assignedByRole: req.user.role || 'SUPERVISOR',
+      assignmentSource: ASSIGNMENT_REPORT_SOURCE.SUPERVISOR,
+      learners: insertedLearners
+    });
   }
 
   await logAudit({

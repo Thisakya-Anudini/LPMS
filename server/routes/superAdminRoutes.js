@@ -3,6 +3,7 @@ import express from 'express';
 import {
   createUser,
   getAllUsers,
+  getAssignedLearningAdmins,
   deleteUser,
   getAllLearners,
   getLearnerLearningPaths,
@@ -24,6 +25,7 @@ router.post(
   createUser
 );
 router.get('/', protect, requireRole([ROLES.SUPER_ADMIN]), getAllUsers);
+router.get('/learning-admin-assignments', protect, requireRole([ROLES.SUPER_ADMIN]), getAssignedLearningAdmins);
 router.get('/learners', protect, requireRole([ROLES.SUPER_ADMIN]), getAllLearners);
 router.get('/learners/:principalId/learning-paths', protect, requireRole([ROLES.SUPER_ADMIN]), getLearnerLearningPaths);
 router.get('/learning-paths/:learningPathId/enrollments', protect, requireRole([ROLES.SUPER_ADMIN]), getLearningPathEnrollments);

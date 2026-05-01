@@ -73,6 +73,12 @@ export function Sidebar({
           icon: ChevronRight,
           label: 'Certificate Customization',
           isSubmenu: true
+        },
+        {
+          to: '/learning-admin/assignment-reports',
+          icon: ChevronRight,
+          label: 'Assignment Reports',
+          isSubmenu: true
         }];
 
       case 'EMPLOYEE':
@@ -131,6 +137,12 @@ export function Sidebar({
                 to: '/learning-admin/certificates',
                 icon: ChevronRight,
                 label: 'Certificate Customization',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/assignment-reports',
+                icon: ChevronRight,
+                label: 'Assignment Reports',
                 isSubmenu: true
               }
             ]

@@ -9,6 +9,7 @@ import { AdminLearnerDetailsPage } from './pages/admin/AdminLearnerDetailsPage';
 import { AdminLearningPathsPage } from './pages/admin/AdminLearningPathsPage';
 import { AdminLearningPathDetailsPage } from './pages/admin/AdminLearningPathDetailsPage';
 import { LearningAdminDashboard } from './pages/learning-admin/LearningAdminDashboard';
+import { AssignmentReportsPage } from './pages/learning-admin/AssignmentReportsPage';
 import { LearningPathManagement } from './pages/learning-admin/LearningPathManagement';
 import { CertificateCustomizationPage } from './pages/learning-admin/CertificateCustomizationPage';
 import { LoginPage } from './pages/LoginPage';
@@ -214,6 +215,16 @@ export function App() {
                 <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
                   <LearningAdminAccessRoute>
                     <CertificateCustomizationPage />
+                  </LearningAdminAccessRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learning-admin/assignment-reports"
+              element={
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <AssignmentReportsPage />
                   </LearningAdminAccessRoute>
                 </ProtectedRoute>
               }

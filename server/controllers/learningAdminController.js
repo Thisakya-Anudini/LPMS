@@ -12,6 +12,11 @@ import {
   fetchOrganizationList
 } from '../utils/erpClient.js';
 import { renderCertificatePdf } from '../utils/certificatePdf.js';
+import {
+  ASSIGNMENT_REPORT_SOURCE,
+  ASSIGNMENT_REPORT_STATUS,
+  createAssignmentReport
+} from '../utils/assignmentReports.js';
 
 const parseCategory = (value) => {
   const allowed = ['RESTRICTED', 'SEMI_RESTRICTED', 'PUBLIC'];
@@ -71,6 +76,29 @@ const mergeEmployeeRows = (base = {}, incoming = {}) => {
     }
   }
   return merged;
+};
+
+const mapLearningAdminAssignments = async (employees = []) => {
+  const employeeNumbers = employees
+    .map((employee) => String(employee?.employeeNumber || '').trim())
+    .filter(Boolean);
+
+  if (employeeNumbers.length === 0) {
+    return new Set();
+  }
+
+  const assignments = await query(
+    `
+      SELECT employee_number
+      FROM learning_admin_assignments
+      WHERE employee_number = ANY($1::text[])
+    `,
+    [employeeNumbers]
+  );
+
+  return new Set(
+    assignments.rows.map((row) => String(row.employee_number || '').trim()).filter(Boolean)
+  );
 };
 
 const normalizeOptionList = (rows, key) =>
@@ -293,7 +321,8 @@ const getOrCreateLearnerPrincipalForEnrollment = async (employee) => {
   let principalEmail = email;
   if (!principalId) {
     const fallbackEmailBase = `${employeeNumber}@${fallbackDomain}`;
-    principalEmail = fallbackEmailBase;
+    const hasProvidedEmail = Boolean(email);
+    principalEmail = hasProvidedEmail ? email : fallbackEmailBase;
     let emailSuffix = 1;
 
     while (true) {
@@ -334,6 +363,45 @@ const getOrCreateLearnerPrincipalForEnrollment = async (employee) => {
       [principalEmail, passwordHash, name]
     );
     principalId = createdPrincipal.rows[0].id;
+  }
+
+  if (principalId && email) {
+    const principalResult = await query(
+      `
+        SELECT email
+        FROM auth_principals
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [principalId]
+    );
+    const currentPrincipalEmail = String(principalResult.rows[0]?.email || '').trim().toLowerCase();
+    const usesFallbackEmail =
+      currentPrincipalEmail.endsWith(`@${fallbackDomain}`) ||
+      currentPrincipalEmail.includes(`+`) && currentPrincipalEmail.endsWith(`@${fallbackDomain}`);
+
+    if (usesFallbackEmail && currentPrincipalEmail !== email) {
+      const emailOwner = await query(
+        `
+          SELECT id
+          FROM auth_principals
+          WHERE email = $1
+          LIMIT 1
+        `,
+        [email]
+      );
+
+      if (emailOwner.rowCount === 0 || emailOwner.rows[0].id === principalId) {
+        await query(
+          `
+            UPDATE auth_principals
+            SET email = $2
+            WHERE id = $1
+          `,
+          [principalId, email]
+        );
+      }
+    }
   }
 
   const existingEmployeeForPrincipal = await query(
@@ -924,6 +992,7 @@ export const createEnrollments = async (req, res) => {
   }
 
   const inserted = [];
+  const insertedLearners = [];
 
   const pathResult = await query(
     `
@@ -955,6 +1024,14 @@ export const createEnrollments = async (req, res) => {
     );
     if (created.rowCount > 0) {
       inserted.push(created.rows[0]);
+      insertedLearners.push({
+        principalId,
+        employeeNumber: String(learner.employeeNumber || '').trim(),
+        learnerName: normalizeEmployeeDisplayName(learner, learner.employeeNumber),
+        learnerEmail: learner.email ? String(learner.email).trim().toLowerCase() : '',
+        designation: learner.designation ? String(learner.designation).trim() : 'Learner',
+        gradeName: learner.gradeName ? String(learner.gradeName).trim() : 'N/A'
+      });
       await query(
         `
           INSERT INTO notifications (principal_id, title, message, type, is_read)
@@ -965,6 +1042,18 @@ export const createEnrollments = async (req, res) => {
     }
   }
 
+  if (insertedLearners.length > 0) {
+    await createAssignmentReport({
+      learningPathId,
+      learningPathTitle: learningPath.title,
+      assignedByPrincipalId: actorPrincipalId,
+      assignedByName: req.user.name || 'Learning Admin',
+      assignedByRole: req.user.role || 'LEARNING_ADMIN',
+      assignmentSource: ASSIGNMENT_REPORT_SOURCE.LEARNING_ADMIN,
+      learners: insertedLearners
+    });
+  }
+
   await logAudit({
     actorPrincipalId,
     action: 'CREATE_ENROLLMENTS',
@@ -973,6 +1062,84 @@ export const createEnrollments = async (req, res) => {
   });
 
   return res.status(201).json({ enrollments: inserted });
+};
+
+export const getAssignmentReports = async (_req, res) => {
+  const result = await query(
+    `
+      SELECT
+        ar.id,
+        ar.learning_path_id,
+        ar.learning_path_title,
+        ar.assigned_by_name,
+        ar.assigned_by_role,
+        ar.assignment_source,
+        ar.report_status,
+        ar.assigned_at,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'id', arl.id,
+              'principalId', arl.principal_id,
+              'employeeNumber', arl.employee_number,
+              'learnerName', arl.learner_name,
+              'learnerEmail', arl.learner_email,
+              'designation', arl.designation,
+              'gradeName', arl.grade_name
+            )
+            ORDER BY arl.learner_name ASC, arl.employee_number ASC
+          ) FILTER (WHERE arl.id IS NOT NULL),
+          '[]'::json
+        ) AS learners
+      FROM assignment_reports ar
+      LEFT JOIN assignment_report_learners arl ON arl.report_id = ar.id
+      GROUP BY
+        ar.id,
+        ar.learning_path_id,
+        ar.learning_path_title,
+        ar.assigned_by_name,
+        ar.assigned_by_role,
+        ar.assignment_source,
+        ar.report_status,
+        ar.assigned_at
+      ORDER BY ar.assigned_at DESC, ar.created_at DESC
+    `
+  );
+
+  return res.status(200).json({ reports: result.rows });
+};
+
+export const updateAssignmentReportStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (![ASSIGNMENT_REPORT_STATUS.ASSIGNED_IN_LPMS, ASSIGNMENT_REPORT_STATUS.ENROLLED_IN_ERP].includes(status)) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid assignment report status.');
+  }
+
+  const result = await query(
+    `
+      UPDATE assignment_reports
+      SET report_status = $2, updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, report_status
+    `,
+    [id, status]
+  );
+
+  if (result.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'Assignment report not found.');
+  }
+
+  await logAudit({
+    actorPrincipalId: await resolveActorPrincipalId(req.user),
+    action: 'UPDATE_ASSIGNMENT_REPORT_STATUS',
+    resourceType: 'ASSIGNMENT_REPORT',
+    resourceId: id,
+    metadata: { status }
+  });
+
+  return res.status(200).json({ report: result.rows[0] });
 };
 
 export const getAssignableEmployeeSearchOptions = async (_req, res) => {
@@ -1084,6 +1251,11 @@ export const searchAssignableEmployees = async (req, res) => {
     const employees = Array.from(intersection.values()).sort((a, b) =>
       a.employeeName.localeCompare(b.employeeName)
     );
+    const learningAdminAssignments = await mapLearningAdminAssignments(employees);
+    const employeesWithAssignments = employees.map((employee) => ({
+      ...employee,
+      isLearningAdmin: learningAdminAssignments.has(employee.employeeNumber)
+    }));
 
     await logAudit({
       actorPrincipalId: await resolveActorPrincipalId(req.user),
@@ -1096,11 +1268,11 @@ export const searchAssignableEmployees = async (req, res) => {
         grade: grade || null,
         organizationName: organizationName || null,
         payrollType: payrollType || null,
-        matched: employees.length
+        matched: employeesWithAssignments.length
       }
     });
 
-    return res.status(200).json({ employees });
+    return res.status(200).json({ employees: employeesWithAssignments });
   } catch (error) {
     return sendError(
       res,
