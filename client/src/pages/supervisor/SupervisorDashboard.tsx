@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -44,6 +45,8 @@ export function SupervisorDashboard() {
   const [employeeNoSearch, setEmployeeNoSearch] = useState('');
   const [nameSearch, setNameSearch] = useState('');
   const [designationFilter, setDesignationFilter] = useState('ALL');
+  const statSkeletons = Array.from({ length: 2 }, (_, index) => index);
+  const teamSkeletons = Array.from({ length: 4 }, (_, index) => index);
 
   const load = useCallback(async () => {
     try {
@@ -182,27 +185,40 @@ export function SupervisorDashboard() {
       {error ? <Card className="text-red-600">{error}</Card> : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Team Learners</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.teamCount}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Available Learning Paths</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.availablePathCount}</p>
-        </Card>
+        {statSkeletons.map((index) => (
+          <Card key={`supervisor-stat-${index}`} className="p-4">
+            <p className="text-sm text-slate-500">
+              {index === 0 ? 'Team Learners' : 'Available Learning Paths'}
+            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-8 w-16" />
+            ) : (
+              <p className="text-2xl font-bold text-slate-900">
+                {index === 0 ? stats.teamCount : stats.availablePathCount}
+              </p>
+            )}
+          </Card>
+        ))}
       </div>
 
       <Card title="Assign Learning Paths">
         <div className="space-y-4">
-          <Select
-            label="Learning Path"
-            value={selectedLearningPathId}
-            onChange={(event) => setSelectedLearningPathId(event.target.value)}
-            options={[
-              { value: '', label: 'Select a learning path' },
-              ...learningPaths.map((path) => ({ value: path.id, label: path.title }))
-            ]}
-          />
+          {loading ? (
+            <div>
+              <p className="mb-2 text-sm font-medium text-slate-700">Learning Path</p>
+              <Skeleton className="h-10 w-full rounded-md" />
+            </div>
+          ) : (
+            <Select
+              label="Learning Path"
+              value={selectedLearningPathId}
+              onChange={(event) => setSelectedLearningPathId(event.target.value)}
+              options={[
+                { value: '', label: 'Select a learning path' },
+                ...learningPaths.map((path) => ({ value: path.id, label: path.title }))
+              ]}
+            />
+          )}
 
           <div className="max-h-80 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-2 border-b border-slate-200 mb-2">
@@ -240,7 +256,17 @@ export function SupervisorDashboard() {
               </div>
             </div>
 
-            {team.length === 0 ? (
+            {loading ? (
+              teamSkeletons.map((index) => (
+                <div key={`team-skeleton-${index}`} className="flex items-start gap-3 p-2 rounded">
+                  <Skeleton className="mt-1 h-4 w-4 rounded-sm" />
+                  <span className="block w-full">
+                    <Skeleton className="mb-2 h-5 w-52" />
+                    <Skeleton className="h-4 w-36" />
+                  </span>
+                </div>
+              ))
+            ) : team.length === 0 ? (
               <p className="text-sm text-slate-500 p-2">No learners found under this supervisor.</p>
             ) : filteredTeam.length === 0 ? (
               <p className="text-sm text-slate-500 p-2">No learners match current filters.</p>

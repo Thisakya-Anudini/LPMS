@@ -4,6 +4,7 @@ import { learningApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { ModalOverlay } from '../../components/ui/ModalOverlay';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -79,6 +80,8 @@ export function AssignmentReportsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<AssignmentReport | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
+  const rowSkeletons = Array.from({ length: 4 }, (_, index) => index);
 
   const loadReports = useCallback(async () => {
     try {
@@ -193,18 +196,20 @@ export function AssignmentReportsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Total Reports</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : stats.totalReports}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Pending ERP Enrollment</p>
-          <p className="text-2xl font-bold text-amber-700">{loading ? '...' : stats.assignedInLpms}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Enrolled in ERP</p>
-          <p className="text-2xl font-bold text-emerald-700">{loading ? '...' : stats.enrolledInErp}</p>
-        </Card>
+        {statSkeletons.map((index) => (
+          <Card key={`report-stat-${index}`} className="p-4">
+            <p className="text-sm text-slate-500">
+              {index === 0 ? 'Total Reports' : index === 1 ? 'Pending ERP Enrollment' : 'Enrolled in ERP'}
+            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-8 w-16" />
+            ) : (
+              <p className={`text-2xl font-bold ${index === 1 ? 'text-amber-700' : index === 2 ? 'text-emerald-700' : 'text-slate-900'}`}>
+                {index === 0 ? stats.totalReports : index === 1 ? stats.assignedInLpms : stats.enrolledInErp}
+              </p>
+            )}
+          </Card>
+        ))}
       </div>
 
       <Card title="Assignment Report List">
@@ -222,11 +227,16 @@ export function AssignmentReportsPage() {
             </thead>
             <tbody className="divide-y divide-slate-200">
               {loading ? (
-                <tr>
-                  <td className="px-4 py-4 text-slate-500" colSpan={6}>
-                    Loading assignment reports...
-                  </td>
-                </tr>
+                rowSkeletons.map((row) => (
+                  <tr key={`report-skeleton-${row}`}>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-40" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-10" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-28" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-32" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-8 w-36 rounded-full" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-8 w-28 rounded-lg" /></td>
+                  </tr>
+                ))
               ) : reports.length === 0 ? (
                 <tr>
                   <td className="px-4 py-4 text-slate-500" colSpan={6}>

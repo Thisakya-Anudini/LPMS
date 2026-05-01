@@ -3,6 +3,7 @@ import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 
 type AssignedLearningPath = {
@@ -55,6 +56,8 @@ export function LearnerDashboard() {
       already_enrolled: boolean;
     }>
   >([]);
+  const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
+  const listSkeletons = Array.from({ length: 3 }, (_, index) => index);
 
   const load = useCallback(async () => {
     try {
@@ -244,23 +247,33 @@ export function LearnerDashboard() {
       {error ? <Card className="text-red-600">{error}</Card> : null}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Assigned Learning Paths</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.totalLearningPaths}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Completed Learning Paths</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.completedLearningPaths}</p>
-        </Card>
-        <Card className="p-4">
-          <p className="text-sm text-slate-500">Pending Learning Paths</p>
-          <p className="text-2xl font-bold text-slate-900">{loading ? '...' : summary.remainingLearningPaths}</p>
-        </Card>
+        {statSkeletons.map((index) => (
+          <Card key={`learner-stat-${index}`} className="p-4">
+            <p className="text-sm text-slate-500">
+              {index === 0 ? 'Assigned Learning Paths' : index === 1 ? 'Completed Learning Paths' : 'Pending Learning Paths'}
+            </p>
+            {loading ? <Skeleton className="mt-2 h-8 w-16" /> : (
+              <p className="text-2xl font-bold text-slate-900">
+                {index === 0 ? summary.totalLearningPaths : index === 1 ? summary.completedLearningPaths : summary.remainingLearningPaths}
+              </p>
+            )}
+          </Card>
+        ))}
       </div>
 
       <Card title="My Learning Progress">
         <div className="space-y-4">
-          {assignedLearningPaths.map((path) => (
+          {loading ? (
+            listSkeletons.map((index) => (
+              <div key={`assigned-skeleton-${index}`} className="w-full rounded-lg border border-slate-200 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-full" />
+              </div>
+            ))
+          ) : assignedLearningPaths.map((path) => (
             <button
               key={path.enrollmentId}
               type="button"
@@ -287,7 +300,20 @@ export function LearnerDashboard() {
       {selectedEnrollmentId ? (
         <Card title="Learning Path Courses">
           {coursePanelLoading ? (
-            <p className="text-sm text-slate-500">Loading course details...</p>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <Skeleton className="mb-2 h-5 w-56" />
+                <Skeleton className="mb-2 h-4 w-44" />
+                <Skeleton className="h-3 w-full" />
+              </div>
+              {listSkeletons.map((index) => (
+                <div key={`course-skeleton-${index}`} className="rounded border border-slate-200 bg-white p-3">
+                  <Skeleton className="mb-2 h-5 w-40" />
+                  <Skeleton className="mb-2 h-4 w-20" />
+                  <Skeleton className="h-4 w-36" />
+                </div>
+              ))}
+            </div>
           ) : selectedPathMeta ? (
             <div className="space-y-4">
               <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
@@ -350,7 +376,21 @@ export function LearnerDashboard() {
 
       <Card title="Public Learning Paths - Self Enrollment">
         <div className="space-y-3">
-          {publicLearningPaths.length === 0 && !loading ? (
+          {loading ? (
+            listSkeletons.map((index) => (
+              <div
+                key={`public-skeleton-${index}`}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <Skeleton className="mb-2 h-5 w-44" />
+                <Skeleton className="mb-2 h-4 w-full" />
+                <div className="flex items-center justify-between gap-3">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-10 w-28 rounded-lg" />
+                </div>
+              </div>
+            ))
+          ) : publicLearningPaths.length === 0 ? (
             <p className="text-sm text-slate-500">No public learning paths available.</p>
           ) : (
             publicLearningPaths.map((path) => (

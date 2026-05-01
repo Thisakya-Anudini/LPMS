@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Globe2, Layers, ShieldCheck } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -28,6 +29,7 @@ export function LearningAdminDashboard() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const statSkeletons = Array.from({ length: 4 }, (_, index) => index);
 
   useEffect(() => {
     const load = async () => {
@@ -81,50 +83,39 @@ export function LearningAdminDashboard() {
       {error ? <Card className="text-error-600 border-error-200 bg-error-50">{error}</Card> : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
-              <BookOpen className="h-6 w-6 text-primary-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-secondary-600">Total LPs</p>
-              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : summary?.totalPaths ?? stats.total}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success-100">
-              <Globe2 className="h-6 w-6 text-success-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-secondary-600">Public LPs</p>
-              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : stats.publicCount}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning-100">
-              <Layers className="h-6 w-6 text-warning-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-secondary-600">Semi-restricted LPs</p>
-              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : stats.semiRestricted}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-secondary-100">
-              <ShieldCheck className="h-6 w-6 text-secondary-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-secondary-600">Restricted LPs</p>
-              <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : stats.restricted}</p>
-            </div>
-          </div>
-        </Card>
+        {statSkeletons.map((index) => {
+          const icons = [BookOpen, Globe2, Layers, ShieldCheck];
+          const bgClasses = ['bg-primary-100', 'bg-success-100', 'bg-warning-100', 'bg-secondary-100'];
+          const iconClasses = ['text-primary-600', 'text-success-600', 'text-warning-600', 'text-secondary-600'];
+          const labels = ['Total LPs', 'Public LPs', 'Semi-restricted LPs', 'Restricted LPs'];
+          const Icon = icons[index];
+
+          return (
+            <Card key={`admin-stat-${labels[index]}`} className="p-6">
+              <div className="flex items-center gap-4">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${bgClasses[index]}`}>
+                  <Icon className={`h-6 w-6 ${iconClasses[index]}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-secondary-600">{labels[index]}</p>
+                  {loading ? (
+                    <Skeleton className="mt-2 h-9 w-20" />
+                  ) : (
+                    <p className="text-3xl font-bold text-secondary-900">
+                      {index === 0
+                        ? summary?.totalPaths ?? stats.total
+                        : index === 1
+                          ? stats.publicCount
+                          : index === 2
+                            ? stats.semiRestricted
+                            : stats.restricted}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
     </div>

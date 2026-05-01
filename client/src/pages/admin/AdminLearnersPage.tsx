@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { superAdminApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -84,6 +85,7 @@ export function AdminLearnersPage() {
     () => ['ALL', ...designationOptions],
     [designationOptions]
   );
+  const skeletonRows = Array.from({ length: 8 }, (_, index) => index);
   const visiblePages = useMemo(() => {
     if (pagination.totalPages <= 1) {
       return pagination.totalPages === 1 ? [1] : [];
@@ -111,49 +113,68 @@ export function AdminLearnersPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Search by Employee No</label>
-            <input
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              placeholder="e.g. 011338"
-              value={employeeNoSearch}
-              onChange={(event) => setEmployeeNoSearch(event.target.value)}
-            />
+            {loading ? (
+              <Skeleton className="h-10 w-full rounded-md" />
+            ) : (
+              <input
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="e.g. 011338"
+                value={employeeNoSearch}
+                onChange={(event) => setEmployeeNoSearch(event.target.value)}
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Search by Name</label>
-            <input
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              placeholder="e.g. Tennakoon"
-              value={nameSearch}
-              onChange={(event) => setNameSearch(event.target.value)}
-            />
+            {loading ? (
+              <Skeleton className="h-10 w-full rounded-md" />
+            ) : (
+              <input
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                placeholder="e.g. Tennakoon"
+                value={nameSearch}
+                onChange={(event) => setNameSearch(event.target.value)}
+              />
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Filter by Designation</label>
-            <select
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
-              value={designationFilter}
-              onChange={(event) => setDesignationFilter(event.target.value)}
-            >
-              {designationSelectOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            {loading ? (
+              <Skeleton className="h-10 w-full rounded-md" />
+            ) : (
+              <select
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+                value={designationFilter}
+                onChange={(event) => setDesignationFilter(event.target.value)}
+              >
+                {designationSelectOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold text-slate-900">
-              Showing {pageStart}-{pageEnd} of {pagination.total} learners
-            </p>
-            
+            {loading ? (
+              <Skeleton className="h-5 w-52" />
+            ) : (
+              <p className="text-sm font-semibold text-slate-900">
+                Showing {pageStart}-{pageEnd} of {pagination.total} learners
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="rounded-full bg-white px-3 py-1 font-medium text-slate-700 shadow-sm ring-1 ring-slate-200">
-              Page {pagination.totalPages === 0 ? 0 : pagination.page} of {pagination.totalPages}
-            </span>
+            {loading ? (
+              <Skeleton className="h-8 w-28 rounded-full" />
+            ) : (
+              <span className="rounded-full bg-white px-3 py-1 font-medium text-slate-700 shadow-sm ring-1 ring-slate-200">
+                Page {pagination.totalPages === 0 ? 0 : pagination.page} of {pagination.totalPages}
+              </span>
+            )}
           </div>
         </div>
 
@@ -170,9 +191,23 @@ export function AdminLearnersPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loading ? (
-                  <tr>
-                    <td colSpan={4} className="px-3 py-3 text-slate-500">Loading learners...</td>
-                  </tr>
+                  skeletonRows.map((row) => (
+                    <tr key={`skeleton-${row}`}>
+                      <td className="px-3 py-3">
+                        <Skeleton className="mb-2 h-5 w-40" />
+                        <Skeleton className="h-4 w-52" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-5 w-20" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-5 w-36" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-5 w-14" />
+                      </td>
+                    </tr>
+                  ))
                 ) : learners.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-3 py-3 text-slate-500">No learners match current filters.</td>
@@ -203,55 +238,68 @@ export function AdminLearnersPage() {
 
         <div className="mt-4 flex justify-end">
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage(1)}
-              disabled={loading || !canGoPrevious}
-            >
-              First
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-              disabled={loading || !canGoPrevious}
-            >
-              {'<'}
-            </Button>
-            {visiblePages.map((pageNumber) => (
-              <Button
-                key={pageNumber}
-                type="button"
-                variant={pageNumber === pagination.page ? 'primary' : 'outline'}
-                size="sm"
-                onClick={() => setPage(pageNumber)}
-                disabled={loading}
-                className="min-w-9"
-              >
-                {pageNumber}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPage((prev) => prev + 1)}
-              disabled={loading || !canGoNext}
-            >
-              {'>'}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setPage(pagination.totalPages)}
-              disabled={loading || !canGoNext}
-            >
-              Last
-            </Button>
+            {loading ? (
+              <>
+                <Skeleton className="h-8 w-12" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-12" />
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(1)}
+                  disabled={loading || !canGoPrevious}
+                >
+                  First
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={loading || !canGoPrevious}
+                >
+                  {'<'}
+                </Button>
+                {visiblePages.map((pageNumber) => (
+                  <Button
+                    key={pageNumber}
+                    type="button"
+                    variant={pageNumber === pagination.page ? 'primary' : 'outline'}
+                    size="sm"
+                    onClick={() => setPage(pageNumber)}
+                    disabled={loading}
+                    className="min-w-9"
+                  >
+                    {pageNumber}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => prev + 1)}
+                  disabled={loading || !canGoNext}
+                >
+                  {'>'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(pagination.totalPages)}
+                  disabled={loading || !canGoNext}
+                >
+                  Last
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </Card>

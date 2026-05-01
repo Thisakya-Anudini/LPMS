@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
 import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { Select } from '../../components/ui/Select';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -92,6 +93,8 @@ export function AdminDashboard() {
   const [organizationOptions, setOrganizationOptions] = useState<
     Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
   >([]);
+  const recentUsersSkeletonRows = Array.from({ length: 3 }, (_, index) => index);
+  const assignResultsSkeletonRows = Array.from({ length: 5 }, (_, index) => index);
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
   const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
   const hasAssignFilterSearch =
@@ -326,7 +329,11 @@ export function AdminDashboard() {
             <UserCheck className="h-5 w-5 text-green-600" />
             <div>
               <p className="text-sm text-slate-500">Super Admins</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : superAdminCount}</p>
+              {loading ? (
+                <Skeleton className="mt-2 h-8 w-16" />
+              ) : (
+                <p className="text-2xl font-bold text-slate-900">{superAdminCount}</p>
+              )}
             </div>
           </div>
         </Card>
@@ -335,7 +342,11 @@ export function AdminDashboard() {
             <ShieldCheck className="h-5 w-5 text-amber-600" />
             <div>
               <p className="text-sm text-slate-500">Learning Admins</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : learningAdminCount}</p>
+              {loading ? (
+                <Skeleton className="mt-2 h-8 w-16" />
+              ) : (
+                <p className="text-2xl font-bold text-slate-900">{learningAdminCount}</p>
+              )}
             </div>
           </div>
         </Card>
@@ -344,7 +355,11 @@ export function AdminDashboard() {
             <Users className="h-5 w-5 text-indigo-600" />
             <div>
               <p className="text-sm text-slate-500">Learners</p>
-              <p className="text-2xl font-bold text-slate-900">{loading ? '...' : learnerTotal}</p>
+              {loading ? (
+                <Skeleton className="mt-2 h-8 w-20" />
+              ) : (
+                <p className="text-2xl font-bold text-slate-900">{learnerTotal}</p>
+              )}
             </div>
           </div>
         </Card>
@@ -469,7 +484,33 @@ export function AdminDashboard() {
           </div>
 
           <div className="max-h-[26rem] overflow-y-auto">
-            {erpEmployees.length === 0 ? (
+            {assignSearchLoading ? (
+              <div className="min-w-[1080px]">
+                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Name</span>
+                  <span>Emp No</span>
+                  <span>Designation</span>
+                  <span>Grade</span>
+                  <span>Organization</span>
+                  <span>Email</span>
+                  <span>Learning Admin</span>
+                </div>
+                {assignResultsSkeletonRows.map((row) => (
+                  <div
+                    key={`assign-skeleton-${row}`}
+                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-3 py-3"
+                  >
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-5 w-36" />
+                    <Skeleton className="h-5 w-14" />
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-5 w-28" />
+                    <Skeleton className="h-8 w-20 rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            ) : erpEmployees.length === 0 ? (
               <p className="text-sm text-slate-500 p-3">Search ERP to load employees for Learning Admin assignment.</p>
             ) : (
               <div className="min-w-[1080px]">
@@ -542,7 +583,16 @@ export function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {section.users.length ? (
+                    {loading ? (
+                      recentUsersSkeletonRows.map((row) => (
+                        <tr key={`${section.key}-skeleton-${row}`} className="border-b border-slate-100">
+                          <td className="py-2.5 px-3"><Skeleton className="h-5 w-28" /></td>
+                          <td className="py-2.5 px-3"><Skeleton className="h-5 w-40" /></td>
+                          <td className="py-2.5 px-3"><Skeleton className="h-5 w-16" /></td>
+                          <td className="py-2.5 px-3"><Skeleton className="h-8 w-20 rounded-lg" /></td>
+                        </tr>
+                      ))
+                    ) : section.users.length ? (
                       section.users.map((user) => (
                         <tr key={user.id} className="border-b border-slate-100">
                           <td className="py-2.5 px-3 font-medium text-slate-900">{user.name}</td>
@@ -599,7 +649,19 @@ export function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assignedLearningAdmins.length ? (
+                  {loading ? (
+                    recentUsersSkeletonRows.map((row) => (
+                      <tr key={`learning-admin-skeleton-${row}`} className="border-b border-slate-100">
+                        <td className="py-2.5 px-3">
+                          <Skeleton className="mb-2 h-5 w-28" />
+                          <Skeleton className="h-4 w-20" />
+                        </td>
+                        <td className="py-2.5 px-3"><Skeleton className="h-5 w-40" /></td>
+                        <td className="py-2.5 px-3"><Skeleton className="h-5 w-16" /></td>
+                        <td className="py-2.5 px-3"><Skeleton className="h-8 w-20 rounded-lg" /></td>
+                      </tr>
+                    ))
+                  ) : assignedLearningAdmins.length ? (
                     assignedLearningAdmins.map((admin) => (
                       <tr key={admin.employee_number} className="border-b border-slate-100">
                         <td className="py-2.5 px-3">

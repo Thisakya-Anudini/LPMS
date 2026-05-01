@@ -3,6 +3,7 @@ import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { ModalOverlay } from '../../components/ui/ModalOverlay';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -42,6 +43,7 @@ export function LearnerCertificatesPage() {
     url: string | null;
     error: string | null;
   } | null>(null);
+  const certificateSkeletons = Array.from({ length: 3 }, (_, index) => index);
   const previewUrlRef = useRef<string | null>(null);
 
   const revokePreviewUrl = useCallback(() => {
@@ -151,7 +153,20 @@ export function LearnerCertificatesPage() {
       <Card title="My Certificates">
         <div className="space-y-3">
           {loading ? (
-            <p className="text-sm text-slate-500">Loading certificates...</p>
+            certificateSkeletons.map((index) => (
+              <div
+                key={`certificate-skeleton-${index}`}
+                className="rounded-lg border border-slate-200 bg-slate-50 p-3"
+              >
+                <Skeleton className="mb-2 h-5 w-52" />
+                <Skeleton className="mb-2 h-4 w-64" />
+                <Skeleton className="mb-2 h-4 w-56" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-10 w-24 rounded-lg" />
+                  <Skeleton className="h-10 w-40 rounded-lg" />
+                </div>
+              </div>
+            ))
           ) : certificates.length === 0 ? (
             <p className="text-sm text-slate-500">No certificates generated yet.</p>
           ) : (

@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
@@ -47,6 +48,8 @@ export function LearnerMyProgressPage() {
     totalCourses: number;
     completedCourses: number;
   } | null>(null);
+  const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
+  const listSkeletons = Array.from({ length: 3 }, (_, index) => index);
 
   const load = useCallback(async () => {
     try {
@@ -212,23 +215,35 @@ export function LearnerMyProgressPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-6">
-          <p className="text-sm font-medium text-secondary-600">Assigned Learning Paths</p>
-          <p className="text-3xl font-bold text-secondary-900">{loading ? '...' : summary.totalLearningPaths}</p>
-        </Card>
-        <Card className="p-6">
-          <p className="text-sm font-medium text-secondary-600">Completed Learning Paths</p>
-          <p className="text-3xl font-bold text-success-600">{loading ? '...' : summary.completedLearningPaths}</p>
-        </Card>
-        <Card className="p-6">
-          <p className="text-sm font-medium text-secondary-600">Pending Learning Paths</p>
-          <p className="text-3xl font-bold text-warning-600">{loading ? '...' : summary.remainingLearningPaths}</p>
-        </Card>
+        {statSkeletons.map((index) => (
+          <Card key={`progress-stat-${index}`} className="p-6">
+            <p className="text-sm font-medium text-secondary-600">
+              {index === 0 ? 'Assigned Learning Paths' : index === 1 ? 'Completed Learning Paths' : 'Pending Learning Paths'}
+            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-9 w-16" />
+            ) : (
+              <p className={`text-3xl font-bold ${index === 1 ? 'text-success-600' : index === 2 ? 'text-warning-600' : 'text-secondary-900'}`}>
+                {index === 0 ? summary.totalLearningPaths : index === 1 ? summary.completedLearningPaths : summary.remainingLearningPaths}
+              </p>
+            )}
+          </Card>
+        ))}
       </div>
 
       <Card title="My Learning Progress" className="animate-fade-in">
         <div className="space-y-4">
-          {assignedLearningPaths.map((path) => (
+          {loading ? (
+            listSkeletons.map((index) => (
+              <div key={`progress-row-skeleton-${index}`} className="rounded-xl border border-secondary-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-3 w-full" />
+              </div>
+            ))
+          ) : assignedLearningPaths.map((path) => (
             <button
               key={path.enrollmentId}
               type="button"
@@ -272,7 +287,20 @@ export function LearnerMyProgressPage() {
 
             <div className="p-4">
               {modalLoading ? (
-                <p className="text-sm text-slate-500">Loading course details...</p>
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-4">
+                    <Skeleton className="mb-2 h-6 w-56" />
+                    <Skeleton className="mb-3 h-4 w-48" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                  {listSkeletons.map((index) => (
+                    <div key={`modal-course-skeleton-${index}`} className="rounded-xl border border-secondary-200 bg-white p-4">
+                      <Skeleton className="mb-2 h-5 w-44" />
+                      <Skeleton className="mb-2 h-4 w-20 rounded-full" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                  ))}
+                </div>
               ) : selectedPathMeta ? (
                 <div className="space-y-4">
                   <div className="p-4 rounded-xl border border-secondary-200 bg-secondary-50">
