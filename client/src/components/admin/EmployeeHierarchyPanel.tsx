@@ -255,16 +255,13 @@ export function EmployeeHierarchyPanel() {
         style={{ paddingLeft: depth === 0 ? 0 : 50 }}
       >
         {depth > 0 ? (
-          <>
-            <span className="absolute left-[25px] top-0 h-full w-px bg-slate-200" aria-hidden="true" />
-            <span className="absolute left-[25px] top-6 h-px w-[25px] bg-slate-200" aria-hidden="true" />
-          </>
+          <span className="absolute left-[25px] top-6 h-px w-[25px] bg-slate-300" aria-hidden="true" />
         ) : null}
 
         <button
           type="button"
           onClick={() => void toggleHierarchyEmployee(employee.employeeNumber)}
-          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${
+          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all ${
             isRoot
               ? 'border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm hover:border-amber-300 hover:shadow-md'
               : `${depthStyle.cardClass} hover:shadow-sm`
@@ -272,7 +269,7 @@ export function EmployeeHierarchyPanel() {
           disabled={!canExpand && !nodeState?.loading}
         >
           <div
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
               isRoot
                 ? 'border-amber-200 bg-amber-100 text-amber-700'
                 : depthStyle.iconWrapClass
@@ -283,10 +280,7 @@ export function EmployeeHierarchyPanel() {
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold leading-5 text-slate-900">{employee.name}</p>
-            <p className="truncate text-sm leading-5 text-slate-500">{employee.designation}</p>
-            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">
-              {employee.employeeNumber}
-            </p>
+            <p className="truncate text-sm leading-4 text-slate-500">{employee.designation}</p>
           </div>
 
           {childCount !== null ? (
@@ -315,7 +309,8 @@ export function EmployeeHierarchyPanel() {
         {isExpanded ? (
           <div className="space-y-2">
             {nodeState?.loading ? (
-              <div className="space-y-2 pl-[50px]">
+              <div className="relative space-y-2 pl-[50px]">
+                <span className="absolute left-[25px] top-0 bottom-0 w-px bg-slate-300" aria-hidden="true" />
                 {Array.from({ length: 3 }, (_, index) => (
                   <div
                     key={`${employee.employeeNumber}-skeleton-${index}`}
@@ -338,7 +333,10 @@ export function EmployeeHierarchyPanel() {
                 No subordinates found.
               </div>
             ) : (
-              nodeState?.rows.map((child) => renderHierarchyNode(child, depth + 1)) ?? null
+              <div className="relative space-y-2">
+                <span className="absolute left-[25px] top-0 bottom-0 w-px bg-slate-300" aria-hidden="true" />
+                {nodeState?.rows.map((child) => renderHierarchyNode(child, depth + 1)) ?? null}
+              </div>
             )}
           </div>
         ) : null}
