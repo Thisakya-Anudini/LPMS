@@ -210,7 +210,7 @@ export function LearnerMyProgressPage() {
         <h1 className="text-3xl font-bold text-secondary-900">Welcome {learnerName}</h1>
         <p className="text-secondary-600 mt-2">
           My learning progress
-          {isSupervisor ? ' | You also have Supervisor Dashboard access from the sidebar.' : ''}
+          {isSupervisor ? ' | You also have Supervisor Dashboard access from the top navigation.' : ''}
         </p>
       </div>
 

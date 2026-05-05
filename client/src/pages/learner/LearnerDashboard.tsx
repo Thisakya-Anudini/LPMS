@@ -240,7 +240,7 @@ export function LearnerDashboard() {
         <h1 className="text-2xl font-bold text-slate-900">Welcome {learnerName}</h1>
         <p className="text-slate-500">
           Learner dashboard
-          {isSupervisor ? ' | You also have Supervisor Dashboard access from the sidebar.' : ''}
+          {isSupervisor ? ' | You also have Supervisor Dashboard access from the top navigation.' : ''}
         </p>
       </div>
 
