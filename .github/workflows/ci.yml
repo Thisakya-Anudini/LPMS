@@ -1,11 +1,10 @@
-
 name: LPMS CI/CD Pipeline
 
 on:
   push:
-    branches: ["main", "test", "dev", "Feature-ci-deploy"]
+    branches: ["main", "test", "dev"]
   pull_request:
-    branches: ["main", "test", "dev", "Feature-ci-deploy"]
+    branches: ["main", "test", "dev"]
 
 jobs:
   client-ci:
@@ -30,11 +29,13 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Fix ESLint Version for Legacy Config
-        # ESLint 8 is required for .eslintrc.cjs — avoids permanent file changes
+        # This dynamically uses ESLint 8 which supports .eslintrc.cjs
+        # It avoids changing any files in your project repository permanently.
         run: npm install eslint@8.57.0 --no-save --legacy-peer-deps
 
       - name: Run Linter
         run: npm run lint
+        # If lint fails, it will fail the build
 
       - name: Build Production Bundle
         run: npm run build
@@ -62,7 +63,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://user:password@localhost:5432/lpms_db
-      SECRET_KEY: test-secret
+      SECRET_KEY: test-secret # Fallback for JWT signing in tests
 
     steps:
       - name: Checkout Code
@@ -80,45 +81,16 @@ jobs:
 
       - name: Run Database Migrations
         run: npm run migrate
+        # Ensures that the database schema is valid and current
 
       - name: Run Unit Tests
         run: npm test
 
-  deploy-test:
-    name: Deploy to Server Test
-    runs-on: ubuntu-latest
-    needs: [client-ci, server-ci]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/Feature-ci-deploy'
-
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          PROD_DB_URL: ${{ secrets.PROD_DATABASE_URL }}
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          port: ${{ secrets.SERVER_PORT }}
-          username: ${{ secrets.SERVER_USERNAME }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: PROD_DB_URL
-          script: |
-            cd ~/LPMS
-            git fetch origin
-            git checkout Feature-ci-deploy
-            git pull origin Feature-ci-deploy
-            cd client
-            npm install --legacy-peer-deps
-            npm run build
-            cp -r dist/* /var/www/lpms-client/
-            cd ../server
-            npm install --legacy-peer-deps
-            DATABASE_URL=$PROD_DB_URL npm run migrate
-            pm2 restart lpms-api
   deploy:
     name: Deploy to Production Server
     runs-on: ubuntu-latest
     needs: [client-ci, server-ci]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Deploy via SSH
@@ -132,13 +104,24 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           envs: PROD_DB_URL
           script: |
+            # Navigate to the project directory
             cd ~/LPMS
             git pull origin main
+            git reset --hard origin/main
+            git clean -fd
+            
+            # Rebuild and Deploy Frontend
             cd client
             npm install --legacy-peer-deps
             npm run build
+            # We assume /var/www/lpms-client is owned by the trainee user (no sudo required)
             cp -r dist/* /var/www/lpms-client/
+            
+            # Install Backend Dependencies and Restart
             cd ../server
             npm install --legacy-peer-deps
+            
+            # Safely run database migrations before restarting
             DATABASE_URL=$PROD_DB_URL npm run migrate
+            
             pm2 restart lpms-api
