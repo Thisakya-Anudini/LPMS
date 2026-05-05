@@ -1,7 +1,5 @@
-import dotenv from 'dotenv';
+import '../loadEnv.js';
 import pool, { query } from '../db.js';
-
-dotenv.config();
 
 const run = async () => {
   try {

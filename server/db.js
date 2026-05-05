@@ -1,7 +1,5 @@
 import { Pool } from 'pg';
-import dotenv from 'dotenv';
-
-dotenv.config();
+import './loadEnv.js';
 
 const connectionString = process.env.DATABASE_URL;
 
