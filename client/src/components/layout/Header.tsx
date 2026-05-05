@@ -1,8 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Menu, Bell, LogOut } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import {
+  Bell,
+  ChevronDown,
+  GraduationCap,
+  LayoutGrid,
+  LogOut,
+  Menu
+} from 'lucide-react';
 import { notificationsApi } from '../../api/lpmsApi';
 import { useAuth } from '../../contexts/useAuth';
 import { Button } from '../ui/Button';
+import { getNavigationModel, isGroupActive, isLinkActive, NavigationGroup, NavigationLink } from './navigation';
 
 type NotificationRow = {
   id: string;
@@ -13,17 +22,103 @@ type NotificationRow = {
   created_at: string;
 };
 
-export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
+type OpenMenu = 'mobile' | 'explore' | 'profile' | 'notifications' | `group:${string}` | null;
+
+function TopNavLink({ link, pathname }: { link: NavigationLink; pathname: string }) {
+  const active = isLinkActive(pathname, link);
+
+  return (
+    <NavLink
+      to={link.to}
+      end={link.matchMode === 'exact'}
+      className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+        active
+          ? 'bg-slate-950/85 text-white shadow-sm'
+          : 'text-white/80 hover:bg-white/10 hover:text-white'
+      }`}
+    >
+      {link.label}
+    </NavLink>
+  );
+}
+
+function DesktopDropdown({
+  group,
+  pathname,
+  menuKey,
+  openMenu,
+  onToggle,
+  onClose
+}: {
+  group: NavigationGroup;
+  pathname: string;
+  menuKey: OpenMenu;
+  openMenu: OpenMenu;
+  onToggle: (menu: OpenMenu) => void;
+  onClose: () => void;
+}) {
+  const active = isGroupActive(pathname, group);
+
+  return (
+    <div className="relative" data-header-menu-root="true">
+      <button
+        type="button"
+        onClick={() => onToggle(menuKey)}
+        className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+          active || openMenu === menuKey
+            ? 'bg-slate-950/85 text-white shadow-sm'
+            : 'text-white/80 hover:bg-white/10 hover:text-white'
+        }`}
+      >
+        <group.icon className="h-4 w-4" />
+        {group.label}
+        <ChevronDown className={`h-4 w-4 transition-transform ${openMenu === menuKey ? 'rotate-180' : ''}`} />
+      </button>
+
+      {openMenu === menuKey ? (
+        <div className="absolute left-0 top-12 z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <p className="text-sm font-semibold text-slate-900">{group.label}</p>
+            <p className="mt-1 text-xs text-slate-500">Jump straight to tools in this workspace.</p>
+          </div>
+          <div className="p-2">
+            {group.links.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.matchMode === 'exact'}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                    isActive || isLinkActive(pathname, link)
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                  }`
+                }
+              >
+                <link.icon className="h-4 w-4" />
+                {link.label}
+              </NavLink>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function Header() {
+  const { pathname } = useLocation();
   const { user, logout, getAccessToken } = useAuth();
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isPopupOpen, setIsPopupOpen] = useState(false);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
-  const popupRef = useRef<HTMLDivElement | null>(null);
-  const bellRef = useRef<HTMLButtonElement | null>(null);
+  const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+
+  const navigation = useMemo(() => (user ? getNavigationModel(user) : null), [user]);
 
   const loadNotifications = useCallback(async () => {
     if (!user) {
@@ -65,30 +160,29 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
   }, [loadNotifications]);
 
   useEffect(() => {
-    if (!isPopupOpen) {
-      return;
-    }
-
     const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        popupRef.current?.contains(target) ||
-        bellRef.current?.contains(target)
-      ) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-header-menu-root="true"]')) {
         return;
       }
-      setIsPopupOpen(false);
+      setOpenMenu(null);
     };
+
     document.addEventListener('mousedown', onPointerDown);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
     };
-  }, [isPopupOpen]);
+  }, []);
 
-  const togglePopup = async () => {
-    const nextOpen = !isPopupOpen;
-    setIsPopupOpen(nextOpen);
-    if (nextOpen) {
+  useEffect(() => {
+    setOpenMenu(null);
+  }, [pathname]);
+
+  const handleToggleMenu = async (menu: OpenMenu) => {
+    const nextMenu = openMenu === menu ? null : menu;
+    setOpenMenu(nextMenu);
+
+    if (nextMenu === 'notifications') {
       try {
         setLoadingNotifications(true);
         await loadNotifications();
@@ -144,98 +238,316 @@ export function Header({ onMenuClick }: {onMenuClick: () => void;}) {
     return String(unreadCount);
   }, [unreadCount]);
 
-  return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] px-4 lg:px-8 shadow-md">
-      <div className="flex items-center">
-        <button
-          onClick={onMenuClick}
-          className="mr-4 text-white/85 hover:text-white lg:hidden transition-colors"
-        >
-          <Menu className="h-6 w-6" />
-        </button>
-        <h1 className="text-xl font-semibold text-white lg:hidden">LPMS</h1>
-      </div>
+  if (!user || !navigation) {
+    return null;
+  }
 
-      <div className="flex items-center gap-5 relative">
-        <button
-          ref={bellRef}
-          onClick={togglePopup}
-          className="relative inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/35 bg-white/10 text-white transition-colors hover:bg-white/20"
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-          {unreadLabel ? (
-            <span className="absolute -right-1 -top-1 min-w-[16px] h-4 px-1 rounded-full bg-[#3faa45] text-[10px] leading-4 text-white text-center font-bold ring-2 ring-[#034c96]">
-              {unreadLabel}
-            </span>
-          ) : null}
-        </button>
-        {isPopupOpen ? (
-          <div
-            ref={popupRef}
-            className="absolute right-0 top-12 z-50 w-[360px] max-w-[90vw] rounded-lg border border-slate-200 bg-white shadow-xl"
-          >
-            <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-              <p className="text-sm font-semibold text-slate-900">Notifications</p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleMarkAllAsRead}
-                isLoading={markingAll}
-                disabled={unreadCount === 0}
-              >
-                Mark all read
-              </Button>
+  const currentSection =
+    navigation.primaryLinks.find((link) => isLinkActive(pathname, link))?.label ||
+    navigation.groups.find((group) => isGroupActive(pathname, group))?.label ||
+    'Workspace';
+
+  return (
+    <header className="sticky top-0 z-30 border-b border-white/20 bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] backdrop-blur">
+      <div className="mx-auto max-w-7xl px-4 lg:px-0">
+        <div className="flex h-20 items-center gap-4">
+          <Link to="/" className="flex shrink-0 items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl border border-white/50 bg-white/10 backdrop-blur-md text-white shadow-sm">
+              <img src="/assets/ShortLogo2.png" alt="LPMS logo" className="h-8 w-8 object-contain" />
             </div>
-            <div className="max-h-96 overflow-auto">
-              {loadingNotifications ? (
-                <p className="px-3 py-3 text-sm text-slate-500">Loading notifications...</p>
-              ) : notificationError ? (
-                <p className="px-3 py-3 text-sm text-red-600">{notificationError}</p>
-              ) : notifications.length === 0 ? (
-                <p className="px-3 py-3 text-sm text-slate-500">No notifications.</p>
-              ) : (
-                notifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`border-b border-slate-100 px-3 py-3 ${notification.is_read ? 'bg-white' : 'bg-blue-50'}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
-                        <p className="mt-1 text-xs text-slate-600">{notification.message}</p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          {new Date(notification.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      {!notification.is_read ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          isLoading={markingId === notification.id}
-                          onClick={() => handleMarkAsRead(notification.id)}
+            <div>
+              <p className="text-xl font-black tracking-tight text-white">LPMS</p>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/70">Learning Portal</p>
+            </div>
+          </Link>
+
+          <div className="hidden lg:flex" data-header-menu-root="true">
+            <button
+              type="button"
+              onClick={() => handleToggleMenu('explore')}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                openMenu === 'explore'
+                  ? 'bg-white/14 text-white shadow-sm'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Explore
+              <ChevronDown className={`h-4 w-4 transition-transform ${openMenu === 'explore' ? 'rotate-180' : ''}`} />
+            </button>
+
+            {openMenu === 'explore' ? (
+              <div className="absolute top-16 z-50 w-80 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                <div className="border-b border-slate-100 px-4 py-3">
+                  <p className="text-sm font-semibold text-slate-900">Workspace map</p>
+                  <p className="mt-1 text-xs text-slate-500">All major sections are available from this top menu.</p>
+                </div>
+                <div className="space-y-5 p-4">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Primary</p>
+                    <div className="space-y-1">
+                      {navigation.primaryLinks.map((link) => (
+                        <NavLink
+                          key={link.to}
+                          to={link.to}
+                          end={link.matchMode === 'exact'}
+                          onClick={() => setOpenMenu(null)}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                              isActive || isLinkActive(pathname, link)
+                                ? 'bg-slate-900 text-white'
+                                : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                            }`
+                          }
                         >
-                          Read
-                        </Button>
-                      ) : null}
+                          <link.icon className="h-4 w-4" />
+                          {link.label}
+                        </NavLink>
+                      ))}
                     </div>
                   </div>
-                ))
-              )}
+
+                  {navigation.groups.map((group) => (
+                    <div key={group.label}>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{group.label}</p>
+                      <div className="space-y-1">
+                        {group.links.map((link) => (
+                          <NavLink
+                            key={link.to}
+                            to={link.to}
+                            end={link.matchMode === 'exact'}
+                            onClick={() => setOpenMenu(null)}
+                            className={({ isActive }) =>
+                              `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                                isActive || isLinkActive(pathname, link)
+                                  ? 'bg-slate-900 text-white'
+                                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                              }`
+                            }
+                          >
+                            <link.icon className="h-4 w-4" />
+                            {link.label}
+                          </NavLink>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2 lg:gap-3">
+            <button
+              type="button"
+              onClick={() => handleToggleMenu('mobile')}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-white transition-colors hover:bg-white/20 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+
+            <div className="relative" data-header-menu-root="true">
+              <button
+                type="button"
+                onClick={() => handleToggleMenu('notifications')}
+                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-white transition-colors hover:bg-white/20"
+                aria-label="Notifications"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadLabel ? (
+                  <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-white px-1.5 text-[10px] font-bold leading-5 text-slate-950 shadow-sm">
+                    {unreadLabel}
+                  </span>
+                ) : null}
+              </button>
+
+              {openMenu === 'notifications' ? (
+                <div className="absolute right-0 top-14 z-50 w-[360px] max-w-[90vw] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                      <p className="text-xs text-slate-500">Stay on top of assignments and updates.</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleMarkAllAsRead}
+                      isLoading={markingAll}
+                      disabled={unreadCount === 0}
+                    >
+                      Mark all read
+                    </Button>
+                  </div>
+                  <div className="max-h-96 overflow-auto">
+                    {loadingNotifications ? (
+                      <p className="px-4 py-4 text-sm text-slate-500">Loading notifications...</p>
+                    ) : notificationError ? (
+                      <p className="px-4 py-4 text-sm text-red-600">{notificationError}</p>
+                    ) : notifications.length === 0 ? (
+                      <p className="px-4 py-4 text-sm text-slate-500">No notifications.</p>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div
+                          key={notification.id}
+                          className={`border-b border-slate-100 px-4 py-4 ${
+                            notification.is_read ? 'bg-white' : 'bg-violet-50/60'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
+                              <p className="mt-1 text-xs leading-5 text-slate-600">{notification.message}</p>
+                              <p className="mt-2 text-[11px] text-slate-500">
+                                {new Date(notification.created_at).toLocaleString()}
+                              </p>
+                            </div>
+                            {!notification.is_read ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                isLoading={markingId === notification.id}
+                                onClick={() => handleMarkAsRead(notification.id)}
+                              >
+                                Read
+                              </Button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="border-t border-slate-100 px-4 py-3">
+                    <NavLink
+                      to="/notifications"
+                      onClick={() => setOpenMenu(null)}
+                      className="text-sm font-semibold text-slate-700 hover:text-slate-950"
+                    >
+                      View all notifications
+                    </NavLink>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="relative" data-header-menu-root="true">
+              <button
+                type="button"
+                onClick={() => handleToggleMenu('profile')}
+                className="inline-flex items-center gap-3 rounded-full border border-white/35 bg-white px-2 py-2 text-left shadow-sm transition-colors hover:bg-white/95 lg:w-[200px]"
+              >
+                <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-950 text-sm font-bold text-white">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden min-w-0 flex-1 pr-1 lg:block">
+                  <p className="truncate text-sm font-semibold text-slate-900">{user.name}</p>
+                  <p className="truncate text-xs text-slate-500">{currentSection}</p>
+                </div>
+                <ChevronDown
+                  className={`hidden h-4 w-4 shrink-0 text-slate-500 transition-transform lg:block ${
+                    openMenu === 'profile' ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+
+              {openMenu === 'profile' ? (
+                <div className="absolute right-0 top-14 z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                  <div className="border-b border-slate-100 px-4 py-4">
+                    <p className="text-base font-semibold text-slate-900">{user.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{user.email}</p>
+                  </div>
+                  <div className="p-2">
+                    <NavLink
+                      to={navigation.primaryLinks[0]?.to || '/'}
+                      onClick={() => setOpenMenu(null)}
+                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+                    >
+                      <GraduationCap className="h-4 w-4" />
+                      Go to workspace
+                    </NavLink>
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm text-rose-600 transition-colors hover:bg-rose-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden items-center gap-2 border-t border-white/25 py-3 lg:flex">
+          {navigation.primaryLinks.map((link) => (
+            <TopNavLink key={link.to} link={link} pathname={pathname} />
+          ))}
+
+          {navigation.groups.map((group) => (
+            <DesktopDropdown
+              key={group.label}
+              group={group}
+              pathname={pathname}
+              menuKey={`group:${group.label}`}
+              openMenu={openMenu}
+              onToggle={handleToggleMenu}
+              onClose={() => setOpenMenu(null)}
+            />
+          ))}
+        </div>
+
+        {openMenu === 'mobile' ? (
+          <div className="border-t border-white/25 py-3 lg:hidden" data-header-menu-root="true">
+            <div className="space-y-2">
+              {navigation.primaryLinks.map((link) => (
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  end={link.matchMode === 'exact'}
+                  onClick={() => setOpenMenu(null)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
+                      isActive || isLinkActive(pathname, link)
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                    }`
+                  }
+                >
+                  <link.icon className="h-4 w-4" />
+                  {link.label}
+                </NavLink>
+              ))}
+
+              {navigation.groups.map((group) => (
+                <div key={group.label} className="rounded-3xl border border-slate-200 bg-white p-2">
+                  <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    {group.label}
+                  </div>
+                  {group.links.map((link) => (
+                    <NavLink
+                      key={link.to}
+                      to={link.to}
+                      end={link.matchMode === 'exact'}
+                      onClick={() => setOpenMenu(null)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                          isActive || isLinkActive(pathname, link)
+                            ? 'bg-slate-900 text-white'
+                            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                        }`
+                      }
+                    >
+                      <link.icon className="h-4 w-4" />
+                      {link.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
-
-        <Button
-          variant="ghost"
-          size="md"
-          onClick={logout}
-          className="text-white hover:text-white hover:bg-white/20 text-sm font-semibold px-3 h-8 border border-white/35 bg-white/10">
-
-          <LogOut className="h-4 w-4 mr-2" />
-          Logout
-        </Button>
       </div>
-    </header>);
-
+    </header>
+  );
 }
