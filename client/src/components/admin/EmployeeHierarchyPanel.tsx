@@ -337,7 +337,7 @@ export function EmployeeHierarchyPanel() {
                 <span className="absolute left-[25px] top-0 bottom-0 w-px bg-slate-300" aria-hidden="true" />
                 {nodeState?.rows.map((child) => renderHierarchyNode(child, depth + 1)) ?? null}
               </div>
-2            )}
+            )}
           </div>
         ) : null}
       </div>
