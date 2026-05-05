@@ -113,10 +113,6 @@ export function AssignmentReportsPage() {
     };
   }, [reports]);
 
-  const handleMarkEnrolled = async (reportId: string) => {
-    return handleStatusChange(reportId, 'ENROLLED_IN_ERP');
-  };
-
   const handleStatusChange = async (
     reportId: string,
     status: AssignmentReport['report_status']
