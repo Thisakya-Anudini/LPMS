@@ -497,17 +497,6 @@ export const integrationApi = {
       body: { employeeNo }
     });
   },
-  getErpHierarchy(token: string, employeeNo: string) {
-    return request<{
-      success: boolean;
-      message: string;
-      data: Array<Record<string, unknown>>;
-    }>('/integrations/erp/hierarchy', {
-      method: 'POST',
-      token,
-      body: { employeeNo }
-    });
-  },
   importErpEmployees(
     token: string,
     payload: {

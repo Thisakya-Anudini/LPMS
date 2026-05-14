@@ -1,7 +1,6 @@
 const getErpConfig = () => ({
   subordinatesUrl: process.env.ERP_SUBORDINATES_URL,
   detailsUrl: process.env.ERP_DETAILS_URL,
-  hierarchyUrl: process.env.ERP_HIERARCHY_URL,
   partNameUrl: process.env.ERP_PART_NAME_URL,
   designationsUrl: process.env.ERP_DESIGNATIONS_URL,
   salaryGradesUrl: process.env.ERP_SALARY_GRADES_URL,
@@ -89,20 +88,6 @@ export const fetchEmployeeDetailsForServiceNo = async (employeeNo) => {
   const config = getErpConfig();
   return postErp({
     url: config.detailsUrl,
-    username: config.username,
-    password: config.password,
-    body: {
-      organizationID: config.defaultOrganizationId,
-      costCenterCode: config.defaultCostCenterCode,
-      employeeNo
-    }
-  });
-};
-
-export const fetchEmployeeHierarchy = async (employeeNo) => {
-  const config = getErpConfig();
-  return postErp({
-    url: config.hierarchyUrl,
     username: config.username,
     password: config.password,
     body: {

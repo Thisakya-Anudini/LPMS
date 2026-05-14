@@ -1,6 +1,5 @@
 import express from 'express';
 import {
-  getErpHierarchy,
   getErpLearnerDetails,
   getErpSubordinates,
   importErpEmployees
@@ -24,13 +23,6 @@ router.post(
   requireRole([ROLES.SUPER_ADMIN, ROLES.LEARNING_ADMIN, ROLES.EMPLOYEE]),
   requireFields(['employeeNo']),
   getErpSubordinates
-);
-router.post(
-  '/erp/hierarchy',
-  protect,
-  requireRole([ROLES.SUPER_ADMIN, ROLES.LEARNING_ADMIN]),
-  requireFields(['employeeNo']),
-  getErpHierarchy
 );
 router.post(
   '/erp/import-employees',
