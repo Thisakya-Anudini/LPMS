@@ -4,7 +4,6 @@ import {
   Bell,
   ChevronDown,
   GraduationCap,
-  LayoutGrid,
   LogOut,
   Menu
 } from 'lucide-react';
@@ -22,7 +21,7 @@ type NotificationRow = {
   created_at: string;
 };
 
-type OpenMenu = 'mobile' | 'explore' | 'profile' | 'notifications' | `group:${string}` | null;
+type OpenMenu = 'mobile' | 'profile' | 'notifications' | `group:${string}` | null;
 
 function TopNavLink({ link, pathname }: { link: NavigationLink; pathname: string }) {
   const active = isLinkActive(pathname, link);
@@ -250,92 +249,16 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-white/20 bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 lg:px-0">
-        <div className="flex h-20 items-center gap-4">
+        <div className="flex h-16 items-center gap-4">
           <Link to="/" className="flex shrink-0 items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl border border-white/50 bg-white/10 backdrop-blur-md text-white shadow-sm">
-              <img src="/assets/ShortLogo2.png" alt="LPMS logo" className="h-8 w-8 object-contain" />
+            <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/50 bg-white/10 backdrop-blur-md text-white shadow-sm">
+              <img src="/assets/ShortLogo2.png" alt="LPMS logo" className="h-7 w-7 object-contain" />
             </div>
             <div>
-              <p className="text-xl font-black tracking-tight text-white">LPMS</p>
+              <p className="text-lg font-black tracking-tight text-white">LPMS</p>
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/70">Learning Portal</p>
             </div>
           </Link>
-
-          <div className="hidden lg:flex" data-header-menu-root="true">
-            <button
-              type="button"
-              onClick={() => handleToggleMenu('explore')}
-              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                openMenu === 'explore'
-                  ? 'bg-white/14 text-white shadow-sm'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Explore
-              <ChevronDown className={`h-4 w-4 transition-transform ${openMenu === 'explore' ? 'rotate-180' : ''}`} />
-            </button>
-
-            {openMenu === 'explore' ? (
-              <div className="absolute top-16 z-50 w-80 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-                <div className="border-b border-slate-100 px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">Workspace map</p>
-                  <p className="mt-1 text-xs text-slate-500">All major sections are available from this top menu.</p>
-                </div>
-                <div className="space-y-5 p-4">
-                  <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Primary</p>
-                    <div className="space-y-1">
-                      {navigation.primaryLinks.map((link) => (
-                        <NavLink
-                          key={link.to}
-                          to={link.to}
-                          end={link.matchMode === 'exact'}
-                          onClick={() => setOpenMenu(null)}
-                          className={({ isActive }) =>
-                            `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                              isActive || isLinkActive(pathname, link)
-                                ? 'bg-slate-900 text-white'
-                                : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                            }`
-                          }
-                        >
-                          <link.icon className="h-4 w-4" />
-                          {link.label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  </div>
-
-                  {navigation.groups.map((group) => (
-                    <div key={group.label}>
-                      <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{group.label}</p>
-                      <div className="space-y-1">
-                        {group.links.map((link) => (
-                          <NavLink
-                            key={link.to}
-                            to={link.to}
-                            end={link.matchMode === 'exact'}
-                            onClick={() => setOpenMenu(null)}
-                            className={({ isActive }) =>
-                              `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                                isActive || isLinkActive(pathname, link)
-                                  ? 'bg-slate-900 text-white'
-                                  : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                              }`
-                            }
-                          >
-                            <link.icon className="h-4 w-4" />
-                            {link.label}
-                          </NavLink>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
 
           <div className="ml-auto flex items-center gap-2 lg:gap-3">
             <button
@@ -433,7 +356,7 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => handleToggleMenu('profile')}
-                className="inline-flex items-center gap-3 rounded-full border border-white/35 bg-white px-2 py-2 text-left shadow-sm transition-colors hover:bg-white/95 lg:w-[200px]"
+                className="inline-flex h-11 items-center gap-3 rounded-full border border-white/35 bg-white px-1.5 text-left shadow-sm transition-colors hover:bg-white/95 lg:w-[200px]"
               >
                 <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-950 text-sm font-bold text-white">
                   {user.name.charAt(0).toUpperCase()}
@@ -479,7 +402,7 @@ export function Header() {
           </div>
         </div>
 
-        <div className="hidden items-center gap-2 border-t border-white/25 py-3 lg:flex">
+        <div className="hidden items-center gap-2 border-t border-white/25 py-2 lg:flex">
           {navigation.primaryLinks.map((link) => (
             <TopNavLink key={link.to} link={link} pathname={pathname} />
           ))}

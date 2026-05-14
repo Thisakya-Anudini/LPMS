@@ -80,7 +80,7 @@ Learning path master records.
 - `id` (UUID, PK)
 - `title` (TEXT, required)
 - `description` (TEXT, required)
-- `category` (`RESTRICTED | SEMI_RESTRICTED | PUBLIC`)
+- `category` (`RESTRICTED | PUBLIC`)
 - `total_duration` (TEXT, required)
 - `status` (`ACTIVE | ARCHIVED | DRAFT`)
 - `created_by` (UUID FK)

@@ -5,13 +5,13 @@ import { Card } from '../../components/ui/Card';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
-type CategoryFilter = 'ALL' | 'PUBLIC' | 'RESTRICTED' | 'SEMI_RESTRICTED';
+type CategoryFilter = 'ALL' | 'PUBLIC' | 'RESTRICTED';
 
 type LearningPathRow = {
   id: string;
   title: string;
   description: string;
-  category: 'PUBLIC' | 'RESTRICTED' | 'SEMI_RESTRICTED';
+  category: 'PUBLIC' | 'RESTRICTED';
   total_duration: string;
   status: string;
   created_at: string;
@@ -66,7 +66,7 @@ export function AdminLearningPathsPage() {
 
       <Card title="All Learning Paths">
         <div className="flex gap-2 mb-4 flex-wrap">
-          {(['ALL', 'PUBLIC', 'RESTRICTED', 'SEMI_RESTRICTED'] as CategoryFilter[]).map((item) => (
+          {(['ALL', 'PUBLIC', 'RESTRICTED'] as CategoryFilter[]).map((item) => (
             <button
               key={item}
               type="button"
@@ -77,7 +77,7 @@ export function AdminLearningPathsPage() {
                   : 'bg-white border-slate-200 text-slate-700'
               }`}
             >
-              {item === 'SEMI_RESTRICTED' ? 'SEMI RESTRICTED' : item}
+              {item}
             </button>
           ))}
         </div>

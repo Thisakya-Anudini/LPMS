@@ -62,13 +62,11 @@ export function LearningAdminDashboard() {
   const stats = useMemo(() => {
     const active = paths.filter((path) => path.status === 'ACTIVE').length;
     const publicCount = paths.filter((path) => path.category === 'PUBLIC').length;
-    const semiRestricted = paths.filter((path) => path.category === 'SEMI_RESTRICTED').length;
     const restricted = paths.filter((path) => path.category === 'RESTRICTED').length;
     return {
       total: paths.length,
       active,
       publicCount,
-      semiRestricted,
       restricted
     };
   }, [paths]);

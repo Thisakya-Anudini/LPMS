@@ -1,5 +1,5 @@
 DO $$ BEGIN
-  CREATE TYPE lp_category AS ENUM ('RESTRICTED', 'SEMI_RESTRICTED', 'PUBLIC');
+  CREATE TYPE lp_category AS ENUM ('RESTRICTED', 'PUBLIC');
 EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;

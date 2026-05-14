@@ -80,6 +80,7 @@ export function AdminDashboard() {
 
   const [userForm, setUserForm] = useState(initialUserForm);
   const [userFormLoading, setUserFormLoading] = useState(false);
+  const [assignOptionsLoading, setAssignOptionsLoading] = useState(true);
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
   const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
@@ -181,6 +182,7 @@ export function AdminDashboard() {
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
+    setAssignOptionsLoading(true);
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -207,6 +209,7 @@ export function AdminDashboard() {
       showToast(err instanceof Error ? err.message : 'Failed to load users.', 'error');
     } finally {
       setLoading(false);
+      setAssignOptionsLoading(false);
     }
   }, [getAccessToken, showToast]);
 
@@ -422,6 +425,7 @@ export function AdminDashboard() {
                 { value: '', label: 'All Designations' },
                 ...designationOptions.map((option) => ({ value: option, label: option }))
               ]}
+              isLoading={assignOptionsLoading}
             />
             <Select
               label="Filter by Grade"
@@ -432,6 +436,7 @@ export function AdminDashboard() {
                 { value: '', label: 'All Grades' },
                 ...gradeOptions.map((option) => ({ value: option, label: option }))
               ]}
+              isLoading={assignOptionsLoading}
             />
             <Select
               label="Filter by Organization"
@@ -447,6 +452,7 @@ export function AdminDashboard() {
                     : option.organizationName
                 }))
               ]}
+              isLoading={assignOptionsLoading}
             />
             <Select
               label="Executive / Non Executive"
@@ -458,6 +464,7 @@ export function AdminDashboard() {
                 { value: 'EXECUTIVE', label: 'Executive' },
                 { value: 'NON_EXECUTIVE', label: 'Non Executive' }
               ]}
+              isLoading={assignOptionsLoading}
             />
           </div>
 

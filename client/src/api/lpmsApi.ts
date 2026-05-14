@@ -144,7 +144,7 @@ export const learningApi = {
         id: string;
         title: string;
         description: string;
-        category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+        category: 'RESTRICTED' | 'PUBLIC';
         total_duration: string;
         status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
         created_at: string;
@@ -169,7 +169,7 @@ export const learningApi = {
     payload: {
       title: string;
       description: string;
-      category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+      category: 'RESTRICTED' | 'PUBLIC';
       totalDuration: string;
       stages?: Array<{
         title: string;
@@ -190,7 +190,7 @@ export const learningApi = {
     payload: {
       title: string;
       description: string;
-      category: 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+      category: 'RESTRICTED' | 'PUBLIC';
       totalDuration: string;
       status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
       stages?: Array<{

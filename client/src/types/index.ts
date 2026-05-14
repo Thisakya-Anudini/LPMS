@@ -29,7 +29,7 @@ export type Stage = {
   courses: Course[];
 };
 
-export type LPCategory = 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+export type LPCategory = 'RESTRICTED' | 'PUBLIC';
 
 export type LearningPath = {
   id: string;

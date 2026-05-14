@@ -146,16 +146,15 @@ This document defines the functional behavior of LPMS in implementation-ready de
 
 ### FR-LP-005 Category Model
 - System shall support categories:
-  - `RESTRICTED`, `SEMI_RESTRICTED`, `PUBLIC`
+  - `RESTRICTED`, `PUBLIC`
 
 ## 4.6 Enrollment Management
 ### FR-ENR-001 Learning Admin Enrollment
 - Learning Admin can enroll selected employees into paths.
 - Notification shall be generated for enrolled employee.
 
-### FR-ENR-002 Supervisor Enrollment (Semi-Restricted)
-- Supervisor can enroll only supervised team members.
-- Allowed only when path category is `SEMI_RESTRICTED` and active.
+### FR-ENR-002 Supervisor Enrollment
+- Supervisor enrollment functionality has been removed.
 
 ### FR-ENR-003 Employee Self-Enrollment (Public)
 - Employee can self-enroll only when path category is `PUBLIC` and active.

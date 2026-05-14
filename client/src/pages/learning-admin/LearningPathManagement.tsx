@@ -7,10 +7,11 @@ import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { Select } from '../../components/ui/Select';
+import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
-type Category = 'RESTRICTED' | 'SEMI_RESTRICTED' | 'PUBLIC';
+type Category = 'RESTRICTED' | 'PUBLIC';
 type PathStatus = 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
 
 type LearningPathRow = {
@@ -147,6 +148,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
   const [assignForm, setAssignForm] = useState(initialAssignForm);
   const [assignLoading, setAssignLoading] = useState(false);
+  const [assignOptionsLoading, setAssignOptionsLoading] = useState(section === 'assign');
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
   const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
@@ -245,6 +247,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setAssignOptionsLoading(section === 'assign');
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -276,6 +279,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       showToast(err instanceof Error ? err.message : 'Failed to load data.', 'error');
     } finally {
       setLoading(false);
+      setAssignOptionsLoading(false);
     }
   }, [getAccessToken, section, showToast]);
 
@@ -700,7 +704,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             Showing {liveFilteredCourses.length} of {courses.length} courses
           </p>
           <div className="max-h-[30rem] overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-            {liveFilteredCourses.length === 0 ? (
+            {loading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : liveFilteredCourses.length === 0 ? (
               <p className="p-3 text-sm text-slate-500">
                 No courses match "{createCourseSearch.trim()}".
               </p>
@@ -837,7 +847,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   }
                   options={[
                     { value: 'PUBLIC', label: 'Public' },
-                    { value: 'SEMI_RESTRICTED', label: 'Semi Restricted' },
                     { value: 'RESTRICTED', label: 'Restricted' }
                   ]}
                 />
@@ -1002,6 +1011,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       { value: '', label: 'All Designations' },
                       ...designationOptions.map((option) => ({ value: option, label: option }))
                     ]}
+                    isLoading={assignOptionsLoading}
                   />
                   <Select
                     label="Filter by Grade"
@@ -1012,6 +1022,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       { value: '', label: 'All Grades' },
                       ...gradeOptions.map((option) => ({ value: option, label: option }))
                     ]}
+                    isLoading={assignOptionsLoading}
                   />
                   <Select
                     label="Filter by Organization"
@@ -1027,6 +1038,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                           : option.organizationName
                       }))
                     ]}
+                    isLoading={assignOptionsLoading}
                   />
                   <Select
                     label="Executive / Non Executive"
@@ -1038,6 +1050,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       { value: 'EXECUTIVE', label: 'Executive' },
                       { value: 'NON_EXECUTIVE', label: 'Non Executive' }
                     ]}
+                    isLoading={assignOptionsLoading}
                   />
                 </div>
 
@@ -1185,9 +1198,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                           variant={
                             path.category === 'RESTRICTED'
                               ? 'danger'
-                              : path.category === 'SEMI_RESTRICTED'
-                                ? 'warning'
-                                : 'success'
+                              : 'success'
                           }
                         >
                           {path.category.replace('_', ' ')}
@@ -1275,7 +1286,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     }
                     options={[
                       { value: 'PUBLIC', label: 'Public' },
-                      { value: 'SEMI_RESTRICTED', label: 'Semi Restricted' },
                       { value: 'RESTRICTED', label: 'Restricted' }
                     ]}
                   />

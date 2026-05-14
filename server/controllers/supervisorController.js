@@ -69,18 +69,8 @@ export const getPendingApprovals = async (req, res) => {
 };
 
 export const getSupervisorPaths = async (_req, res) => {
-  const result = await query(
-    `
-      SELECT id, title, description, category, total_duration, status
-      FROM learning_paths
-      WHERE is_deleted = FALSE
-        AND status = 'ACTIVE'
-        AND category = 'SEMI_RESTRICTED'
-      ORDER BY created_at DESC
-    `
-  );
-
-  return res.status(200).json({ learningPaths: result.rows });
+  // Supervisors can no longer access any learning paths since SEMI_RESTRICTED category has been removed
+  return res.status(200).json({ learningPaths: [] });
 };
 
 export const enrollTeamMembers = async (req, res) => {
@@ -101,10 +91,6 @@ export const enrollTeamMembers = async (req, res) => {
   const path = pathResult.rows[0];
   if (!path) {
     return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
-  }
-
-  if (path.category !== 'SEMI_RESTRICTED') {
-    return sendError(res, 403, 'FORBIDDEN', 'Supervisors can only enroll members in semi-restricted paths.');
   }
 
   const teamResult = await query(

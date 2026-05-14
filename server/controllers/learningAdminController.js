@@ -19,7 +19,7 @@ import {
 } from '../utils/assignmentReports.js';
 
 const parseCategory = (value) => {
-  const allowed = ['RESTRICTED', 'SEMI_RESTRICTED', 'PUBLIC'];
+  const allowed = ['RESTRICTED', 'PUBLIC'];
   if (!allowed.includes(value)) {
     return null;
   }

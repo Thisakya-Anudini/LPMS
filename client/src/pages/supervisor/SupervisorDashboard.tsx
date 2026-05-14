@@ -13,6 +13,7 @@ type TeamMember = {
   name: string;
   designation: string;
   gradeName: string;
+  email: string;
 };
 
 type LearningPath = {
@@ -77,7 +78,8 @@ export function SupervisorDashboard() {
           employeeNumber: String(row.employeeNumber || ''),
           name: getEmployeeDisplayName(row),
           designation: String(row.designation || '-'),
-          gradeName: String(row.gradeName || '-')
+          gradeName: String(row.gradeName || '-'),
+          email: String(row.email || '-')
         }))
       );
       setLearningPaths(learningPathResponse.learningPaths);
@@ -257,40 +259,51 @@ export function SupervisorDashboard() {
             </div>
 
             {loading ? (
-              teamSkeletons.map((index) => (
-                <div key={`team-skeleton-${index}`} className="flex items-start gap-3 p-2 rounded">
-                  <Skeleton className="mt-1 h-4 w-4 rounded-sm" />
-                  <span className="block w-full">
-                    <Skeleton className="mb-2 h-5 w-52" />
-                    <Skeleton className="h-4 w-36" />
-                  </span>
-                </div>
-              ))
+              <div className="space-y-2 p-2">
+                {teamSkeletons.map((index) => (
+                  <div key={`team-skeleton-${index}`} className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.4fr] items-center gap-3">
+                    <Skeleton className="h-4 w-4 rounded-sm" />
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-5 w-24" />
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-5 w-20" />
+                    <Skeleton className="h-5 w-48" />
+                  </div>
+                ))}
+              </div>
             ) : team.length === 0 ? (
               <p className="text-sm text-slate-500 p-2">No learners found under this supervisor.</p>
             ) : filteredTeam.length === 0 ? (
               <p className="text-sm text-slate-500 p-2">No learners match current filters.</p>
             ) : (
-              filteredTeam.map((member) => (
-                <label
-                  key={member.employeeNumber}
-                  className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedTeamNumbers.includes(member.employeeNumber)}
-                    onChange={() => toggleTeamMember(member.employeeNumber)}
-                  />
-                  <span>
-                    <span className="block text-sm font-medium text-slate-900">
-                      {member.name} ({member.employeeNumber})
-                    </span>
-                    <span className="block text-xs text-slate-500">
-                      {member.designation} | {member.gradeName}
-                    </span>
-                  </span>
-                </label>
-              ))
+              <div className="min-w-[840px]">
+                <div className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.4fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Select</span>
+                  <span>Name</span>
+                  <span>Emp No</span>
+                  <span>Designation</span>
+                  <span>Grade</span>
+                  <span>Email</span>
+                </div>
+                {filteredTeam.map((member) => (
+                  <label
+                    key={member.employeeNumber}
+                    className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTeamNumbers.includes(member.employeeNumber)}
+                      onChange={() => toggleTeamMember(member.employeeNumber)}
+                      className="shrink-0"
+                    />
+                    <span className="font-medium text-slate-900">{member.name}</span>
+                    <span>{member.employeeNumber}</span>
+                    <span>{member.designation || '-'}</span>
+                    <span>{member.gradeName || '-'}</span>
+                    <span>{member.email || '-'}</span>
+                  </label>
+                ))}
+              </div>
             )}
           </div>
 
