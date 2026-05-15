@@ -22,6 +22,8 @@ type HierarchyEmployee = {
   designation: string;
 };
 
+export type SelectedHierarchyEmployee = HierarchyEmployee;
+
 type HierarchyChildrenState = {
   rows: HierarchyEmployee[];
   loaded: boolean;
@@ -88,7 +90,15 @@ const hierarchyDepthStyles = [
 
 const getDepthStyle = (depth: number) => hierarchyDepthStyles[depth % hierarchyDepthStyles.length];
 
-export function EmployeeHierarchyPanel() {
+type EmployeeHierarchyPanelProps = {
+  selectedEmployeeNumber?: string | null;
+  onViewDetails?: (employee: SelectedHierarchyEmployee) => void;
+};
+
+export function EmployeeHierarchyPanel({
+  selectedEmployeeNumber,
+  onViewDetails
+}: EmployeeHierarchyPanelProps) {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [hierarchyRoot, setHierarchyRoot] = useState<HierarchyEmployee | null>(null);
@@ -247,45 +257,54 @@ export function EmployeeHierarchyPanel() {
       nodeState?.loading || Boolean(nodeState?.error) || (childCount !== null ? childCount > 0 : true);
     const depthStyle = getDepthStyle(depth);
     const LevelIcon = isRoot ? Crown : depthStyle.icon;
+    const isSelected = selectedEmployeeNumber === employee.employeeNumber;
 
     return (
       <div
         key={`${employee.employeeNumber}-${depth}`}
         className="relative space-y-2"
-        style={{ paddingLeft: depth === 0 ? 0 : 50 }}
+        style={{ paddingLeft: depth === 0 ? 0 : 25 }}
       >
         {depth > 0 ? (
-          <span className="absolute left-[25px] top-6 h-px w-[25px] bg-slate-300" aria-hidden="true" />
+          <span className="absolute left-[12px] top-6 h-px w-[13px] bg-slate-300" aria-hidden="true" />
         ) : null}
 
-        <button
-          type="button"
-          onClick={() => void toggleHierarchyEmployee(employee.employeeNumber)}
+        <div
           className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all ${
             isRoot
               ? 'border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm hover:border-amber-300 hover:shadow-md'
               : `${depthStyle.cardClass} hover:shadow-sm`
-          }`}
-          disabled={!canExpand && !nodeState?.loading}
+          } ${isSelected ? 'ring-2 ring-primary-600 ring-offset-1' : ''}`}
         >
-          <div
+          <button
+            type="button"
+            onClick={() => void toggleHierarchyEmployee(employee.employeeNumber)}
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
+              hasChildren ? 'cursor-pointer' : 'cursor-default'
+            } ${
               isRoot
                 ? 'border-amber-200 bg-amber-100 text-amber-700'
                 : depthStyle.iconWrapClass
             }`}
+            disabled={!canExpand && !nodeState?.loading}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${employee.name}`}
           >
             <LevelIcon className="h-5 w-5" />
-          </div>
+          </button>
 
-          <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => void toggleHierarchyEmployee(employee.employeeNumber)}
+            className="min-w-0 flex-1 text-left"
+            disabled={!canExpand && !nodeState?.loading}
+          >
             <p className="truncate text-[15px] font-semibold leading-5 text-slate-900">{employee.name}</p>
             <p className="truncate text-sm leading-4 text-slate-500">{employee.designation}</p>
-          </div>
+          </button>
 
           {childCount !== null ? (
             <span
-              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
                 isRoot ? 'border-amber-200 bg-amber-50 text-amber-700' : depthStyle.countClass
               }`}
             >
@@ -293,24 +312,38 @@ export function EmployeeHierarchyPanel() {
             </span>
           ) : null}
 
-          <span
-            className={`rounded-full p-1.5 text-slate-400 transition ${
+          <Button
+            type="button"
+            variant={isSelected ? 'primary' : 'outline'}
+            size="sm"
+            className="shrink-0"
+            onClick={() => onViewDetails?.(employee)}
+          >
+            View
+          </Button>
+
+          <button
+            type="button"
+            onClick={() => void toggleHierarchyEmployee(employee.employeeNumber)}
+            className={`shrink-0 rounded-full p-1.5 text-slate-400 transition ${
               hasChildren ? 'group-hover:bg-slate-100 group-hover:text-slate-600' : 'opacity-40'
             }`}
+            disabled={!canExpand && !nodeState?.loading}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${employee.name}`}
           >
             {hasChildren ? (
               isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
             ) : (
               <ChevronRight className="h-4 w-4" />
             )}
-          </span>
-        </button>
+          </button>
+        </div>
 
         {isExpanded ? (
           <div className="space-y-2">
             {nodeState?.loading ? (
-              <div className="relative space-y-2 pl-[50px]">
-                <span className="absolute left-[25px] top-0 bottom-0 w-px bg-slate-300" aria-hidden="true" />
+              <div className="relative space-y-2 pl-[25px]">
+                <span className="absolute left-[12px] top-0 bottom-0 w-px bg-slate-300" aria-hidden="true" />
                 {Array.from({ length: 3 }, (_, index) => (
                   <div
                     key={`${employee.employeeNumber}-skeleton-${index}`}
@@ -325,16 +358,16 @@ export function EmployeeHierarchyPanel() {
                 ))}
               </div>
             ) : nodeState?.error ? (
-              <div className="ml-[50px] rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div className="ml-[25px] rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
                 {nodeState.error}
               </div>
             ) : nodeState?.loaded && nodeState.rows.length === 0 ? (
-              <div className="ml-[50px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-500">
+              <div className="ml-[25px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-500">
                 No subordinates found.
               </div>
             ) : (
               <div className="relative space-y-2">
-                <span className="absolute left-[25px] top-0 bottom-0 w-px bg-slate-300" aria-hidden="true" />
+                <span className="absolute left-[12px] top-0 bottom-0 w-px bg-slate-300" aria-hidden="true" />
                 {nodeState?.rows.map((child) => renderHierarchyNode(child, depth + 1)) ?? null}
               </div>
             )}
@@ -347,6 +380,8 @@ export function EmployeeHierarchyPanel() {
   return (
     <Card
       title="Employee Hierarchy"
+      className="flex h-full min-h-[520px] flex-col xl:h-[calc(100vh-170px)]"
+      bodyClassName="min-h-0 flex-1 overflow-y-auto"
       action={
         <Button
           type="button"

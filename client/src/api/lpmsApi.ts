@@ -804,6 +804,23 @@ export const superAdminApi = {
       }>;
     }>(`/users/learners/${principalId}/learning-paths`, { token });
   },
+  getLearnerLearningPathsByEmployeeNo(token: string, employeeNo: string) {
+    return request<{
+      learner: { id: string; name: string; email: string };
+      learningPaths: Array<{
+        enrollment_id: string;
+        status: string;
+        progress: number;
+        enrolled_at: string;
+        completed_at?: string;
+        learning_path_id: string;
+        title: string;
+        description: string;
+        category: string;
+        total_duration: string;
+      }>;
+    }>(`/users/learners/by-employee/${encodeURIComponent(employeeNo)}/learning-paths`, { token });
+  },
   getLearningPathEnrollments(token: string, learningPathId: string) {
     return request<{
       learningPath: {

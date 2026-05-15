@@ -3,6 +3,7 @@ import React from 'react';
 interface CardProps {
   children: React.ReactNode;
   className?: string;
+  bodyClassName?: string;
   title?: string;
   description?: string;
   footer?: React.ReactNode;
@@ -13,6 +14,7 @@ interface CardProps {
 export function Card({
   children,
   className = '',
+  bodyClassName = '',
   title,
   description,
   footer,
@@ -46,7 +48,7 @@ export function Card({
           {action && <div className="ml-4 flex-shrink-0">{action}</div>}
         </div>
       )}
-      <div className="p-6">{children}</div>
+      <div className={`p-6 ${bodyClassName}`}>{children}</div>
       {footer && (
         <div className="px-6 py-4 bg-secondary-50 border-t border-secondary-100">
           {footer}

@@ -560,9 +560,7 @@ export const getAllLearners = async (req, res) => {
   });
 };
 
-export const getLearnerLearningPaths = async (req, res) => {
-  const { principalId } = req.params;
-
+const sendLearnerLearningPaths = async (res, principalId) => {
   const principal = await query(
     `
       SELECT id, name, email, role
@@ -606,6 +604,33 @@ export const getLearnerLearningPaths = async (req, res) => {
     },
     learningPaths: result.rows
   });
+};
+
+export const getLearnerLearningPaths = async (req, res) => {
+  const { principalId } = req.params;
+  return sendLearnerLearningPaths(res, principalId);
+};
+
+export const getLearnerLearningPathsByEmployeeNo = async (req, res) => {
+  const employeeNo = String(req.params.employeeNo || '').trim();
+  if (!employeeNo) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
+  }
+
+  const employee = await query(
+    `
+      SELECT principal_id
+      FROM employees
+      WHERE employee_number = $1
+      LIMIT 1
+    `,
+    [employeeNo]
+  );
+  if (employee.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learner not found.');
+  }
+
+  return sendLearnerLearningPaths(res, employee.rows[0].principal_id);
 };
 
 export const getLearningPathEnrollments = async (req, res) => {

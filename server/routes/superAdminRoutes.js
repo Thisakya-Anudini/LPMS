@@ -7,6 +7,7 @@ import {
   deleteUser,
   getAllLearners,
   getLearnerLearningPaths,
+  getLearnerLearningPathsByEmployeeNo,
   getLearningPathEnrollments,
   assignLearningAdmin,
   removeLearningAdmin
@@ -27,6 +28,7 @@ router.post(
 router.get('/', protect, requireRole([ROLES.SUPER_ADMIN]), getAllUsers);
 router.get('/learning-admin-assignments', protect, requireRole([ROLES.SUPER_ADMIN]), getAssignedLearningAdmins);
 router.get('/learners', protect, requireRole([ROLES.SUPER_ADMIN]), getAllLearners);
+router.get('/learners/by-employee/:employeeNo/learning-paths', protect, requireRole([ROLES.SUPER_ADMIN]), getLearnerLearningPathsByEmployeeNo);
 router.get('/learners/:principalId/learning-paths', protect, requireRole([ROLES.SUPER_ADMIN]), getLearnerLearningPaths);
 router.get('/learning-paths/:learningPathId/enrollments', protect, requireRole([ROLES.SUPER_ADMIN]), getLearningPathEnrollments);
 router.post(
