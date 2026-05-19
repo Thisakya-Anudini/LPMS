@@ -739,7 +739,7 @@ export function AdminDashboard() {
                 Are you sure you want to delete{' '}
                 <span className="font-semibold text-slate-900">{pendingDeleteUser.name}</span>?
               </p>
-              <p className="mt-2 text-xs text-slate-400">{pendingDeleteUser.email}</p>
+              <p className="mt-2 text-xs text-slate-500">{pendingDeleteUser.email}</p>
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <Button type="button" variant="outline" onClick={() => setPendingDeleteUser(null)}>
