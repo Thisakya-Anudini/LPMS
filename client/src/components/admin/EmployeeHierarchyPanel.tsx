@@ -75,7 +75,7 @@ const hierarchyDepthStyles = [
       'border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50/70 to-white hover:border-emerald-300',
     iconWrapClass: 'border-emerald-200 bg-emerald-100 text-emerald-700',
     countClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    accentClass: 'bg-emerald-400',
+    accentClass: 'bg-emerald-300',
     icon: Building2
   },
   {
