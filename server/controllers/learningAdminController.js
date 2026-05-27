@@ -4,6 +4,7 @@ import { logAudit } from '../utils/audit.js';
 import bcrypt from 'bcryptjs';
 import {
   fetchAllCourses,
+  fetchClassesByCourseCode,
   fetchAllDesignations,
   fetchAllSalaryGrades,
   fetchEmployeesByFilters,
@@ -219,6 +220,106 @@ const normalizeErpCourseCatalog = (rows) =>
       })
       .filter(Boolean)
   );
+
+const pickFirstString = (row, keys) => {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value !== null && value !== undefined && String(value).trim() !== '') {
+      return String(value).trim();
+    }
+  }
+
+  const normalizedLookup = new Map(
+    Object.entries(row || {}).map(([key, value]) => [
+      key.toLowerCase().replace(/[^a-z0-9]/g, ''),
+      value
+    ])
+  );
+  for (const key of keys) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const value = normalizedLookup.get(normalizedKey);
+    if (value !== null && value !== undefined && String(value).trim() !== '') {
+      return String(value).trim();
+    }
+  }
+
+  return '';
+};
+
+const pickFirstByTokens = (row, tokenGroups) => {
+  const entries = Object.entries(row || {});
+  for (const tokens of tokenGroups) {
+    const normalizedTokens = tokens.map((token) => token.toLowerCase());
+    const match = entries.find(([key, value]) => {
+      if (value === null || value === undefined || String(value).trim() === '') {
+        return false;
+      }
+      const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return normalizedTokens.every((token) => normalizedKey.includes(token));
+    });
+    if (match) {
+      return String(match[1]).trim();
+    }
+  }
+  return '';
+};
+
+const normalizeErpClassRow = (row, index) => {
+  const classId =
+    pickFirstString(row, ['classId', 'classID', 'class_id', 'id', 'classCode', 'classNo', 'batchId', 'batchCode']) ||
+    `CLASS-${index + 1}`;
+  const classCode = pickFirstString(row, ['classCode', 'classNo', 'class_code', 'batchCode', 'batchNo']) || classId;
+  const classTitle =
+    pickFirstString(row, ['className', 'classTitle', 'title', 'batchName', 'name', 'description']) ||
+    `Class ${index + 1}`;
+
+  return {
+    id: classId,
+    code: classCode,
+    title: classTitle,
+    startDate:
+      pickFirstString(row, [
+        'startDate',
+        'classStartDate',
+        'courseStartDate',
+        'sessionStartDate',
+        'fromDate',
+        'dateFrom',
+        'startDt',
+        'fromDt',
+        'commenceDate',
+        'commencementDate'
+      ]) ||
+      pickFirstByTokens(row, [
+        ['start', 'date'],
+        ['from', 'date'],
+        ['commence', 'date']
+      ]),
+    endDate:
+      pickFirstString(row, [
+        'endDate',
+        'classEndDate',
+        'courseEndDate',
+        'sessionEndDate',
+        'toDate',
+        'dateTo',
+        'endDt',
+        'toDt',
+        'completionDate',
+        'finishDate'
+      ]) ||
+      pickFirstByTokens(row, [
+        ['end', 'date'],
+        ['to', 'date'],
+        ['completion', 'date'],
+        ['finish', 'date']
+      ]),
+    venue: pickFirstString(row, ['venue', 'location', 'classVenue', 'trainingLocation']),
+    instructor: pickFirstString(row, ['instructor', 'lecturer', 'trainer', 'resourcePerson']),
+    capacity: pickFirstString(row, ['capacity', 'maxParticipants', 'noOfParticipants', 'seats']),
+    raw: row || {}
+  };
+};
 
 const resolveCourseUuid = async (courseId, courseCatalogByCode = new Map()) => {
   const raw = String(courseId || '').trim();
@@ -1282,6 +1383,265 @@ export const searchAssignableEmployees = async (req, res) => {
       error.details || error.message
     );
   }
+};
+
+export const getClassAssignmentOptions = async (req, res) => {
+  const { id } = req.params;
+
+  const pathResult = await query(
+    `
+      SELECT id, title, description, status
+      FROM learning_paths
+      WHERE id = $1 AND is_deleted = FALSE
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  const learningPath = pathResult.rows[0];
+  if (!learningPath) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+  }
+
+  const usesCourseReferenceTable =
+    (await hasTable('courses')) &&
+    (await hasColumn('stage_courses', 'course_id'));
+
+  const courseResult = await query(
+    usesCourseReferenceTable
+      ? `
+          SELECT DISTINCT ON (c.code)
+            c.id AS course_id,
+            c.code AS course_code,
+            c.title AS course_title,
+            lps.title AS stage_title,
+            lps.stage_order,
+            sc.course_order
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          JOIN courses c ON c.id = sc.course_id
+          WHERE lps.learning_path_id = $1
+          ORDER BY c.code, lps.stage_order ASC, sc.course_order ASC
+        `
+      : `
+          SELECT DISTINCT ON (COALESCE(sc.course_code, sc.course_title))
+            COALESCE(sc.course_code, sc.course_title) AS course_id,
+            COALESCE(sc.course_code, sc.course_title) AS course_code,
+            sc.course_title,
+            lps.title AS stage_title,
+            lps.stage_order,
+            sc.course_order
+          FROM learning_path_stages lps
+          JOIN stage_courses sc ON sc.stage_id = lps.id
+          WHERE lps.learning_path_id = $1
+          ORDER BY COALESCE(sc.course_code, sc.course_title), lps.stage_order ASC, sc.course_order ASC
+        `,
+    [id]
+  );
+
+  const learnerResult = await query(
+    `
+      SELECT
+        en.id AS enrollment_id,
+        en.status,
+        en.progress,
+        en.enrolled_at,
+        ap.id AS principal_id,
+        ap.name,
+        ap.email,
+        e.employee_number,
+        e.designation,
+        e.grade_name,
+        COALESCE(
+          JSON_AGG(
+            JSON_BUILD_OBJECT(
+              'id', ce.id,
+              'courseCode', ce.course_code,
+              'classId', ce.class_id,
+              'classCode', ce.class_code,
+              'classTitle', ce.class_title,
+              'classPayload', ce.class_payload,
+              'assignedAt', ce.assigned_at
+            )
+            ORDER BY ce.assigned_at DESC
+          ) FILTER (WHERE ce.id IS NOT NULL),
+          '[]'::json
+        ) AS class_assignments
+      FROM enrollments en
+      JOIN auth_principals ap ON ap.id = en.principal_id
+      LEFT JOIN employees e ON e.principal_id = ap.id
+      LEFT JOIN class_enrollments ce ON ce.enrollment_id = en.id
+      WHERE en.learning_path_id = $1
+      GROUP BY
+        en.id,
+        en.status,
+        en.progress,
+        en.enrolled_at,
+        ap.id,
+        ap.name,
+        ap.email,
+        e.employee_number,
+        e.designation,
+        e.grade_name
+      ORDER BY ap.name ASC, e.employee_number ASC
+    `,
+    [id]
+  );
+
+  return res.status(200).json({
+    learningPath,
+    courses: courseResult.rows.map((row) => ({
+      courseId: row.course_id,
+      courseCode: row.course_code,
+      title: row.course_title || row.course_code,
+      stageTitle: row.stage_title,
+      stageOrder: row.stage_order,
+      order: row.course_order
+    })),
+    learners: learnerResult.rows.map((row) => ({
+      enrollmentId: row.enrollment_id,
+      principalId: row.principal_id,
+      employeeNumber: row.employee_number,
+      name: row.name,
+      email: row.email,
+      designation: row.designation,
+      gradeName: row.grade_name,
+      status: row.status,
+      progress: Number(row.progress || 0),
+      enrolledAt: row.enrolled_at,
+      classAssignments: row.class_assignments || []
+    }))
+  });
+};
+
+export const getClassesByCourseCode = async (req, res) => {
+  const courseCode = String(req.params.courseCode || '').trim();
+  if (!courseCode) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Course code is required.');
+  }
+
+  try {
+    const response = await fetchClassesByCourseCode(courseCode);
+    const rows = Array.isArray(response?.data) ? response.data : [];
+    return res.status(200).json({
+      courseCode,
+      classes: rows.map(normalizeErpClassRow)
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      getSearchErrorStatus(error),
+      'ERP_REQUEST_FAILED',
+      'Failed to load ERP classes for this course.',
+      error.details || error.message
+    );
+  }
+};
+
+export const assignClassEnrollments = async (req, res) => {
+  const learningPathId = String(req.body.learningPathId || '').trim();
+  const courseCode = String(req.body.courseCode || '').trim();
+  const selectedEnrollmentIds = Array.isArray(req.body.enrollmentIds)
+    ? req.body.enrollmentIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : [];
+  const selectedClass = req.body.class || {};
+  const classId = String(selectedClass.id || selectedClass.classId || '').trim();
+  const classCode = String(selectedClass.code || selectedClass.classCode || classId).trim();
+  const classTitle = String(selectedClass.title || selectedClass.classTitle || classCode || classId).trim();
+
+  if (!learningPathId || !courseCode || !classId || selectedEnrollmentIds.length === 0) {
+    return sendError(
+      res,
+      400,
+      'VALIDATION_ERROR',
+      'learningPathId, courseCode, class, and enrollmentIds are required.'
+    );
+  }
+
+  const pathResult = await query(
+    `
+      SELECT id
+      FROM learning_paths
+      WHERE id = $1 AND is_deleted = FALSE
+      LIMIT 1
+    `,
+    [learningPathId]
+  );
+  if (pathResult.rowCount === 0) {
+    return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+  }
+
+  const validEnrollments = await query(
+    `
+      SELECT id
+      FROM enrollments
+      WHERE learning_path_id = $1
+        AND id = ANY($2::uuid[])
+    `,
+    [learningPathId, selectedEnrollmentIds]
+  );
+
+  if (validEnrollments.rowCount === 0) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'No selected learners belong to this learning path.');
+  }
+
+  const actorPrincipalId = await resolveActorPrincipalId(req.user);
+  const assigned = [];
+  for (const row of validEnrollments.rows) {
+    const result = await query(
+      `
+        INSERT INTO class_enrollments (
+          enrollment_id,
+          learning_path_id,
+          course_code,
+          class_id,
+          class_code,
+          class_title,
+          class_payload,
+          assigned_by,
+          assigned_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, NOW(), NOW())
+        ON CONFLICT (enrollment_id, course_code)
+        DO UPDATE SET
+          class_id = EXCLUDED.class_id,
+          class_code = EXCLUDED.class_code,
+          class_title = EXCLUDED.class_title,
+          class_payload = EXCLUDED.class_payload,
+          assigned_by = EXCLUDED.assigned_by,
+          assigned_at = NOW(),
+          updated_at = NOW()
+        RETURNING id, enrollment_id, course_code, class_id, class_code, class_title, assigned_at
+      `,
+      [
+        row.id,
+        learningPathId,
+        courseCode,
+        classId,
+        classCode || null,
+        classTitle || null,
+        JSON.stringify(selectedClass),
+        actorPrincipalId
+      ]
+    );
+    assigned.push(result.rows[0]);
+  }
+
+  await logAudit({
+    actorPrincipalId,
+    action: 'ASSIGN_CLASS_ENROLLMENTS',
+    resourceType: 'CLASS_ENROLLMENT',
+    metadata: {
+      learningPathId,
+      courseCode,
+      classId,
+      assigned: assigned.length,
+      requested: selectedEnrollmentIds.length
+    }
+  });
+
+  return res.status(201).json({ assigned });
 };
 
 export const getLearningSummaryReport = async (_req, res) => {

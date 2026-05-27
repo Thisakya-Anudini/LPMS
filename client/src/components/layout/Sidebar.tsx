@@ -6,6 +6,7 @@ import {
   Users,
   BookOpen,
   ChevronRight,
+  School,
   UserCog,
   Shield,
   GitBranch } from
@@ -63,9 +64,20 @@ export function Sidebar({
           isSubmenu: true
         },
         {
+          isHeader: true,
+          label: 'Assign Enrollment',
+        
+        },
+        {
           to: '/learning-admin/paths/assign',
           icon: ChevronRight,
-          label: 'Assign Enrollments',
+          label: 'Assign Enrollment [Learning Paths]',
+          isSubmenu: true
+        },
+        {
+          to: '/learning-admin/classes/assign',
+          icon: School,
+          label: 'Assign Enrollment [Classes]',
           isSubmenu: true
         },
         {
@@ -128,9 +140,20 @@ export function Sidebar({
                 isSubmenu: true
               },
               {
+                isHeader: true,
+                label: 'Assign Enrollment',
+              
+              },
+              {
                 to: '/learning-admin/paths/assign',
                 icon: ChevronRight,
-                label: 'Assign Enrollments',
+                label: 'Assign Enrollment [Learning Paths]',
+                isSubmenu: true
+              },
+              {
+                to: '/learning-admin/classes/assign',
+                icon: School,
+                label: 'Assign Enrollment [Classes]',
                 isSubmenu: true
               },
               {

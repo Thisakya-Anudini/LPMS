@@ -7,6 +7,7 @@ const getErpConfig = () => ({
   organizationsUrl: process.env.ERP_ORGANIZATIONS_URL,
   employeeFilterUrl: process.env.ERP_EMPLOYEE_FILTER_URL,
   coursesUrl: process.env.ERP_COURSES_URL,
+  classesUrl: process.env.ERP_CLASSES_URL,
   username: process.env.ERP_USERNAME,
   password: process.env.ERP_PASSWORD,
   searchUsername: process.env.ERP_SEARCH_USERNAME || process.env.ERP_USERNAME,
@@ -165,5 +166,15 @@ export const fetchAllCourses = async () => {
     username: config.searchUsername,
     password: config.searchPassword,
     body: {}
+  });
+};
+
+export const fetchClassesByCourseCode = async (courseCode) => {
+  const config = getErpConfig();
+  return postErp({
+    url: config.classesUrl,
+    username: config.searchUsername,
+    password: config.searchPassword,
+    body: { courseCode }
   });
 };

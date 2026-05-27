@@ -13,6 +13,7 @@ import { LearningAdminDashboard } from './pages/learning-admin/LearningAdminDash
 import { AssignmentReportsPage } from './pages/learning-admin/AssignmentReportsPage';
 import { LearningPathManagement } from './pages/learning-admin/LearningPathManagement';
 import { CertificateCustomizationPage } from './pages/learning-admin/CertificateCustomizationPage';
+import { AssignEnrollmentToClassesPage } from './pages/learning-admin/AssignEnrollmentToClassesPage';
 import { LoginPage } from './pages/LoginPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { Role } from './types';
@@ -214,6 +215,16 @@ export function App() {
                 <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
                   <LearningAdminAccessRoute>
                     <LearningPathManagement section="manage" />
+                  </LearningAdminAccessRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="learning-admin/classes/assign"
+              element={
+                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                  <LearningAdminAccessRoute>
+                    <AssignEnrollmentToClassesPage />
                   </LearningAdminAccessRoute>
                 </ProtectedRoute>
               }
