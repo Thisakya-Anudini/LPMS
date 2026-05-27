@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BookOpen, Globe2, Layers, ShieldCheck } from 'lucide-react';
+import { BookOpen, Globe2, ShieldCheck } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Skeleton } from '../../components/ui/Skeleton';
@@ -29,7 +29,7 @@ export function LearningAdminDashboard() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const statSkeletons = Array.from({ length: 4 }, (_, index) => index);
+  const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
 
   useEffect(() => {
     const load = async () => {
@@ -80,12 +80,12 @@ export function LearningAdminDashboard() {
 
       {error ? <Card className="text-error-600 border-error-200 bg-error-50">{error}</Card> : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {statSkeletons.map((index) => {
-          const icons = [BookOpen, Globe2, Layers, ShieldCheck];
-          const bgClasses = ['bg-primary-100', 'bg-success-100', 'bg-warning-100', 'bg-secondary-100'];
-          const iconClasses = ['text-primary-600', 'text-success-600', 'text-warning-600', 'text-secondary-600'];
-          const labels = ['Total LPs', 'Public LPs', 'Semi-restricted LPs', 'Restricted LPs'];
+          const icons = [BookOpen, Globe2, ShieldCheck];
+          const bgClasses = ['bg-primary-100', 'bg-success-100', 'bg-secondary-100'];
+          const iconClasses = ['text-primary-600', 'text-success-600', 'text-secondary-600'];
+          const labels = ['Total LPs', 'Public LPs', 'Restricted LPs'];
           const Icon = icons[index];
 
           return (
@@ -104,9 +104,7 @@ export function LearningAdminDashboard() {
                         ? summary?.totalPaths ?? stats.total
                         : index === 1
                           ? stats.publicCount
-                          : index === 2
-                            ? stats.semiRestricted
-                            : stats.restricted}
+                          : stats.restricted}
                     </p>
                   )}
                 </div>
