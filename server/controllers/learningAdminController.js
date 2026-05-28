@@ -18,6 +18,10 @@ import {
   ASSIGNMENT_REPORT_STATUS,
   createAssignmentReport
 } from '../utils/assignmentReports.js';
+import {
+  sendClassAssignedEmail,
+  sendLearningPathAssignedEmail
+} from '../utils/emailService.js';
 
 const parseCategory = (value) => {
   const allowed = ['RESTRICTED', 'PUBLIC'];
@@ -1140,6 +1144,18 @@ export const createEnrollments = async (req, res) => {
         `,
         [principalId, `You were enrolled in "${learningPath.title}".`]
       );
+
+      sendLearningPathAssignedEmail({
+        employeeNumber: String(learner.employeeNumber || '').trim(),
+        to: learner.email ? String(learner.email).trim().toLowerCase() : '',
+        learnerName: normalizeEmployeeDisplayName(learner, learner.employeeNumber),
+        learningPathTitle: learningPath.title
+      }).catch((error) => {
+        console.error('LPMS learning path assignment email failed:', {
+          employeeNumber: String(learner.employeeNumber || '').trim(),
+          message: error.message
+        });
+      });
     }
   }
 
@@ -1560,7 +1576,7 @@ export const assignClassEnrollments = async (req, res) => {
 
   const pathResult = await query(
     `
-      SELECT id
+      SELECT id, title
       FROM learning_paths
       WHERE id = $1 AND is_deleted = FALSE
       LIMIT 1
@@ -1571,12 +1587,20 @@ export const assignClassEnrollments = async (req, res) => {
     return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
   }
 
+  const learningPath = pathResult.rows[0];
+
   const validEnrollments = await query(
     `
-      SELECT id
-      FROM enrollments
-      WHERE learning_path_id = $1
-        AND id = ANY($2::uuid[])
+      SELECT
+        en.id,
+        ap.name,
+        ap.email,
+        e.employee_number
+      FROM enrollments en
+      JOIN auth_principals ap ON ap.id = en.principal_id
+      LEFT JOIN employees e ON e.principal_id = ap.id
+      WHERE en.learning_path_id = $1
+        AND en.id = ANY($2::uuid[])
     `,
     [learningPathId, selectedEnrollmentIds]
   );
@@ -1626,6 +1650,21 @@ export const assignClassEnrollments = async (req, res) => {
       ]
     );
     assigned.push(result.rows[0]);
+
+    sendClassAssignedEmail({
+      employeeNumber: String(row.employee_number || '').trim(),
+      to: row.email ? String(row.email).trim().toLowerCase() : '',
+      learnerName: row.name,
+      learningPathTitle: learningPath.title,
+      courseCode,
+      classTitle,
+      classCode
+    }).catch((error) => {
+      console.error('LPMS class assignment email failed:', {
+        employeeNumber: String(row.employee_number || '').trim(),
+        message: error.message
+      });
+    });
   }
 
   await logAudit({
