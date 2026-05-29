@@ -319,6 +319,96 @@ export const learningApi = {
       }
     );
   },
+  getClassAssignmentOptions(token: string, learningPathId: string) {
+    return request<{
+      learningPath: {
+        id: string;
+        title: string;
+        description: string;
+        status: string;
+      };
+      courses: Array<{
+        courseId: string;
+        courseCode: string;
+        title: string;
+        stageTitle: string | null;
+        stageOrder: number;
+        order: number;
+      }>;
+      learners: Array<{
+        enrollmentId: string;
+        principalId: string;
+        employeeNumber: string | null;
+        name: string;
+        email: string;
+        designation: string | null;
+        gradeName: string | null;
+        status: string;
+        progress: number;
+        enrolledAt: string;
+        classAssignments: Array<{
+          id: string;
+          courseCode: string;
+          classId: string;
+          classCode: string | null;
+          classTitle: string | null;
+          classPayload?: Record<string, unknown>;
+          assignedAt: string;
+        }>;
+      }>;
+    }>(`/learning-paths/${learningPathId}/class-assignment-options`, { token });
+  },
+  getClassesByCourseCode(token: string, courseCode: string) {
+    return request<{
+      courseCode: string;
+      classes: Array<{
+        id: string;
+        code: string;
+        title: string;
+        startDate: string;
+        endDate: string;
+        venue: string;
+        instructor: string;
+        capacity: string;
+        raw: Record<string, unknown>;
+      }>;
+    }>(`/courses/${encodeURIComponent(courseCode)}/classes`, { token });
+  },
+  assignClassEnrollments(
+    token: string,
+    payload: {
+      learningPathId: string;
+      courseCode: string;
+      class: {
+        id: string;
+        code: string;
+        title: string;
+        startDate?: string;
+        endDate?: string;
+        venue?: string;
+        instructor?: string;
+        capacity?: string;
+        raw?: Record<string, unknown>;
+      };
+      enrollmentIds: string[];
+    }
+  ) {
+    return request<{
+      assigned: Array<{
+        id: string;
+        enrollment_id: string;
+        course_code: string;
+        class_id: string;
+        class_code: string | null;
+        class_title: string | null;
+        assigned_at: string;
+      }>;
+    }>('/class-enrollments', {
+      method: 'POST',
+      token,
+      body: payload
+    });
+  },
   getSummaryReport(token: string) {
     return request<{
       summary: {

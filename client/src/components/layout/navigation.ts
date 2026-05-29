@@ -6,6 +6,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LineChart,
+  School,
   Shield,
   Sparkles,
   UserCog,
@@ -17,9 +18,10 @@ type NavigationIcon = typeof LayoutDashboard;
 
 export type NavigationLink = {
   label: string;
-  to: string;
+  to?: string;
   icon: NavigationIcon;
   matchMode?: 'exact' | 'prefix';
+  children?: NavigationLink[];
 };
 
 export type NavigationGroup = {
@@ -65,9 +67,21 @@ const learningAdminLinks: NavigationLink[] = [
     icon: BookOpen
   },
   {
-    label: 'Assign Enrollments',
+    label: 'Assign Enrollment',
     to: '/learning-admin/paths/assign',
-    icon: Users
+    icon: Users,
+    children: [
+      {
+        label: 'Assign Enrollment [Learning Paths]',
+        to: '/learning-admin/paths/assign',
+        icon: Users
+      },
+      {
+        label: 'Assign Enrollment [Classes]',
+        to: '/learning-admin/classes/assign',
+        icon: School
+      }
+    ]
   },
   {
     label: 'Manage LPs',
@@ -130,12 +144,12 @@ export function getNavigationModel(user: User): NavigationModel {
         {
           label: 'Learning Paths',
           icon: BookOpen,
-          links: learningAdminLinks.slice(1, 4)
+          links: learningAdminLinks.slice(1, 5)
         },
         {
           label: 'Operations',
           icon: Shield,
-          links: learningAdminLinks.slice(4)
+          links: learningAdminLinks.slice(5)
         }
       ],
       quickLinks: learningAdminLinks
@@ -143,7 +157,9 @@ export function getNavigationModel(user: User): NavigationModel {
   }
 
   const groups: NavigationGroup[] = [];
-  const primaryLinks = [...learnerLinks];
+  const primaryLinks = user.isLearningAdmin
+    ? learnerLinks.filter((link) => link.label !== 'Public Paths')
+    : [...learnerLinks];
 
   if (user.isLearningAdmin) {
     groups.push({
@@ -164,15 +180,27 @@ export function getNavigationModel(user: User): NavigationModel {
   return {
     primaryLinks,
     groups,
-    quickLinks: [...learnerLinks, ...(user.isLearningAdmin ? learningAdminLinks : []), ...(user.isSupervisor ? [{
+    quickLinks: [
+      ...primaryLinks,
+      ...(user.isLearningAdmin ? learningAdminLinks : []),
+      ...(user.isSupervisor ? [{
       label: 'Supervisor Dashboard',
       to: '/supervisor',
       icon: UserCog
-    }] : [])]
+    }] : [])
+    ]
   };
 }
 
 export function isLinkActive(pathname: string, link: NavigationLink) {
+  if (link.children?.some((child) => isLinkActive(pathname, child))) {
+    return true;
+  }
+
+  if (!link.to) {
+    return false;
+  }
+
   if (link.matchMode === 'exact') {
     return pathname === link.to;
   }
@@ -182,4 +210,8 @@ export function isLinkActive(pathname: string, link: NavigationLink) {
 
 export function isGroupActive(pathname: string, group: NavigationGroup) {
   return group.links.some((link) => isLinkActive(pathname, link));
+}
+
+export function flattenNavigationLinks(links: NavigationLink[]): NavigationLink[] {
+  return links.flatMap((link) => (link.children ? flattenNavigationLinks(link.children) : [link]));
 }

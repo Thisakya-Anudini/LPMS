@@ -12,6 +12,7 @@ import {
   ASSIGNMENT_REPORT_SOURCE,
   createAssignmentReport
 } from '../utils/assignmentReports.js';
+import { sendCourseCompletedEmail } from '../utils/emailService.js';
 
 const normalizeEmployeeNo = (user, requestBody = {}) => {
   if (user.employeeNo) {
@@ -1096,9 +1097,18 @@ export const updateLearnerCourseCompletion = async (req, res) => {
 
   const enrollmentResult = await query(
     `
-      SELECT en.id, en.learning_path_id, en.progress, lp.title
+      SELECT
+        en.id,
+        en.learning_path_id,
+        en.progress,
+        lp.title,
+        ap.name AS learner_name,
+        ap.email AS learner_email,
+        e.employee_number
       FROM enrollments en
       JOIN learning_paths lp ON lp.id = en.learning_path_id
+      JOIN auth_principals ap ON ap.id = en.principal_id
+      LEFT JOIN employees e ON e.principal_id = ap.id
       WHERE en.id = $1
         AND en.principal_id = $2
         AND lp.is_deleted = FALSE
@@ -1117,7 +1127,8 @@ export const updateLearnerCourseCompletion = async (req, res) => {
           SELECT
             course.id AS course_id,
             lps.id AS stage_id,
-            NULL::text AS course_code
+            course.code AS course_code,
+            COALESCE(course.title, lps.title) AS course_title
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
           LEFT JOIN courses course ON course.id = sc.course_id
@@ -1129,7 +1140,8 @@ export const updateLearnerCourseCompletion = async (req, res) => {
           SELECT
             NULL::uuid AS course_id,
             lps.id AS stage_id,
-            sc.course_code
+            sc.course_code,
+            COALESCE(sc.course_title, lps.title) AS course_title
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
           WHERE lps.learning_path_id = $2
@@ -1143,6 +1155,45 @@ export const updateLearnerCourseCompletion = async (req, res) => {
   }
 
   const match = courseCheck.rows[0];
+  let previousCourseCompleted = false;
+  if (useCourseReference && match.course_id) {
+    const previous = await query(
+      `
+        SELECT progress
+        FROM enrollment_progress
+        WHERE enrollment_id = $1
+          AND course_id = $2
+        LIMIT 1
+      `,
+      [enrollmentId, match.course_id]
+    );
+    previousCourseCompleted = Number(previous.rows[0]?.progress || 0) >= 100;
+  } else if (!useCourseReference && match.course_code) {
+    const previous = await query(
+      `
+        SELECT progress
+        FROM enrollment_progress
+        WHERE enrollment_id = $1
+          AND course_code = $2
+        LIMIT 1
+      `,
+      [enrollmentId, match.course_code]
+    );
+    previousCourseCompleted = Number(previous.rows[0]?.progress || 0) >= 100;
+  } else {
+    const previous = await query(
+      `
+        SELECT progress
+        FROM enrollment_progress
+        WHERE enrollment_id = $1
+          AND stage_id = $2
+        LIMIT 1
+      `,
+      [enrollmentId, match.stage_id]
+    );
+    previousCourseCompleted = Number(previous.rows[0]?.progress || 0) >= 100;
+  }
+
   if (useCourseReference && match.course_id) {
     await query(
       `
@@ -1181,6 +1232,17 @@ export const updateLearnerCourseCompletion = async (req, res) => {
     learningPathId: enrollment.learning_path_id,
     principalId
   });
+
+  if (completed && !previousCourseCompleted) {
+    await sendCourseCompletedEmail({
+      employeeNumber: String(enrollment.employee_number || employeeNo || '').trim(),
+      to: enrollment.learner_email ? String(enrollment.learner_email).trim().toLowerCase() : '',
+      learnerName: enrollment.learner_name,
+      learningPathTitle: enrollment.title,
+      courseTitle: match.course_title,
+      courseCode: match.course_code || courseId
+    });
+  }
 
   if (previousProgress < 100 && computed.computedProgress >= 100) {
     let learnerProfile = null;

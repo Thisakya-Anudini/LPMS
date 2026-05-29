@@ -113,47 +113,35 @@ export function AdminLearnersPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Search by Employee No</label>
-            {loading ? (
-              <Skeleton className="h-10 w-full rounded-md" />
-            ) : (
-              <input
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                placeholder="e.g. 011338"
-                value={employeeNoSearch}
-                onChange={(event) => setEmployeeNoSearch(event.target.value)}
-              />
-            )}
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="e.g. 011338"
+              value={employeeNoSearch}
+              onChange={(event) => setEmployeeNoSearch(event.target.value)}
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Search by Name</label>
-            {loading ? (
-              <Skeleton className="h-10 w-full rounded-md" />
-            ) : (
-              <input
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                placeholder="e.g. Tennakoon"
-                value={nameSearch}
-                onChange={(event) => setNameSearch(event.target.value)}
-              />
-            )}
+            <input
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              placeholder="e.g. Tennakoon"
+              value={nameSearch}
+              onChange={(event) => setNameSearch(event.target.value)}
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Filter by Designation</label>
-            {loading ? (
-              <Skeleton className="h-10 w-full rounded-md" />
-            ) : (
-              <select
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
-                value={designationFilter}
-                onChange={(event) => setDesignationFilter(event.target.value)}
-              >
-                {designationSelectOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+              value={designationFilter}
+              onChange={(event) => setDesignationFilter(event.target.value)}
+            >
+              {designationSelectOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 

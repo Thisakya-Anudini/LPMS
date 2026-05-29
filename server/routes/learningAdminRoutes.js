@@ -1,10 +1,13 @@
 import express from 'express';
 import {
+  assignClassEnrollments,
   createEnrollments,
   createLearningPath,
   deleteLearningPath,
   getAssignmentReports,
   getAssignableEmployeeSearchOptions,
+  getClassesByCourseCode,
+  getClassAssignmentOptions,
   getCertificateCustomizationPaths,
   getLearningSummaryReport,
   getLearningPathById,
@@ -29,9 +32,16 @@ router.post(
   createLearningPath
 );
 router.get('/learning-paths', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPaths);
+router.get(
+  '/learning-paths/:id/class-assignment-options',
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  getClassAssignmentOptions
+);
 router.get('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPathById);
 router.put('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), updateLearningPath);
 router.delete('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), deleteLearningPath);
+router.get('/courses/:courseCode/classes', protect, requireRole([ROLES.LEARNING_ADMIN]), getClassesByCourseCode);
 
 router.post(
   '/enrollments',
@@ -39,6 +49,13 @@ router.post(
   requireRole([ROLES.LEARNING_ADMIN]),
   requireFields(['learningPathId', 'selectedLearners']),
   createEnrollments
+);
+router.post(
+  '/class-enrollments',
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  requireFields(['learningPathId', 'courseCode', 'class', 'enrollmentIds']),
+  assignClassEnrollments
 );
 router.get('/assignment-reports', protect, requireRole([ROLES.LEARNING_ADMIN]), getAssignmentReports);
 router.patch(

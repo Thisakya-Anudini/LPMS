@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Bell,
   ChevronDown,
+  ChevronRight,
   GraduationCap,
   LogOut,
   Menu
@@ -23,12 +24,20 @@ type NotificationRow = {
 
 type OpenMenu = 'mobile' | 'profile' | 'notifications' | `group:${string}` | null;
 
-function TopNavLink({ link, pathname }: { link: NavigationLink; pathname: string }) {
-  const active = isLinkActive(pathname, link);
+function TopNavLink({
+  link,
+  pathname,
+  suppressActive
+}: {
+  link: NavigationLink;
+  pathname: string;
+  suppressActive?: boolean;
+}) {
+  const active = !suppressActive && isLinkActive(pathname, link);
 
   return (
     <NavLink
-      to={link.to}
+      to={link.to || '#'}
       end={link.matchMode === 'exact'}
       className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
         active
@@ -36,6 +45,58 @@ function TopNavLink({ link, pathname }: { link: NavigationLink; pathname: string
           : 'text-white/80 hover:bg-white/10 hover:text-white'
       }`}
     >
+      {link.label}
+    </NavLink>
+  );
+}
+
+function DesktopDropdownLink({
+  link,
+  pathname,
+  onClose
+}: {
+  link: NavigationLink;
+  pathname: string;
+  onClose: () => void;
+}) {
+  const active = isLinkActive(pathname, link);
+
+  if (link.children?.length) {
+    return (
+      <div className="group/nested relative">
+        <button
+          type="button"
+          className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-colors ${
+            active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+          }`}
+        >
+          <link.icon className="h-4 w-4" />
+          <span className="min-w-0 flex-1 truncate">{link.label}</span>
+          <ChevronRight className="h-4 w-4" />
+        </button>
+
+        <div className="invisible absolute left-[calc(100%-0.25rem)] top-0 z-50 w-80 rounded-3xl border border-slate-200 bg-white p-2 opacity-0 shadow-2xl transition group-hover/nested:visible group-hover/nested:opacity-100">
+          {link.children.map((child) => (
+            <DesktopDropdownLink key={`${child.to}-${child.label}`} link={child} pathname={pathname} onClose={onClose} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <NavLink
+      key={link.to}
+      to={link.to || '#'}
+      end={link.matchMode === 'exact'}
+      onClick={onClose}
+      className={({ isActive }) =>
+        `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+          isActive || active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+        }`
+      }
+    >
+      <link.icon className="h-4 w-4" />
       {link.label}
     </NavLink>
   );
@@ -75,29 +136,14 @@ function DesktopDropdown({
       </button>
 
       {openMenu === menuKey ? (
-        <div className="absolute left-0 top-12 z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="absolute left-0 top-12 z-50 w-72 rounded-3xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 px-4 py-3">
             <p className="text-sm font-semibold text-slate-900">{group.label}</p>
             <p className="mt-1 text-xs text-slate-500">Jump straight to tools in this workspace.</p>
           </div>
           <div className="p-2">
             {group.links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.matchMode === 'exact'}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                    isActive || isLinkActive(pathname, link)
-                      ? 'bg-slate-900 text-white'
-                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                  }`
-                }
-              >
-                <link.icon className="h-4 w-4" />
-                {link.label}
-              </NavLink>
+              <DesktopDropdownLink key={`${link.to}-${link.label}`} link={link} pathname={pathname} onClose={onClose} />
             ))}
           </div>
         </div>
@@ -404,7 +450,12 @@ export function Header() {
 
         <div className="hidden items-center gap-2 border-t border-white/25 py-2 lg:flex">
           {navigation.primaryLinks.map((link) => (
-            <TopNavLink key={link.to} link={link} pathname={pathname} />
+            <TopNavLink
+              key={link.to}
+              link={link}
+              pathname={pathname}
+              suppressActive={typeof openMenu === 'string' && openMenu.startsWith('group:')}
+            />
           ))}
 
           {navigation.groups.map((group) => (
@@ -448,22 +499,48 @@ export function Header() {
                     {group.label}
                   </div>
                   {group.links.map((link) => (
-                    <NavLink
-                      key={link.to}
-                      to={link.to}
-                      end={link.matchMode === 'exact'}
-                      onClick={() => setOpenMenu(null)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                          isActive || isLinkActive(pathname, link)
-                            ? 'bg-slate-900 text-white'
-                            : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                        }`
-                      }
-                    >
-                      <link.icon className="h-4 w-4" />
-                      {link.label}
-                    </NavLink>
+                    <React.Fragment key={`${link.to}-${link.label}`}>
+                      {link.children?.length ? (
+                        <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                          {link.label}
+                        </div>
+                      ) : (
+                        <NavLink
+                          to={link.to || '#'}
+                          end={link.matchMode === 'exact'}
+                          onClick={() => setOpenMenu(null)}
+                          className={({ isActive }) =>
+                            `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                              isActive || isLinkActive(pathname, link)
+                                ? 'bg-slate-900 text-white'
+                                : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                            }`
+                          }
+                        >
+                          <link.icon className="h-4 w-4" />
+                          {link.label}
+                        </NavLink>
+                      )}
+
+                      {link.children?.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to || '#'}
+                          end={child.matchMode === 'exact'}
+                          onClick={() => setOpenMenu(null)}
+                          className={({ isActive }) =>
+                            `ml-3 flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                              isActive || isLinkActive(pathname, child)
+                                ? 'bg-slate-900 text-white'
+                                : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+                            }`
+                          }
+                        >
+                          <child.icon className="h-4 w-4" />
+                          {child.label}
+                        </NavLink>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </div>
               ))}

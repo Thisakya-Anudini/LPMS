@@ -7,7 +7,15 @@ import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
 
-export function LearnerPublicPathsPage() {
+type LearnerPublicPathsPanelProps = {
+  showHeader?: boolean;
+  cardTitle?: string;
+};
+
+export function LearnerPublicPathsPanel({
+  showHeader = true,
+  cardTitle = 'Public Learning Paths - Self Enrollment'
+}: LearnerPublicPathsPanelProps) {
   const { getAccessToken, user } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -118,13 +126,15 @@ export function LearnerPublicPathsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Public Learning Paths</h1>
-        <p className="text-slate-500">Self enroll to available public learning paths.</p>
-        {user?.name ? <p className="text-sm text-slate-500 mt-1">Learner: {user.name}</p> : null}
-      </div>
+      {showHeader ? (
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Public Learning Paths</h1>
+          <p className="text-slate-500">Self enroll to available public learning paths.</p>
+          {user?.name ? <p className="text-sm text-slate-500 mt-1">Learner: {user.name}</p> : null}
+        </div>
+      ) : null}
 
-      <Card title="Public Learning Paths - Self Enrollment">
+      <Card title={cardTitle}>
         <div className="space-y-3">
           {publicLearningPaths.length === 0 && !loading ? (
             <p className="text-sm text-slate-500">No public learning paths available.</p>
@@ -232,4 +242,8 @@ export function LearnerPublicPathsPage() {
       ) : null}
     </div>
   );
+}
+
+export function LearnerPublicPathsPage() {
+  return <LearnerPublicPathsPanel />;
 }

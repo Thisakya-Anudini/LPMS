@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { BookOpen, LibraryBig, Sparkles, X } from 'lucide-react';
 import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -8,6 +8,7 @@ import { ProgressBar } from '../../components/ui/ProgressBar';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
 import { useToast } from '../../contexts/useToast';
+import { LearnerPublicPathsPanel } from './LearnerPublicPathsPage';
 
 type AssignedLearningPath = {
   enrollmentId: string;
@@ -36,6 +37,8 @@ export function LearnerMyProgressPage() {
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [courseUpdateLoadingId, setCourseUpdateLoadingId] = useState<string | null>(null);
+  const [activeLearningSection, setActiveLearningSection] = useState<'assigned' | 'self'>('assigned');
+  const [activeSelfEnrollmentSection, setActiveSelfEnrollmentSection] = useState<'public' | 'other'>('public');
   const [isSupervisor, setIsSupervisor] = useState(Boolean(user?.isSupervisor));
   const [learnerName, setLearnerName] = useState(user?.name || 'Learner');
   const [assignedLearningPaths, setAssignedLearningPaths] = useState<AssignedLearningPath[]>([]);
@@ -214,62 +217,148 @@ export function LearnerMyProgressPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {statSkeletons.map((index) => (
-          <Card key={`progress-stat-${index}`} className="p-6">
-            <p className="text-sm font-medium text-secondary-600">
-              {index === 0 ? 'Assigned Learning Paths' : index === 1 ? 'Completed Learning Paths' : 'Pending Learning Paths'}
-            </p>
-            {loading ? (
-              <Skeleton className="mt-2 h-9 w-16" />
-            ) : (
-              <p className={`text-3xl font-bold ${index === 1 ? 'text-success-600' : index === 2 ? 'text-warning-600' : 'text-secondary-900'}`}>
-                {index === 0 ? summary.totalLearningPaths : index === 1 ? summary.completedLearningPaths : summary.remainingLearningPaths}
-              </p>
-            )}
-          </Card>
-        ))}
+      <div className="rounded-xl border border-secondary-200 bg-white p-2 shadow-soft">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setActiveLearningSection('assigned')}
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-all ${
+              activeLearningSection === 'assigned'
+                ? 'bg-primary-600 text-white shadow-soft'
+                : 'text-secondary-700 hover:bg-secondary-50'
+            }`}
+          >
+            <BookOpen className="h-5 w-5" />
+            <span>
+              <span className="block text-sm font-semibold">Assigned LPs</span>
+              <span className={`block text-xs ${activeLearningSection === 'assigned' ? 'text-primary-100' : 'text-secondary-500'}`}>
+                Learning paths assigned to you
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveLearningSection('self')}
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-all ${
+              activeLearningSection === 'self'
+                ? 'bg-primary-600 text-white shadow-soft'
+                : 'text-secondary-700 hover:bg-secondary-50'
+            }`}
+          >
+            <Sparkles className="h-5 w-5" />
+            <span>
+              <span className="block text-sm font-semibold">Self Enrollment</span>
+              <span className={`block text-xs ${activeLearningSection === 'self' ? 'text-primary-100' : 'text-secondary-500'}`}>
+                Public LPs and other learning options
+              </span>
+            </span>
+          </button>
+        </div>
       </div>
 
-      <Card title="My Learning Progress" className="animate-fade-in">
+      {activeLearningSection === 'assigned' ? (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {statSkeletons.map((index) => (
+              <Card key={`progress-stat-${index}`} className="p-6">
+                <p className="text-sm font-medium text-secondary-600">
+                  {index === 0 ? 'Assigned Learning Paths' : index === 1 ? 'Completed Learning Paths' : 'Pending Learning Paths'}
+                </p>
+                {loading ? (
+                  <Skeleton className="mt-2 h-9 w-16" />
+                ) : (
+                  <p className={`text-3xl font-bold ${index === 1 ? 'text-success-600' : index === 2 ? 'text-warning-600' : 'text-secondary-900'}`}>
+                    {index === 0 ? summary.totalLearningPaths : index === 1 ? summary.completedLearningPaths : summary.remainingLearningPaths}
+                  </p>
+                )}
+              </Card>
+            ))}
+          </div>
+
+          <Card title="Assigned LPs" className="animate-fade-in">
+            <div className="space-y-4">
+              {loading ? (
+                listSkeletons.map((index) => (
+                  <div key={`progress-row-skeleton-${index}`} className="rounded-xl border border-secondary-200 bg-white p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <Skeleton className="h-5 w-48" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                ))
+              ) : assignedLearningPaths.map((path) => (
+                <button
+                  key={path.enrollmentId}
+                  type="button"
+                  onClick={() => openLearningPathModal(path.enrollmentId)}
+                  className="w-full text-left p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200 group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-semibold text-secondary-900 group-hover:text-primary-700">{path.title}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                      path.status === 'COMPLETED'
+                        ? 'bg-success-100 text-success-700'
+                        : path.status === 'IN_PROGRESS'
+                        ? 'bg-warning-100 text-warning-700'
+                        : 'bg-secondary-100 text-secondary-700'
+                    }`}>
+                      {path.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                  <ProgressBar progress={path.progress} showLabel size="sm" />
+                </button>
+              ))}
+              {!loading && assignedLearningPaths.length === 0 ? (
+                <p className="text-sm text-secondary-500 text-center py-8">No assigned learning paths yet.</p>
+              ) : null}
+            </div>
+          </Card>
+        </>
+      ) : (
         <div className="space-y-4">
-          {loading ? (
-            listSkeletons.map((index) => (
-              <div key={`progress-row-skeleton-${index}`} className="rounded-xl border border-secondary-200 bg-white p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                </div>
-                <Skeleton className="h-3 w-full" />
+          <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-2">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setActiveSelfEnrollmentSection('public')}
+                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                  activeSelfEnrollmentSection === 'public'
+                    ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
+                    : 'text-secondary-600 hover:bg-white/70'
+                }`}
+              >
+                <Sparkles className="h-4 w-4" />
+                Public LPs
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSelfEnrollmentSection('other')}
+                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                  activeSelfEnrollmentSection === 'other'
+                    ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
+                    : 'text-secondary-600 hover:bg-white/70'
+                }`}
+              >
+                <LibraryBig className="h-4 w-4" />
+                Other Courses
+              </button>
+            </div>
+          </div>
+
+          {activeSelfEnrollmentSection === 'public' ? (
+            <LearnerPublicPathsPanel showHeader={false} cardTitle="Public LPs" />
+          ) : (
+            <Card title="Other Courses">
+              <div className="rounded-xl border border-dashed border-secondary-300 bg-secondary-50 px-4 py-10 text-center">
+                <LibraryBig className="mx-auto h-8 w-8 text-secondary-400" />
+                <p className="mt-3 text-sm font-semibold text-secondary-800">Other Courses</p>
+                <p className="mt-1 text-sm text-secondary-500">This section is ready for the next integration.</p>
               </div>
-            ))
-          ) : assignedLearningPaths.map((path) => (
-            <button
-              key={path.enrollmentId}
-              type="button"
-              onClick={() => openLearningPathModal(path.enrollmentId)}
-              className="w-full text-left p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200 group"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <p className="font-semibold text-secondary-900 group-hover:text-primary-700">{path.title}</p>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  path.status === 'COMPLETED'
-                    ? 'bg-success-100 text-success-700'
-                    : path.status === 'IN_PROGRESS'
-                    ? 'bg-warning-100 text-warning-700'
-                    : 'bg-secondary-100 text-secondary-700'
-                }`}>
-                  {path.status.replace('_', ' ')}
-                </span>
-              </div>
-              <ProgressBar progress={path.progress} showLabel size="sm" />
-            </button>
-          ))}
-          {!loading && assignedLearningPaths.length === 0 ? (
-            <p className="text-sm text-secondary-500 text-center py-8">No assigned learning paths yet.</p>
-          ) : null}
+            </Card>
+          )}
         </div>
-      </Card>
+      )}
 
       {selectedEnrollmentId ? (
         <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
