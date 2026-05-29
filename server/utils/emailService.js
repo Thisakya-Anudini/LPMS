@@ -2,7 +2,7 @@ import net from 'net';
 import tls from 'tls';
 
 const DEFAULT_ALLOWED_EMPLOYEE_NUMBERS = ['020998', '008668'];
-const TEMP_TEST_COPY_EMAIL = 'sudam17fernando@gmail.com';
+const DEFAULT_BLOCKED_EMAIL_DOMAINS = ['erp.local'];
 
 const normalizeEmployeeNumber = (value) => String(value || '').trim();
 
@@ -14,13 +14,29 @@ const getAllowedEmployeeNumbers = () => {
 
 const isEmailEnabled = () => String(process.env.EMAIL_ENABLED || 'true').toLowerCase() !== 'false';
 
+const getBlockedEmailDomains = () => {
+  const configured = String(process.env.EMAIL_BLOCKED_DOMAINS || '').trim();
+  const source = configured ? configured.split(',') : DEFAULT_BLOCKED_EMAIL_DOMAINS;
+  return new Set(source.map((domain) => String(domain || '').trim().toLowerCase()).filter(Boolean));
+};
+
+const getEmailDomain = (email) => String(email || '').trim().toLowerCase().split('@').pop() || '';
+
+const canSendToEmailAddress = (email) => {
+  const normalizedEmail = String(email || '').trim();
+  if (!normalizedEmail || !normalizedEmail.includes('@')) {
+    return false;
+  }
+  return !getBlockedEmailDomains().has(getEmailDomain(normalizedEmail));
+};
+
 export const canSendEmailToEmployee = (employeeNumber) =>
   isEmailEnabled() && getAllowedEmployeeNumbers().has(normalizeEmployeeNumber(employeeNumber));
 
 const getSmtpConfig = () => ({
   host: process.env.SMTP_HOST || 'mail.slt.com.lk',
   port: Number(process.env.SMTP_PORT || 25),
-  secure: String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true',
+  secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
   startTls: String(process.env.SMTP_STARTTLS || 'false').toLowerCase() === 'true',
   rejectUnauthorized: String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'false').toLowerCase() === 'true',
   username: process.env.SMTP_USERNAME || 'lpms',
@@ -74,6 +90,8 @@ const createMessage = ({ to, subject, html, text }) => {
   ].join('\r\n');
 };
 
+const getSmtpTimeoutMs = () => Number(process.env.SMTP_TIMEOUT_MS || 15000);
+
 const createSmtpSession = (config) => new Promise((resolve, reject) => {
   const socket = config.secure
     ? tls.connect({
@@ -84,36 +102,75 @@ const createSmtpSession = (config) => new Promise((resolve, reject) => {
     })
     : net.connect({ host: config.host, port: config.port });
 
-  socket.setEncoding('utf8');
-  socket.setTimeout(Number(process.env.SMTP_TIMEOUT_MS || 15000));
-  socket.once('connect', () => resolve(socket));
-  socket.once('secureConnect', () => resolve(socket));
-  socket.once('timeout', () => {
+  let settled = false;
+  const settle = (callback, value) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    socket.off('connect', onConnect);
+    socket.off('secureConnect', onSecureConnect);
+    socket.off('timeout', onTimeout);
+    socket.off('error', onError);
+    callback(value);
+  };
+  const onConnect = () => {
+    if (!config.secure) {
+      settle(resolve, socket);
+    }
+  };
+  const onSecureConnect = () => settle(resolve, socket);
+  const onTimeout = () => {
     socket.destroy();
-    reject(new Error('SMTP connection timed out.'));
-  });
-  socket.once('error', reject);
+    settle(reject, new Error('SMTP connection timed out.'));
+  };
+  const onError = (error) => settle(reject, error);
+
+  socket.setEncoding('utf8');
+  socket.setTimeout(getSmtpTimeoutMs());
+  socket.once('connect', onConnect);
+  socket.once('secureConnect', onSecureConnect);
+  socket.once('timeout', onTimeout);
+  socket.once('error', onError);
 });
 
 const readResponse = (socket) => new Promise((resolve, reject) => {
   let buffer = '';
+  let settled = false;
+  const cleanup = () => {
+    socket.off('data', onData);
+    socket.off('error', onError);
+    socket.off('timeout', onTimeout);
+    socket.off('close', onClose);
+  };
+  const settle = (callback, value) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    cleanup();
+    callback(value);
+  };
   const onData = (chunk) => {
     buffer += chunk;
     const lines = buffer.split(/\r?\n/).filter(Boolean);
     const lastLine = lines[lines.length - 1] || '';
     if (/^\d{3}\s/.test(lastLine)) {
-      socket.off('data', onData);
       const code = Number(lastLine.slice(0, 3));
-      resolve({ code, message: buffer });
+      settle(resolve, { code, message: buffer });
     }
   };
-  const onError = (error) => {
-    socket.off('data', onData);
-    reject(error);
+  const onError = (error) => settle(reject, error);
+  const onTimeout = () => {
+    socket.destroy();
+    settle(reject, new Error('SMTP response timed out.'));
   };
+  const onClose = () => settle(reject, new Error('SMTP connection closed before server response.'));
 
   socket.on('data', onData);
   socket.once('error', onError);
+  socket.once('timeout', onTimeout);
+  socket.once('close', onClose);
 });
 
 const writeCommand = async (socket, command, expectedCodes = []) => {
@@ -123,6 +180,35 @@ const writeCommand = async (socket, command, expectedCodes = []) => {
     throw new Error(`SMTP command failed (${response.code}): ${response.message}`);
   }
   return response;
+};
+
+const introduceSmtpClient = async (socket) => {
+  const heloDomain = process.env.SMTP_HELO_DOMAIN || 'lpms.slt.com.lk';
+  try {
+    return await writeCommand(socket, `EHLO ${heloDomain}`, [250]);
+  } catch (error) {
+    if (error.message === 'SMTP connection closed before server response.') {
+      throw error;
+    }
+    console.warn('LPMS SMTP EHLO failed; retrying with HELO.', {
+      message: error.message
+    });
+    return writeCommand(socket, `HELO ${heloDomain}`, [250]);
+  }
+};
+
+const readInitialGreeting = async (socket) => {
+  try {
+    return await readResponse(socket);
+  } catch (error) {
+    if (error.message === 'SMTP response timed out.') {
+      console.warn('LPMS SMTP greeting timed out; continuing with EHLO.', {
+        message: error.message
+      });
+      return null;
+    }
+    throw error;
+  }
 };
 
 const authenticateIfConfigured = async (socket, config) => {
@@ -141,12 +227,15 @@ export const sendEmail = async ({ to, subject, html, text }) => {
   if (!to) {
     return { skipped: true, reason: 'Recipient email is empty.' };
   }
+  if (!canSendToEmailAddress(to)) {
+    return { skipped: true, reason: 'Recipient email is not deliverable.' };
+  }
 
   let socket;
   try {
     socket = await createSmtpSession(config);
-    await readResponse(socket);
-    await writeCommand(socket, `EHLO ${process.env.SMTP_HELO_DOMAIN || 'lpms.local'}`, [250]);
+    await readInitialGreeting(socket);
+    await introduceSmtpClient(socket);
 
     if (!config.secure && config.startTls) {
       await writeCommand(socket, 'STARTTLS', [220]);
@@ -155,7 +244,7 @@ export const sendEmail = async ({ to, subject, html, text }) => {
         servername: config.host,
         rejectUnauthorized: config.rejectUnauthorized
       });
-      await writeCommand(socket, `EHLO ${process.env.SMTP_HELO_DOMAIN || 'lpms.local'}`, [250]);
+      await introduceSmtpClient(socket);
     }
 
     await authenticateIfConfigured(socket, config);
@@ -198,12 +287,44 @@ const wrapEmail = ({ title, learnerName, intro, details }) => `
 
 const safelySendNotificationEmail = async ({ employeeNumber, to, subject, html, text }) => {
   if (!canSendEmailToEmployee(employeeNumber)) {
+    console.info('LPMS email skipped:', {
+      employeeNumber,
+      to,
+      subject,
+      reason: 'Employee is outside email test allowlist.'
+    });
     return { skipped: true, reason: 'Employee is outside email test allowlist.' };
   }
 
-  const results = [];
   try {
-    results.push({ to, ...(await sendEmail({ to, subject, html, text })) });
+    console.info('LPMS email sending:', {
+      employeeNumber,
+      to,
+      subject,
+      smtp: {
+        host: getSmtpConfig().host,
+        port: getSmtpConfig().port,
+        secure: getSmtpConfig().secure,
+        startTls: getSmtpConfig().startTls
+      }
+    });
+    const result = await sendEmail({ to, subject, html, text });
+    if (result.skipped) {
+      console.info('LPMS email skipped:', {
+        employeeNumber,
+        to,
+        subject,
+        reason: result.reason
+      });
+    }
+    if (result.sent) {
+      console.info('LPMS email sent:', {
+        employeeNumber,
+        to,
+        subject
+      });
+    }
+    return result;
   } catch (error) {
     console.error('LPMS email send failed:', {
       employeeNumber,
@@ -211,27 +332,8 @@ const safelySendNotificationEmail = async ({ employeeNumber, to, subject, html, 
       subject,
       message: error.message
     });
-    results.push({ to, failed: true, error: error.message });
+    return { failed: true, error: error.message };
   }
-
-  if (TEMP_TEST_COPY_EMAIL && TEMP_TEST_COPY_EMAIL !== to) {
-    try {
-      results.push({
-        to: TEMP_TEST_COPY_EMAIL,
-        ...(await sendEmail({ to: TEMP_TEST_COPY_EMAIL, subject, html, text }))
-      });
-    } catch (error) {
-      console.error('LPMS test copy email send failed:', {
-        employeeNumber,
-        to: TEMP_TEST_COPY_EMAIL,
-        subject,
-        message: error.message
-      });
-      results.push({ to: TEMP_TEST_COPY_EMAIL, failed: true, error: error.message });
-    }
-  }
-
-  return { results };
 };
 
 export const sendLearningPathAssignedEmail = async ({ employeeNumber, to, learnerName, learningPathTitle }) =>

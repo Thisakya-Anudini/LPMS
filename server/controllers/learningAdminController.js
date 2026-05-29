@@ -1120,12 +1120,32 @@ export const createEnrollments = async (req, res) => {
     }
     const created = await query(
       `
-        INSERT INTO enrollments (principal_id, learning_path_id, status, progress, enrolled_at, enrollment_source)
-        VALUES ($1, $2, 'NOT_STARTED', 0, NOW(), 'LEARNING_ADMIN')
+        INSERT INTO enrollments (
+          principal_id,
+          learning_path_id,
+          status,
+          progress,
+          enrolled_at,
+          enrollment_source,
+          employee_number,
+          learner_name,
+          learner_email,
+          learner_designation,
+          learner_grade_name
+        )
+        VALUES ($1, $2, 'NOT_STARTED', 0, NOW(), 'LEARNING_ADMIN', $3, $4, $5, $6, $7)
         ON CONFLICT (principal_id, learning_path_id) DO NOTHING
         RETURNING id, principal_id, learning_path_id, status, progress, enrolled_at
       `,
-      [principalId, learningPathId]
+      [
+        principalId,
+        learningPathId,
+        String(learner.employeeNumber || '').trim(),
+        normalizeEmployeeDisplayName(learner, learner.employeeNumber),
+        learner.email ? String(learner.email).trim().toLowerCase() : '',
+        learner.designation ? String(learner.designation).trim() : 'Learner',
+        learner.gradeName ? String(learner.gradeName).trim() : 'N/A'
+      ]
     );
     if (created.rowCount > 0) {
       inserted.push(created.rows[0]);
@@ -1155,6 +1175,12 @@ export const createEnrollments = async (req, res) => {
           employeeNumber: String(learner.employeeNumber || '').trim(),
           message: error.message
         });
+      });
+    } else {
+      console.info('LPMS learning path assignment email skipped:', {
+        employeeNumber: String(learner.employeeNumber || '').trim(),
+        learningPathId,
+        reason: 'Learner is already assigned to this learning path.'
       });
     }
   }
@@ -1593,12 +1619,21 @@ export const assignClassEnrollments = async (req, res) => {
     `
       SELECT
         en.id,
-        ap.name,
-        ap.email,
+        COALESCE(NULLIF(en.learner_name, ''), ap.name) AS name,
+        COALESCE(NULLIF(en.learner_email, ''), NULLIF(latest_report.learner_email, ''), ap.email) AS email,
         e.employee_number
       FROM enrollments en
       JOIN auth_principals ap ON ap.id = en.principal_id
       LEFT JOIN employees e ON e.principal_id = ap.id
+      LEFT JOIN LATERAL (
+        SELECT arl.learner_email
+        FROM assignment_reports ar
+        JOIN assignment_report_learners arl ON arl.report_id = ar.id
+        WHERE ar.learning_path_id = en.learning_path_id
+          AND arl.employee_number = e.employee_number
+        ORDER BY ar.assigned_at DESC, ar.created_at DESC
+        LIMIT 1
+      ) latest_report ON TRUE
       WHERE en.learning_path_id = $1
         AND en.id = ANY($2::uuid[])
     `,
