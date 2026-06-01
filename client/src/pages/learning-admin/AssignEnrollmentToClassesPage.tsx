@@ -51,12 +51,24 @@ type EnrolledLearner = {
   classAssignments: Array<{
     id: string;
     courseCode: string;
-      classId: string;
-      classCode: string | null;
-      classTitle: string | null;
-      classPayload?: Record<string, unknown>;
-      assignedAt: string;
-    }>;
+    classId: string;
+    classCode: string | null;
+    classTitle: string | null;
+    classPayload?: Record<string, unknown>;
+    assignedAt: string;
+  }>;
+};
+
+type ClassReportGroup = {
+  key: string;
+  learningPathTitle: string;
+  courseCode: string;
+  courseTitle: string;
+  classCode: string;
+  classTitle: string;
+  startDate: string;
+  endDate: string;
+  learners: Array<{ id: string; name: string }>;
 };
 
 const getAssignmentForCourse = (learner: EnrolledLearner, courseCode: string) =>
@@ -123,10 +135,30 @@ const getClassPayloadDate = (
   );
 };
 
-const escapeCsvValue = (value: unknown) => {
-  const text = String(value ?? '');
-  return `"${text.replace(/"/g, '""')}"`;
+const downloadBlob = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 };
+
+const safeFilenamePart = (value: string, fallback: string) =>
+  (value || fallback)
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || fallback;
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 export function AssignEnrollmentToClassesPage() {
   const { getAccessToken } = useAuth();
@@ -145,6 +177,8 @@ export function AssignEnrollmentToClassesPage() {
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [classesLoading, setClassesLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
+  const [selectedReportGroupKey, setSelectedReportGroupKey] = useState('');
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'assign' | 'reports'>('assign');
 
   const selectedPath = useMemo(
     () => learningPaths.find((path) => path.id === selectedPathId) || null,
@@ -266,6 +300,51 @@ export function AssignEnrollmentToClassesPage() {
     };
   }, [reportRows]);
 
+  const classReportGroups = useMemo<ClassReportGroup[]>(() => {
+    const groups = new Map<string, ClassReportGroup>();
+
+    for (const row of reportRows) {
+      if (row.assignmentStatus !== 'Assigned' || !row.classCode) {
+        continue;
+      }
+
+      const key = `${row.courseCode}::${row.classCode}`;
+      const existing = groups.get(key);
+      const learner = {
+        id: row.employeeNumber || '',
+        name: row.learnerName
+      };
+
+      if (existing) {
+        existing.learners.push(learner);
+      } else {
+        groups.set(key, {
+          key,
+          learningPathTitle: row.learningPath,
+          courseCode: row.courseCode,
+          courseTitle: row.courseTitle,
+          classCode: row.classCode,
+          classTitle: row.classTitle,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          learners: [learner]
+        });
+      }
+    }
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      learners: group.learners.sort((first, second) =>
+        first.name.localeCompare(second.name) || first.id.localeCompare(second.id)
+      )
+    }));
+  }, [reportRows]);
+
+  const selectedReportGroup = useMemo(
+    () => classReportGroups.find((group) => group.key === selectedReportGroupKey) || classReportGroups[0] || null,
+    [classReportGroups, selectedReportGroupKey]
+  );
+
   const loadLearningPaths = useCallback(async () => {
     try {
       setPathsLoading(true);
@@ -352,6 +431,16 @@ export function AssignEnrollmentToClassesPage() {
     loadClasses();
   }, [loadClasses]);
 
+  useEffect(() => {
+    if (classReportGroups.length === 0) {
+      setSelectedReportGroupKey('');
+      return;
+    }
+    if (!classReportGroups.some((group) => group.key === selectedReportGroupKey)) {
+      setSelectedReportGroupKey(classReportGroups[0].key);
+    }
+  }, [classReportGroups, selectedReportGroupKey]);
+
   const toggleLearner = (enrollmentId: string) => {
     setSelectedEnrollmentIds((prev) =>
       prev.includes(enrollmentId) ? prev.filter((id) => id !== enrollmentId) : [...prev, enrollmentId]
@@ -402,60 +491,66 @@ export function AssignEnrollmentToClassesPage() {
     }
   };
 
-  const downloadReport = () => {
-    if (reportRows.length === 0) {
-      showToast('Select a learning path with learners and courses before downloading the report.', 'error');
+  const downloadSelectedReportExcel = () => {
+    if (!selectedReportGroup) {
+      showToast('Select a course class report before downloading Excel.', 'error');
       return;
     }
 
-    const headers = [
-      'Learning Path',
-      'Employee No',
-      'Learner Name',
-      'Email',
-      'Designation',
-      'Grade',
-      'Course Code',
-      'Course Title',
-      'Class Code',
-      'Class Title',
-      'Start Date',
-      'End Date',
-      'Assignment Status'
-    ];
-    const csv = [
-      headers.map(escapeCsvValue).join(','),
-      ...reportRows.map((row) =>
-        [
-          row.learningPath,
-          row.employeeNumber,
-          row.learnerName,
-          row.email,
-          row.designation,
-          row.gradeName,
-          row.courseCode,
-          row.courseTitle,
-          row.classCode,
-          row.classTitle,
-          row.startDate,
-          row.endDate,
-          row.assignmentStatus
-        ]
-          .map(escapeCsvValue)
-          .join(',')
+    const rows = selectedReportGroup.learners
+      .map(
+        (learner) => `
+          <tr>
+            <td>${escapeHtml(learner.id)}</td>
+            <td>${escapeHtml(learner.name)}</td>
+          </tr>`
       )
-    ].join('\n');
+      .join('');
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const safeTitle = (selectedPath?.title || 'learning-path-report').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-    link.href = url;
-    link.download = `${safeTitle}-class-assignment-report.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const workbookHtml = `
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+        </head>
+        <body>
+          <table border="1">
+            <tbody>
+              <tr>
+                <th>Learning Path</th>
+                <td>${escapeHtml(selectedReportGroup.learningPathTitle)}</td>
+              </tr>
+              <tr>
+                <th>Course</th>
+                <td>${escapeHtml(selectedReportGroup.courseCode)} - ${escapeHtml(selectedReportGroup.courseTitle)}</td>
+              </tr>
+              <tr>
+                <th>Class</th>
+                <td>${escapeHtml(selectedReportGroup.classCode)} - ${escapeHtml(selectedReportGroup.classTitle)}</td>
+              </tr>
+              <tr>
+                <td></td>
+                <td></td>
+              </tr>
+            </tbody>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </body>
+      </html>`;
+
+    downloadBlob(
+      new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' }),
+      `${safeFilenamePart(selectedReportGroup.learningPathTitle, 'learning-path')}_${safeFilenamePart(
+        selectedReportGroup.courseCode,
+        'course'
+      )}_${safeFilenamePart(selectedReportGroup.classCode, 'class')}_learners.xls`
+    );
+    showToast('Excel report downloaded.', 'success');
   };
 
   const pathOptions = [
@@ -550,9 +645,43 @@ export function AssignEnrollmentToClassesPage() {
         ) : null}
       </Card>
 
+      <div className="flex flex-col gap-3 rounded-xl border border-secondary-200 bg-white p-3 shadow-soft sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-2 gap-2 sm:w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveWorkspaceTab('assign')}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+              activeWorkspaceTab === 'assign'
+                ? 'bg-primary-700 text-white shadow-sm'
+                : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
+            }`}
+          >
+            Assign learners
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveWorkspaceTab('reports')}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+              activeWorkspaceTab === 'reports'
+                ? 'bg-primary-700 text-white shadow-sm'
+                : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
+            }`}
+          >
+            Reports
+          </button>
+        </div>
+        <p className="text-sm text-secondary-500">
+          {activeWorkspaceTab === 'assign'
+            ? `${selectedEnrollmentIds.length} selected / ${filteredLearners.length} available`
+            : `${classReportGroups.length} report box(es) ready`}
+        </p>
+      </div>
+
+      {activeWorkspaceTab === 'assign' ? (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(320px,430px)_minmax(0,1fr)]">
       <Card title="ERP Classes" description="Classes are loaded from ERP using the selected course code.">
         {classesLoading ? (
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3">
             <Skeleton className="h-28 w-full" />
             <Skeleton className="h-28 w-full" />
           </div>
@@ -561,7 +690,7 @@ export function AssignEnrollmentToClassesPage() {
         ) : classes.length === 0 ? (
           <p className="text-sm text-secondary-500">No ERP classes found for this course.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="grid max-h-[34rem] grid-cols-1 gap-3 overflow-auto pr-1">
             {classes.map((classItem) => {
               const active = selectedClassId === classItem.id;
               return (
@@ -640,11 +769,10 @@ export function AssignEnrollmentToClassesPage() {
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-secondary-200">
-          <div className="grid min-w-[920px] grid-cols-[48px_1.5fr_1fr_1fr_1fr] bg-secondary-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-secondary-500">
+          <div className="grid min-w-[760px] grid-cols-[48px_1.6fr_120px_1fr] bg-secondary-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-secondary-500">
             <span />
             <span>Learner</span>
             <span>Employee No</span>
-            <span>Designation</span>
             <span>Current Class</span>
           </div>
 
@@ -659,14 +787,14 @@ export function AssignEnrollmentToClassesPage() {
               No unassigned learners found for this course. Check the report below to view learners already assigned to classes.
             </p>
           ) : (
-            <div className="max-h-[32rem] min-w-[920px] divide-y divide-secondary-100 overflow-auto">
+            <div className="max-h-[32rem] min-w-[760px] divide-y divide-secondary-100 overflow-auto">
               {filteredLearners.map((learner) => {
                 const assignedClass = getAssignmentForCourse(learner, selectedCourseCode);
                 const checked = selectedEnrollmentIds.includes(learner.enrollmentId);
                 return (
                   <label
                     key={learner.enrollmentId}
-                    className={`grid cursor-pointer grid-cols-[48px_1.5fr_1fr_1fr_1fr] items-center px-4 py-3 text-sm transition ${
+                    className={`grid cursor-pointer grid-cols-[48px_1.6fr_120px_1fr] items-center px-4 py-3 text-sm transition ${
                       checked ? 'bg-primary-50' : 'bg-white hover:bg-secondary-50'
                     }`}
                   >
@@ -681,7 +809,6 @@ export function AssignEnrollmentToClassesPage() {
                       <span className="block text-xs text-secondary-500">{learner.email}</span>
                     </span>
                     <span className="text-secondary-700">{learner.employeeNumber || '-'}</span>
-                    <span className="text-secondary-700">{learner.designation || '-'}</span>
                     <span className="text-secondary-700">
                       {assignedClass ? assignedClass.classTitle || assignedClass.classCode || assignedClass.classId : '-'}
                     </span>
@@ -692,24 +819,31 @@ export function AssignEnrollmentToClassesPage() {
           )}
         </div>
       </Card>
+        </div>
+      ) : null}
 
+      {activeWorkspaceTab === 'reports' ? (
       <Card
-        title="Learning Path Class Report"
-        description="Complete view of enrolled learners, learning path courses, and class assignment status."
+        title="Course/Class Learner Reports"
+        description="Select a course class box to view learner details and download the Excel report."
         action={
-          <Button variant="outline" onClick={downloadReport} disabled={reportRows.length === 0}>
+          <Button
+            variant="outline"
+            onClick={downloadSelectedReportExcel}
+            disabled={!selectedReportGroup}
+          >
             <Download className="h-4 w-4" />
-            Export CSV
+            Download Excel
           </Button>
         }
       >
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-secondary-200 bg-secondary-50 p-4">
-            <p className="text-sm text-secondary-500">Report Rows</p>
-            <p className="mt-1 text-xl font-bold text-secondary-900">{reportSummary.total}</p>
+            <p className="text-sm text-secondary-500">Assignment Boxes</p>
+            <p className="mt-1 text-xl font-bold text-secondary-900">{classReportGroups.length}</p>
           </div>
           <div className="rounded-lg border border-success-200 bg-success-50 p-4">
-            <p className="text-sm text-success-700">Assigned</p>
+            <p className="text-sm text-success-700">Assigned Rows</p>
             <p className="mt-1 text-xl font-bold text-success-800">{reportSummary.assigned}</p>
           </div>
           <div className="rounded-lg border border-warning-200 bg-warning-50 p-4">
@@ -718,56 +852,91 @@ export function AssignEnrollmentToClassesPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-secondary-200">
-          <div className="grid min-w-[1180px] grid-cols-[1.2fr_1fr_1.2fr_1.2fr_1fr_1fr] bg-secondary-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-secondary-500">
-            <span>Learner</span>
-            <span>Employee No</span>
-            <span>Course</span>
-            <span>Class</span>
-            <span>Dates</span>
-            <span>Status</span>
-          </div>
-
-          {reportRows.length === 0 ? (
-            <p className="p-4 text-sm text-secondary-500">Select a learning path to generate the report.</p>
-          ) : (
-            <div className="max-h-[34rem] min-w-[1180px] divide-y divide-secondary-100 overflow-auto">
-              {reportRows.map((row) => (
-                <div
-                  key={`${row.employeeNumber}-${row.courseCode}`}
-                  className="grid grid-cols-[1.2fr_1fr_1.2fr_1.2fr_1fr_1fr] items-center px-4 py-3 text-sm"
-                >
-                  <span>
-                    <span className="block font-medium text-secondary-900">{row.learnerName}</span>
-                    <span className="block text-xs text-secondary-500">{row.email}</span>
-                  </span>
-                  <span className="text-secondary-700">{row.employeeNumber || '-'}</span>
-                  <span>
-                    <span className="block font-medium text-secondary-900">{row.courseCode}</span>
-                    <span className="block text-xs text-secondary-500">{row.courseTitle}</span>
-                  </span>
-                  <span>
-                    <span className="block font-medium text-secondary-900">{row.classTitle || '-'}</span>
-                    <span className="block text-xs text-secondary-500">{row.classCode || '-'}</span>
-                  </span>
-                  <span className="text-secondary-700">
-                    {row.startDate || '-'} / {row.endDate || '-'}
-                  </span>
-                  <span
-                    className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-semibold ${
-                      row.assignmentStatus === 'Assigned'
-                        ? 'bg-success-100 text-success-700'
-                        : 'bg-warning-100 text-warning-700'
+        {reportRows.length === 0 ? (
+          <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
+            Select a learning path to generate the report.
+          </p>
+        ) : classReportGroups.length === 0 ? (
+          <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
+            No course classes have assigned learners yet.
+          </p>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {classReportGroups.map((group) => {
+                const active = selectedReportGroup?.key === group.key;
+                return (
+                  <button
+                    key={group.key}
+                    type="button"
+                    onClick={() => setSelectedReportGroupKey(group.key)}
+                    className={`rounded-lg border p-4 text-left transition ${
+                      active
+                        ? 'border-primary-500 bg-primary-50 shadow-sm'
+                        : 'border-secondary-200 bg-white hover:border-primary-300 hover:bg-secondary-50'
                     }`}
                   >
-                    {row.assignmentStatus}
+                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                      {group.learningPathTitle}
+                    </p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <p className="font-semibold text-secondary-900">{group.courseCode}</p>
+                        <p className="text-xs text-secondary-500">{group.courseTitle}</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-secondary-900">Class No: {group.classCode}</p>
+                        <p className="text-xs text-secondary-500">{group.classTitle || '-'}</p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-primary-700">{group.learners.length} learner(s)</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedReportGroup ? (
+              <div className="rounded-lg border border-secondary-200">
+                <div className="grid gap-2 border-b border-secondary-200 bg-secondary-50 px-4 py-3 text-sm lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-center">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Learning Path</p>
+                    <p className="font-semibold text-secondary-900">{selectedReportGroup.learningPathTitle}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Course</p>
+                    <p className="font-semibold text-secondary-900">{selectedReportGroup.courseCode}</p>
+                    <p className="text-xs text-secondary-500">{selectedReportGroup.courseTitle}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Class</p>
+                    <p className="font-semibold text-secondary-900">Class No: {selectedReportGroup.classCode}</p>
+                    <p className="text-xs text-secondary-500">{selectedReportGroup.classTitle || '-'}</p>
+                  </div>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                    {selectedReportGroup.learners.length} learner(s)
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+                <div className="grid grid-cols-[160px_1fr] border-b border-secondary-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                  <span>ID</span>
+                  <span>Name</span>
+                </div>
+                <div className="max-h-80 divide-y divide-secondary-100 overflow-auto">
+                  {selectedReportGroup.learners.map((learner) => (
+                    <div
+                      key={`${selectedReportGroup.key}-${learner.id}`}
+                      className="grid grid-cols-[160px_1fr] px-4 py-2 text-sm"
+                    >
+                      <span className="text-secondary-700">{learner.id || '-'}</span>
+                      <span className="font-medium text-secondary-900">{learner.name || '-'}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
       </Card>
+      ) : null}
     </div>
   );
 }
