@@ -294,7 +294,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/20 bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] backdrop-blur">
-      <div className="mx-auto max-w-7xl px-4 lg:px-0">
+      <div className="w-full px-3 sm:px-5 lg:px-10 xl:px-14">
         <div className="flex h-16 items-center gap-4">
           <Link to="/" className="flex shrink-0 items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/50 bg-white/10 backdrop-blur-md text-white shadow-sm">
