@@ -319,23 +319,31 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => handleToggleMenu('notifications')}
-                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-white transition-colors hover:bg-white/20"
+                className={`relative inline-flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all duration-300 ${
+                  openMenu === 'notifications'
+                    ? 'border-white bg-white/25 text-white shadow-lg scale-105'
+                    : 'border-white/35 bg-white/10 text-white hover:bg-white/20 hover:border-white/50'
+                }`}
                 aria-label="Notifications"
               >
-                <Bell className="h-5 w-5" />
+                <Bell className={`h-6 w-6 transition-transform duration-300 ${openMenu === 'notifications' ? 'scale-110' : ''}`} />
                 {unreadLabel ? (
-                  <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-white px-1.5 text-[10px] font-bold leading-5 text-slate-950 shadow-sm">
+                  <span className={`absolute -right-2 -top-2 min-w-[24px] rounded-full px-1.5 py-0.5 text-xs font-bold leading-4 shadow-lg transition-all duration-300 ${
+                    unreadCount > 0
+                      ? 'bg-red-500 text-white animate-pulse'
+                      : 'bg-white text-slate-950'
+                  }`}>
                     {unreadLabel}
                   </span>
                 ) : null}
               </button>
 
               {openMenu === 'notifications' ? (
-                <div className="absolute right-0 top-14 z-50 w-[360px] max-w-[90vw] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <div className="absolute right-0 top-16 z-50 w-[400px] max-w-[95vw] origin-top-right animate-in fade-in zoom-in-95 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl duration-200">
+                  <div className="flex items-center justify-between border-b-2 border-slate-100 bg-gradient-to-r from-blue-50 to-slate-50 px-5 py-4">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">Notifications</p>
-                      <p className="text-xs text-slate-500">Stay on top of assignments and updates.</p>
+                      <p className="text-base font-bold text-slate-900">Notifications</p>
+                      <p className="text-xs text-slate-600">Stay updated with your learning progress</p>
                     </div>
                     <Button
                       size="sm"
@@ -343,55 +351,74 @@ export function Header() {
                       onClick={handleMarkAllAsRead}
                       isLoading={markingAll}
                       disabled={unreadCount === 0}
+                      className="whitespace-nowrap"
                     >
-                      Mark all read
+                      Mark all
                     </Button>
                   </div>
-                  <div className="max-h-96 overflow-auto">
+                  <div className="max-h-[420px] overflow-y-auto">
                     {loadingNotifications ? (
-                      <p className="px-4 py-4 text-sm text-slate-500">Loading notifications...</p>
+                      <div className="flex items-center justify-center px-4 py-12">
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-500"></div>
+                      </div>
                     ) : notificationError ? (
-                      <p className="px-4 py-4 text-sm text-red-600">{notificationError}</p>
+                      <div className="border-l-4 border-red-500 bg-red-50 px-5 py-4 text-sm text-red-700 m-3 rounded">
+                        {notificationError}
+                      </div>
                     ) : notifications.length === 0 ? (
-                      <p className="px-4 py-4 text-sm text-slate-500">No notifications.</p>
+                      <div className="flex flex-col items-center justify-center px-4 py-12">
+                        <Bell className="h-12 w-12 text-slate-300 mb-3" />
+                        <p className="text-sm font-medium text-slate-600">No notifications yet</p>
+                        <p className="text-xs text-slate-500 mt-1">You're all caught up!</p>
+                      </div>
                     ) : (
-                      notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`border-b border-slate-100 px-4 py-4 ${
-                            notification.is_read ? 'bg-white' : 'bg-violet-50/60'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
-                              <p className="mt-1 text-xs leading-5 text-slate-600">{notification.message}</p>
-                              <p className="mt-2 text-[11px] text-slate-500">
-                                {new Date(notification.created_at).toLocaleString()}
-                              </p>
+                      <div className="divide-y divide-slate-100">
+                        {notifications.map((notification, index) => (
+                          <div
+                            key={notification.id}
+                            className={`group/item px-5 py-4 transition-all duration-200 hover:bg-slate-50 animate-in fade-in slide-in-from-top-2`}
+                            style={{ animationDelay: `${index * 50}ms` }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-semibold text-slate-900 truncate">{notification.title}</p>
+                                  {!notification.is_read && (
+                                    <div className="h-2 w-2 flex-shrink-0 rounded-full bg-blue-500 animate-pulse"></div>
+                                  )}
+                                </div>
+                                <p className="mt-1 text-sm leading-5 text-slate-600">{notification.message}</p>
+                                <p className="mt-2 text-xs text-slate-500">
+                                  {new Date(notification.created_at).toLocaleString()}
+                                </p>
+                              </div>
+                              {!notification.is_read ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  isLoading={markingId === notification.id}
+                                  onClick={() => handleMarkAsRead(notification.id)}
+                                  className="flex-shrink-0 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
+                                >
+                                  Mark read
+                                </Button>
+                              ) : (
+                                <div className="flex-shrink-0 text-xs text-slate-500 font-medium">Read</div>
+                              )}
                             </div>
-                            {!notification.is_read ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                isLoading={markingId === notification.id}
-                                onClick={() => handleMarkAsRead(notification.id)}
-                              >
-                                Read
-                              </Button>
-                            ) : null}
                           </div>
-                        </div>
-                      ))
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="border-t border-slate-100 px-4 py-3">
+                  <div className="border-t-2 border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50 px-5 py-3">
                     <NavLink
                       to="/notifications"
                       onClick={() => setOpenMenu(null)}
-                      className="text-sm font-semibold text-slate-700 hover:text-slate-950"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors hover:underline"
                     >
                       View all notifications
+                      <ChevronRight className="h-4 w-4" />
                     </NavLink>
                   </div>
                 </div>
