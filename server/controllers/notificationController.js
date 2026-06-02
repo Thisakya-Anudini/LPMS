@@ -88,3 +88,20 @@ export const markAllNotificationsAsRead = async (req, res) => {
   return res.status(200).json({ success: true, updatedCount: result.rowCount });
 };
 
+export const clearAllNotifications = async (req, res) => {
+  const principalId = await resolvePrincipalId(req.user);
+  if (!principalId) {
+    return res.status(200).json({ success: true, deletedCount: 0 });
+  }
+
+  const result = await query(
+    `
+      DELETE FROM notifications
+      WHERE principal_id = $1
+    `,
+    [principalId]
+  );
+
+  return res.status(200).json({ success: true, deletedCount: result.rowCount });
+};
+

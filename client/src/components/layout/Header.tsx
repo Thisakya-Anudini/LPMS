@@ -161,6 +161,7 @@ export function Header() {
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
 
   const navigation = useMemo(() => (user ? getNavigationModel(user) : null), [user]);
@@ -273,6 +274,24 @@ export function Header() {
     }
   };
 
+  const handleClearAllNotifications = async () => {
+    try {
+      setClearingAll(true);
+      const token = await getAccessToken();
+      if (!token) {
+        setNotificationError('Session expired. Please login again.');
+        return;
+      }
+      await notificationsApi.clearAllNotifications(token);
+      await loadNotifications();
+      window.dispatchEvent(new Event('notifications:updated'));
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : 'Failed to clear notifications.');
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
   const unreadLabel = useMemo(() => {
     if (unreadCount <= 0) {
       return null;
@@ -340,21 +359,33 @@ export function Header() {
 
               {openMenu === 'notifications' ? (
                 <div className="absolute right-0 top-16 z-50 w-[400px] max-w-[95vw] origin-top-right animate-in fade-in zoom-in-95 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl duration-200">
-                  <div className="flex items-center justify-between border-b-2 border-slate-100 bg-gradient-to-r from-blue-50 to-slate-50 px-5 py-4">
+                  <div className="flex flex-col gap-3 border-b-2 border-slate-100 bg-gradient-to-r from-blue-50 to-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-base font-bold text-slate-900">Notifications</p>
                       <p className="text-xs text-slate-600">Stay updated with your learning progress</p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleMarkAllAsRead}
-                      isLoading={markingAll}
-                      disabled={unreadCount === 0}
-                      className="whitespace-nowrap"
-                    >
-                      Mark all
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleMarkAllAsRead}
+                        isLoading={markingAll}
+                        disabled={unreadCount === 0}
+                        className="whitespace-nowrap"
+                      >
+                        Mark all
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleClearAllNotifications}
+                        isLoading={clearingAll}
+                        disabled={notifications.length === 0}
+                        className="whitespace-nowrap text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                      >
+                        Clear all
+                      </Button>
+                    </div>
                   </div>
                   <div className="max-h-[420px] overflow-y-auto">
                     {loadingNotifications ? (

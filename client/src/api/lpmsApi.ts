@@ -1000,5 +1000,11 @@ export const notificationsApi = {
       method: 'PATCH',
       token
     });
+  },
+  clearAllNotifications(token: string) {
+    return request<{ success: boolean; deletedCount: number }>('/notifications/clear-all', {
+      method: 'DELETE',
+      token
+    });
   }
 };
