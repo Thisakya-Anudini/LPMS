@@ -162,6 +162,7 @@ export function Header() {
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
+  const [removingNotificationIds, setRemovingNotificationIds] = useState<string[]>([]);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
 
   const navigation = useMemo(() => (user ? getNavigationModel(user) : null), [user]);
@@ -241,16 +242,23 @@ export function Header() {
   const handleMarkAsRead = async (id: string) => {
     try {
       setMarkingId(id);
+      setRemovingNotificationIds((prev) => [...prev, id]);
+
       const token = await getAccessToken();
       if (!token) {
         setNotificationError('Session expired. Please login again.');
+        setRemovingNotificationIds((prev) => prev.filter((notificationId) => notificationId !== id));
         return;
       }
+
       await notificationsApi.markAsRead(token, id);
+      await new Promise((resolve) => window.setTimeout(resolve, 280));
+      setNotifications((prev) => prev.filter((notification) => notification.id !== id));
       await loadNotifications();
       window.dispatchEvent(new Event('notifications:updated'));
     } catch (error) {
       setNotificationError(error instanceof Error ? error.message : 'Failed to update notification.');
+      setRemovingNotificationIds((prev) => prev.filter((notificationId) => notificationId !== id));
     } finally {
       setMarkingId(null);
     }
@@ -290,6 +298,48 @@ export function Header() {
     } finally {
       setClearingAll(false);
     }
+  };
+
+  const renderNotificationItem = (notification: NotificationRow, index: number) => {
+    const isRemoving = removingNotificationIds.includes(notification.id);
+
+    return (
+      <div
+        key={notification.id}
+        className={`group/item overflow-hidden rounded-2xl border border-slate-100 bg-white px-5 transition-all duration-300 ${
+          isRemoving
+            ? 'max-h-0 opacity-0 py-0 shadow-none'
+            : 'py-4 shadow-sm hover:bg-slate-50'
+        } animate-in fade-in slide-in-from-top-2`}
+        style={{ animationDelay: `${index * 50}ms` }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-slate-900 truncate">{notification.title}</p>
+              {!notification.is_read && (
+                <div className="h-2 w-2 flex-shrink-0 rounded-full bg-blue-500 animate-pulse"></div>
+              )}
+            </div>
+            <p className="mt-1 text-sm leading-5 text-slate-600">{notification.message}</p>
+            <p className="mt-2 text-xs text-slate-500">{new Date(notification.created_at).toLocaleString()}</p>
+          </div>
+          {!notification.is_read ? (
+            <Button
+              size="sm"
+              variant="outline"
+              isLoading={markingId === notification.id}
+              onClick={() => handleMarkAsRead(notification.id)}
+              className="flex-shrink-0 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
+            >
+              Mark read
+            </Button>
+          ) : (
+            <div className="flex-shrink-0 text-xs text-slate-500 font-medium">Read</div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const unreadLabel = useMemo(() => {
@@ -404,41 +454,7 @@ export function Header() {
                       </div>
                     ) : (
                       <div className="divide-y divide-slate-100">
-                        {notifications.map((notification, index) => (
-                          <div
-                            key={notification.id}
-                            className={`group/item px-5 py-4 transition-all duration-200 hover:bg-slate-50 animate-in fade-in slide-in-from-top-2`}
-                            style={{ animationDelay: `${index * 50}ms` }}
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-semibold text-slate-900 truncate">{notification.title}</p>
-                                  {!notification.is_read && (
-                                    <div className="h-2 w-2 flex-shrink-0 rounded-full bg-blue-500 animate-pulse"></div>
-                                  )}
-                                </div>
-                                <p className="mt-1 text-sm leading-5 text-slate-600">{notification.message}</p>
-                                <p className="mt-2 text-xs text-slate-500">
-                                  {new Date(notification.created_at).toLocaleString()}
-                                </p>
-                              </div>
-                              {!notification.is_read ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  isLoading={markingId === notification.id}
-                                  onClick={() => handleMarkAsRead(notification.id)}
-                                  className="flex-shrink-0 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300"
-                                >
-                                  Mark read
-                                </Button>
-                              ) : (
-                                <div className="flex-shrink-0 text-xs text-slate-500 font-medium">Read</div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                        {notifications.map(renderNotificationItem)}
                       </div>
                     )}
                   </div>
@@ -535,7 +551,7 @@ export function Header() {
               {navigation.primaryLinks.map((link) => (
                 <NavLink
                   key={link.to}
-                  to={link.to}
+                  to={link.to || '#'}
                   end={link.matchMode === 'exact'}
                   onClick={() => setOpenMenu(null)}
                   className={({ isActive }) =>
