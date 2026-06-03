@@ -782,6 +782,69 @@ export const learnerApi = {
       };
     }>(`/learner/public-paths/${id}`, { token });
   },
+  getOtherCourses(token: string) {
+    return request<{
+      alreadyEnrolledCourses: Array<{
+        id: string;
+        code: string;
+        title: string;
+        description: string | null;
+        duration: string | null;
+        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        stageTitle: string | null;
+        stageOrder: number;
+        courseOrder: number;
+        enrollment: {
+          id: string;
+          status: string;
+          progress: number;
+        };
+        learningPath: {
+          id: string;
+          title: string;
+          description: string;
+          category: 'PUBLIC' | 'RESTRICTED';
+          totalDuration: string;
+        };
+      }>;
+      preferredCourses: Array<{
+        id: string;
+        code: string;
+        title: string;
+        description: string | null;
+        durationHours: number | null;
+        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+        videoUrl: string | null;
+        venue: string | null;
+        alreadyEnrolled: boolean;
+        learningPaths: Array<{
+          id: string;
+          title: string;
+          description: string;
+          category: 'PUBLIC' | 'RESTRICTED';
+          totalDuration: string;
+        }>;
+      }>;
+      courses: Array<{
+        id: string;
+        code: string;
+        title: string;
+        description: string | null;
+        durationHours: number | null;
+        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+        videoUrl: string | null;
+        venue: string | null;
+        alreadyEnrolled: boolean;
+        learningPaths: Array<{
+          id: string;
+          title: string;
+          description: string;
+          category: 'PUBLIC' | 'RESTRICTED';
+          totalDuration: string;
+        }>;
+      }>;
+    }>('/learner/other-courses', { token });
+  },
   selfEnroll(token: string, learningPathId: string) {
     return request<{ enrollment: { id: string } }>('/learner/self-enroll', {
       method: 'POST',

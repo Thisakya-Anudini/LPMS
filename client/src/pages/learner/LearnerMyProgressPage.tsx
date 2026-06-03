@@ -30,6 +30,45 @@ type PathCourse = {
   videoUrl: string | null;
 };
 
+type LearningPathSummary = {
+  id: string;
+  title: string;
+  description: string;
+  category: 'PUBLIC' | 'RESTRICTED';
+  totalDuration: string;
+};
+
+type OtherCourse = {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  durationHours?: number | null;
+  deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+  videoUrl?: string | null;
+  venue?: string | null;
+  alreadyEnrolled: boolean;
+  learningPaths: LearningPathSummary[];
+};
+
+type AlreadyEnrolledCourse = {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  duration: string | null;
+  deliveryMode: 'ONLINE' | 'PHYSICAL';
+  stageTitle: string | null;
+  stageOrder: number;
+  courseOrder: number;
+  enrollment: {
+    id: string;
+    status: string;
+    progress: number;
+  };
+  learningPath: LearningPathSummary;
+};
+
 export function LearnerMyProgressPage() {
   const { getAccessToken, user } = useAuth();
   const { showToast } = useToast();
@@ -39,10 +78,17 @@ export function LearnerMyProgressPage() {
   const [courseUpdateLoadingId, setCourseUpdateLoadingId] = useState<string | null>(null);
   const [activeLearningSection, setActiveLearningSection] = useState<'assigned' | 'self'>('assigned');
   const [activeSelfEnrollmentSection, setActiveSelfEnrollmentSection] = useState<'public' | 'other'>('public');
+  const [activeOtherCourseSection, setActiveOtherCourseSection] = useState<'enrolled' | 'preferred'>('enrolled');
+  const [otherCoursesLoading, setOtherCoursesLoading] = useState(false);
+  const [otherCoursesLoaded, setOtherCoursesLoaded] = useState(false);
+  const [courseSearch, setCourseSearch] = useState('');
   const [isSupervisor, setIsSupervisor] = useState(Boolean(user?.isSupervisor));
   const [learnerName, setLearnerName] = useState(user?.name || 'Learner');
   const [assignedLearningPaths, setAssignedLearningPaths] = useState<AssignedLearningPath[]>([]);
   const [selectedPathCourses, setSelectedPathCourses] = useState<PathCourse[]>([]);
+  const [alreadyEnrolledCourses, setAlreadyEnrolledCourses] = useState<AlreadyEnrolledCourse[]>([]);
+  const [preferredCourses, setPreferredCourses] = useState<OtherCourse[]>([]);
+  const [allCourses, setAllCourses] = useState<OtherCourse[]>([]);
   const [selectedPathMeta, setSelectedPathMeta] = useState<{
     enrollmentId: string;
     learningPathTitle: string;
@@ -89,6 +135,33 @@ export function LearnerMyProgressPage() {
     load();
   }, [load]);
 
+  const loadOtherCourses = useCallback(async () => {
+    try {
+      setOtherCoursesLoading(true);
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const response = await learnerApi.getOtherCourses(token);
+      setAlreadyEnrolledCourses(response.alreadyEnrolledCourses);
+      setPreferredCourses(response.preferredCourses);
+      setAllCourses(response.courses);
+      setOtherCoursesLoaded(true);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load other courses.', 'error');
+    } finally {
+      setOtherCoursesLoading(false);
+    }
+  }, [getAccessToken, showToast]);
+
+  useEffect(() => {
+    if (activeLearningSection === 'self' && activeSelfEnrollmentSection === 'other' && !otherCoursesLoaded) {
+      loadOtherCourses();
+    }
+  }, [activeLearningSection, activeSelfEnrollmentSection, loadOtherCourses, otherCoursesLoaded]);
+
   const summary = useMemo(() => {
     const totalLearningPaths = assignedLearningPaths.length;
     const completedLearningPaths = assignedLearningPaths.filter((row) => row.status === 'COMPLETED').length;
@@ -126,6 +199,27 @@ export function LearnerMyProgressPage() {
         courses: [...stage.courses].sort((a, b) => a.order - b.order)
       }));
   }, [selectedPathCourses]);
+
+  const normalizedCourseSearch = courseSearch.trim().toLowerCase();
+  const filteredPreferredCourses = useMemo(() => {
+    if (!normalizedCourseSearch) {
+      return preferredCourses;
+    }
+    return preferredCourses.filter((course) =>
+      [course.title, course.code, course.description]
+        .some((value) => String(value || '').toLowerCase().includes(normalizedCourseSearch))
+    );
+  }, [normalizedCourseSearch, preferredCourses]);
+
+  const filteredAllCourses = useMemo(() => {
+    if (!normalizedCourseSearch) {
+      return allCourses;
+    }
+    return allCourses.filter((course) =>
+      [course.title, course.code, course.description]
+        .some((value) => String(value || '').toLowerCase().includes(normalizedCourseSearch))
+    );
+  }, [allCourses, normalizedCourseSearch]);
 
   const openLearningPathModal = async (enrollmentId: string) => {
     try {
@@ -349,13 +443,184 @@ export function LearnerMyProgressPage() {
           {activeSelfEnrollmentSection === 'public' ? (
             <LearnerPublicPathsPanel showHeader={false} cardTitle="Public LPs" />
           ) : (
-            <Card title="Other Courses">
-              <div className="rounded-xl border border-dashed border-secondary-300 bg-secondary-50 px-4 py-10 text-center">
-                <LibraryBig className="mx-auto h-8 w-8 text-secondary-400" />
-                <p className="mt-3 text-sm font-semibold text-secondary-800">Other Courses</p>
-                <p className="mt-1 text-sm text-secondary-500">This section is ready for the next integration.</p>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-2">
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveOtherCourseSection('enrolled')}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                      activeOtherCourseSection === 'enrolled'
+                        ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
+                        : 'text-secondary-600 hover:bg-white/70'
+                    }`}
+                  >
+                    Already Enrolled Courses
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveOtherCourseSection('preferred')}
+                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                      activeOtherCourseSection === 'preferred'
+                        ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
+                        : 'text-secondary-600 hover:bg-white/70'
+                    }`}
+                  >
+                    Preferred Courses
+                  </button>
+                </div>
               </div>
-            </Card>
+
+              {activeOtherCourseSection === 'enrolled' ? (
+                <Card title="Already Enrolled Courses">
+                  {otherCoursesLoading ? (
+                    <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                      {listSkeletons.map((index) => (
+                        <div key={`enrolled-course-skeleton-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
+                          <Skeleton className="mb-2 h-5 w-56" />
+                          <Skeleton className="mb-2 h-4 w-40" />
+                          <Skeleton className="h-4 w-full" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : alreadyEnrolledCourses.length === 0 ? (
+                    <p className="text-sm text-secondary-500">No already enrolled courses found.</p>
+                  ) : (
+                    <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                      {alreadyEnrolledCourses.map((course, index) => (
+                        <div
+                          key={`${course.learningPath.id}-${course.code || course.id}-${index}`}
+                          className="rounded-lg border border-secondary-200 bg-white p-3"
+                        >
+                          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
+                                <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
+                                  Already Enrolled
+                                </span>
+                                <span className="rounded-full bg-secondary-100 px-2 py-0.5 text-xs font-semibold text-secondary-700">
+                                  {course.learningPath.category}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
+                              <p className="mt-1 text-xs text-secondary-600">
+                                {course.learningPath.title} | {course.learningPath.totalDuration}
+                              </p>
+                              <p className="mt-1 text-xs text-secondary-500">
+                                {course.stageTitle ? `Stage ${course.stageOrder}: ${course.stageTitle}` : 'Learning path course'}
+                              </p>
+                            </div>
+                            <div className="min-w-24 text-left md:text-right">
+                              <p className="text-sm font-semibold text-secondary-900">
+                                {course.enrollment.progress}%
+                              </p>
+                              <p className="text-xs text-secondary-500">{course.enrollment.status.replace('_', ' ')}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              ) : (
+                <Card title="Preferred Courses">
+                <div className="mb-4">
+                  <input
+                    type="search"
+                    value={courseSearch}
+                    onChange={(event) => setCourseSearch(event.target.value)}
+                    placeholder="Search by course name or ID"
+                    className="w-full rounded-lg border border-secondary-300 px-3 py-2 text-sm text-secondary-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  />
+                </div>
+                {otherCoursesLoading ? (
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                    {listSkeletons.map((index) => (
+                      <div key={`preferred-course-skeleton-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
+                        <Skeleton className="mb-2 h-5 w-56" />
+                        <Skeleton className="mb-2 h-4 w-40" />
+                        <Skeleton className="h-4 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredPreferredCourses.length === 0 ? (
+                  <p className="text-sm text-secondary-500">No preferred courses found.</p>
+                ) : (
+                  <div className="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-2 lg:grid-cols-2">
+                    {filteredPreferredCourses.map((course, index) => (
+                      <div key={`${course.code || course.id}-preferred-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
+                        <div className="flex h-full flex-col gap-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
+                            <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
+                            {course.description ? (
+                              <p className="mt-1 text-xs text-secondary-600">{course.description}</p>
+                            ) : null}
+                            <span className="mt-2 inline-flex rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
+                              Preferred
+                            </span>
+                          </div>
+                          <Button type="button" size="sm" className="w-full" disabled>
+                            Enroll
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                </Card>
+              )}
+
+              <Card title="All Courses">
+                {otherCoursesLoading ? (
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                    {listSkeletons.map((index) => (
+                      <div key={`all-course-skeleton-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
+                        <Skeleton className="mb-2 h-5 w-56" />
+                        <Skeleton className="mb-2 h-4 w-40" />
+                        <Skeleton className="h-4 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredAllCourses.length === 0 ? (
+                  <p className="text-sm text-secondary-500">No courses found.</p>
+                ) : (
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                    {filteredAllCourses.map((course, index) => (
+                      <div
+                        key={`${course.code || course.id}-all-${index}`}
+                        className="rounded-lg border border-secondary-200 bg-white p-3"
+                      >
+                        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
+                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                course.alreadyEnrolled
+                                  ? 'bg-success-100 text-success-700'
+                                  : 'bg-secondary-100 text-secondary-700'
+                              }`}>
+                                {course.alreadyEnrolled ? 'Already Enrolled' : 'Preferred'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
+                            {course.learningPaths.length > 0 ? (
+                              <p className="mt-1 text-xs text-secondary-600">
+                                {course.learningPaths.map((path) => `${path.title} (${path.category})`).join(', ')}
+                              </p>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-secondary-500">
+                            {course.deliveryMode ? `Mode: ${course.deliveryMode}` : 'Mode: ERP catalog'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
           )}
         </div>
       )}

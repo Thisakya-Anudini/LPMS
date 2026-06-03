@@ -84,6 +84,8 @@ const normalizeErpCourse = (row, index = 0) => {
   };
 };
 
+const normalizeCourseKey = (value) => String(value || '').trim().toLowerCase();
+
 const hasCertificateSignatureColumn = async () => {
   const result = await query(
     `
@@ -759,6 +761,166 @@ export const getCourses = async (_req, res) => {
       typeof error.status === 'number' ? error.status : 502,
       'ERP_REQUEST_FAILED',
       'Failed to fetch courses from ERP.',
+      error.details || error.message
+    );
+  }
+};
+
+export const getLearnerOtherCourses = async (req, res) => {
+  const principalId = await resolvePrincipalForLearner(req.user);
+
+  try {
+    const courseResponse = await fetchAllCourses();
+    const erpCourses = (Array.isArray(courseResponse?.data) ? courseResponse.data : [])
+      .map((row, index) => normalizeErpCourse(row, index))
+      .filter((course) => Boolean(course.code) && Boolean(course.title));
+
+    if (!principalId) {
+      return res.status(200).json({
+        alreadyEnrolledCourses: [],
+        preferredCourses: erpCourses,
+        courses: erpCourses.map((course) => ({ ...course, alreadyEnrolled: false, learningPaths: [] }))
+      });
+    }
+
+    const useCourseReference = await usesCourseReferenceTable();
+    const enrolledResult = await query(
+      useCourseReference
+        ? `
+            SELECT
+              en.id AS enrollment_id,
+              en.status AS enrollment_status,
+              en.progress,
+              lp.id AS learning_path_id,
+              lp.title AS learning_path_title,
+              lp.description AS learning_path_description,
+              lp.category AS learning_path_category,
+              lp.total_duration AS learning_path_duration,
+              COALESCE(c.id::text, sc.course_code, sc.course_title) AS course_id,
+              COALESCE(c.code, sc.course_code) AS course_code,
+              COALESCE(c.title, sc.course_title) AS course_title,
+              COALESCE(c.description, sc.course_title) AS course_description,
+              COALESCE(c.duration, sc.course_duration) AS course_duration,
+              CASE
+                WHEN c.type = 'CLASSROOM' THEN 'PHYSICAL'
+                WHEN c.type = 'HYBRID' THEN 'ONLINE'
+                ELSE COALESCE(sc.delivery_mode, 'ONLINE')
+              END AS delivery_mode,
+              lps.title AS stage_title,
+              lps.stage_order,
+              sc.course_order
+            FROM enrollments en
+            JOIN learning_paths lp ON lp.id = en.learning_path_id
+            JOIN learning_path_stages lps ON lps.learning_path_id = lp.id
+            JOIN stage_courses sc ON sc.stage_id = lps.id
+            LEFT JOIN courses c ON c.id = sc.course_id
+            WHERE en.principal_id = $1
+              AND lp.is_deleted = FALSE
+              AND lp.status = 'ACTIVE'
+            ORDER BY en.enrolled_at DESC, lp.title ASC, lps.stage_order ASC, sc.course_order ASC
+          `
+        : `
+            SELECT
+              en.id AS enrollment_id,
+              en.status AS enrollment_status,
+              en.progress,
+              lp.id AS learning_path_id,
+              lp.title AS learning_path_title,
+              lp.description AS learning_path_description,
+              lp.category AS learning_path_category,
+              lp.total_duration AS learning_path_duration,
+              COALESCE(sc.course_code, sc.course_title) AS course_id,
+              sc.course_code,
+              sc.course_title,
+              sc.course_title AS course_description,
+              sc.course_duration,
+              COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+              lps.title AS stage_title,
+              lps.stage_order,
+              sc.course_order
+            FROM enrollments en
+            JOIN learning_paths lp ON lp.id = en.learning_path_id
+            JOIN learning_path_stages lps ON lps.learning_path_id = lp.id
+            JOIN stage_courses sc ON sc.stage_id = lps.id
+            WHERE en.principal_id = $1
+              AND lp.is_deleted = FALSE
+              AND lp.status = 'ACTIVE'
+            ORDER BY en.enrolled_at DESC, lp.title ASC, lps.stage_order ASC, sc.course_order ASC
+          `,
+      [principalId]
+    );
+
+    const alreadyEnrolledCourses = enrolledResult.rows.map((row) => ({
+      id: row.course_id || row.course_code || row.course_title,
+      code: row.course_code || row.course_id || row.course_title,
+      title: row.course_title || row.course_code || 'Course',
+      description: row.course_description || null,
+      durationHours: null,
+      duration: row.course_duration || null,
+      deliveryMode: normalizeCourseDeliveryMode(row.delivery_mode),
+      stageTitle: row.stage_title,
+      stageOrder: Number(row.stage_order || 0),
+      courseOrder: Number(row.course_order || 0),
+      enrollment: {
+        id: row.enrollment_id,
+        status: row.enrollment_status,
+        progress: Number(row.progress || 0)
+      },
+      learningPath: {
+        id: row.learning_path_id,
+        title: row.learning_path_title,
+        description: row.learning_path_description,
+        category: row.learning_path_category,
+        totalDuration: row.learning_path_duration
+      }
+    }));
+
+    const enrolledKeys = new Set(
+      alreadyEnrolledCourses
+        .flatMap((course) => [course.code, course.title])
+        .map(normalizeCourseKey)
+        .filter(Boolean)
+    );
+
+    const learningPathsByCourseKey = new Map();
+    for (const course of alreadyEnrolledCourses) {
+      for (const key of [course.code, course.title].map(normalizeCourseKey).filter(Boolean)) {
+        if (!learningPathsByCourseKey.has(key)) {
+          learningPathsByCourseKey.set(key, []);
+        }
+        const paths = learningPathsByCourseKey.get(key);
+        if (!paths.some((path) => path.id === course.learningPath.id)) {
+          paths.push(course.learningPath);
+        }
+      }
+    }
+
+    const courses = erpCourses.map((course) => {
+      const keys = [course.code, course.title].map(normalizeCourseKey).filter(Boolean);
+      const alreadyEnrolled = keys.some((key) => enrolledKeys.has(key));
+      const learningPaths = keys.flatMap((key) => learningPathsByCourseKey.get(key) || []);
+      const uniqueLearningPaths = learningPaths.filter(
+        (path, index, list) => list.findIndex((item) => item.id === path.id) === index
+      );
+
+      return {
+        ...course,
+        alreadyEnrolled,
+        learningPaths: uniqueLearningPaths
+      };
+    });
+
+    return res.status(200).json({
+      alreadyEnrolledCourses,
+      preferredCourses: courses.filter((course) => !course.alreadyEnrolled),
+      courses
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      typeof error.status === 'number' ? error.status : 502,
+      'ERP_REQUEST_FAILED',
+      'Failed to fetch learner courses from ERP.',
       error.details || error.message
     );
   }
