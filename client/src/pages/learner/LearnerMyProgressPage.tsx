@@ -88,7 +88,6 @@ export function LearnerMyProgressPage() {
   const [selectedPathCourses, setSelectedPathCourses] = useState<PathCourse[]>([]);
   const [alreadyEnrolledCourses, setAlreadyEnrolledCourses] = useState<AlreadyEnrolledCourse[]>([]);
   const [preferredCourses, setPreferredCourses] = useState<OtherCourse[]>([]);
-  const [allCourses, setAllCourses] = useState<OtherCourse[]>([]);
   const [selectedPathMeta, setSelectedPathMeta] = useState<{
     enrollmentId: string;
     learningPathTitle: string;
@@ -147,7 +146,7 @@ export function LearnerMyProgressPage() {
       const response = await learnerApi.getOtherCourses(token);
       setAlreadyEnrolledCourses(response.alreadyEnrolledCourses);
       setPreferredCourses(response.preferredCourses);
-      setAllCourses(response.courses);
+      // Note: 'All Courses' list removed per UI change
       setOtherCoursesLoaded(true);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load other courses.', 'error');
@@ -211,15 +210,7 @@ export function LearnerMyProgressPage() {
     );
   }, [normalizedCourseSearch, preferredCourses]);
 
-  const filteredAllCourses = useMemo(() => {
-    if (!normalizedCourseSearch) {
-      return allCourses;
-    }
-    return allCourses.filter((course) =>
-      [course.title, course.code, course.description]
-        .some((value) => String(value || '').toLowerCase().includes(normalizedCourseSearch))
-    );
-  }, [allCourses, normalizedCourseSearch]);
+  // 'All Courses' list and filtering removed
 
   const openLearningPathModal = async (enrollmentId: string) => {
     try {
@@ -412,30 +403,33 @@ export function LearnerMyProgressPage() {
       ) : (
         <div className="space-y-4">
           <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-2">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <button
                 type="button"
                 onClick={() => setActiveSelfEnrollmentSection('public')}
-                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                className={`flex items-center justify-center gap-3 w-full md:w-1/2 rounded-full px-6 py-3 text-sm font-semibold transition-all ${
                   activeSelfEnrollmentSection === 'public'
                     ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
                     : 'text-secondary-600 hover:bg-white/70'
                 }`}
               >
                 <Sparkles className="h-4 w-4" />
-                Public LPs
+                <span className="hidden md:inline">Public LPs</span>
+                <span className="md:hidden">Public</span>
               </button>
+              <div className="md:w-4" />
               <button
                 type="button"
                 onClick={() => setActiveSelfEnrollmentSection('other')}
-                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                className={`flex items-center justify-center gap-3 w-full md:w-1/2 rounded-full px-6 py-3 text-sm font-semibold transition-all ${
                   activeSelfEnrollmentSection === 'other'
                     ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
                     : 'text-secondary-600 hover:bg-white/70'
                 }`}
               >
                 <LibraryBig className="h-4 w-4" />
-                Other Courses
+                <span className="hidden md:inline">Other Courses</span>
+                <span className="md:hidden">Other</span>
               </button>
             </div>
           </div>
@@ -445,11 +439,11 @@ export function LearnerMyProgressPage() {
           ) : (
             <div className="space-y-4">
               <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-2">
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div className="flex gap-2 items-center">
                   <button
                     type="button"
                     onClick={() => setActiveOtherCourseSection('enrolled')}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                    className={`flex-1 text-center rounded-full px-6 py-3 text-sm font-semibold transition-all ${
                       activeOtherCourseSection === 'enrolled'
                         ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
                         : 'text-secondary-600 hover:bg-white/70'
@@ -460,7 +454,7 @@ export function LearnerMyProgressPage() {
                   <button
                     type="button"
                     onClick={() => setActiveOtherCourseSection('preferred')}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
+                    className={`flex-1 text-center rounded-full px-6 py-3 text-sm font-semibold transition-all ${
                       activeOtherCourseSection === 'preferred'
                         ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
                         : 'text-secondary-600 hover:bg-white/70'
@@ -492,31 +486,19 @@ export function LearnerMyProgressPage() {
                           key={`${course.learningPath.id}-${course.code || course.id}-${index}`}
                           className="rounded-lg border border-secondary-200 bg-white p-3"
                         >
-                          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
-                                <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
-                                  Already Enrolled
-                                </span>
-                                <span className="rounded-full bg-secondary-100 px-2 py-0.5 text-xs font-semibold text-secondary-700">
-                                  {course.learningPath.category}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
-                              <p className="mt-1 text-xs text-secondary-600">
-                                {course.learningPath.title} | {course.learningPath.totalDuration}
-                              </p>
-                              <p className="mt-1 text-xs text-secondary-500">
-                                {course.stageTitle ? `Stage ${course.stageOrder}: ${course.stageTitle}` : 'Learning path course'}
-                              </p>
+                          <div>
+                            <p className="text-sm font-semibold text-secondary-900">
+                              {course.title}{' '}
+                              {course.deliveryMode === 'ONLINE' ? 'Online' : course.deliveryMode === 'PHYSICAL' ? course.deliveryMode : ''}
+                            </p>
+
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">Already Enrolled</span>
+                              <span className="rounded-full bg-secondary-100 px-2 py-0.5 text-xs font-semibold text-secondary-700">{course.learningPath.category}</span>
                             </div>
-                            <div className="min-w-24 text-left md:text-right">
-                              <p className="text-sm font-semibold text-secondary-900">
-                                {course.enrollment.progress}%
-                              </p>
-                              <p className="text-xs text-secondary-500">{course.enrollment.status.replace('_', ' ')}</p>
-                            </div>
+
+                            <p className="mt-2 text-xs text-secondary-500">{course.code}</p>
+                            <p className="mt-1 text-xs text-secondary-600">Learning Path - {course.learningPath.title}</p>
                           </div>
                         </div>
                       ))}
@@ -572,54 +554,7 @@ export function LearnerMyProgressPage() {
                 </Card>
               )}
 
-              <Card title="All Courses">
-                {otherCoursesLoading ? (
-                  <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
-                    {listSkeletons.map((index) => (
-                      <div key={`all-course-skeleton-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
-                        <Skeleton className="mb-2 h-5 w-56" />
-                        <Skeleton className="mb-2 h-4 w-40" />
-                        <Skeleton className="h-4 w-full" />
-                      </div>
-                    ))}
-                  </div>
-                ) : filteredAllCourses.length === 0 ? (
-                  <p className="text-sm text-secondary-500">No courses found.</p>
-                ) : (
-                  <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
-                    {filteredAllCourses.map((course, index) => (
-                      <div
-                        key={`${course.code || course.id}-all-${index}`}
-                        className="rounded-lg border border-secondary-200 bg-white p-3"
-                      >
-                        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
-                              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                course.alreadyEnrolled
-                                  ? 'bg-success-100 text-success-700'
-                                  : 'bg-secondary-100 text-secondary-700'
-                              }`}>
-                                {course.alreadyEnrolled ? 'Already Enrolled' : 'Preferred'}
-                              </span>
-                            </div>
-                            <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
-                            {course.learningPaths.length > 0 ? (
-                              <p className="mt-1 text-xs text-secondary-600">
-                                {course.learningPaths.map((path) => `${path.title} (${path.category})`).join(', ')}
-                              </p>
-                            ) : null}
-                          </div>
-                          <p className="text-xs text-secondary-500">
-                            {course.deliveryMode ? `Mode: ${course.deliveryMode}` : 'Mode: ERP catalog'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Card>
+              {/* 'All Courses' section removed per request */}
             </div>
           )}
         </div>
