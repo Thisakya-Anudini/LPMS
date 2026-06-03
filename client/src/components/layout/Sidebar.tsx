@@ -114,12 +114,6 @@ export function Sidebar({
             isSubmenu: true
           },
           {
-            to: '/learner/public-paths',
-            icon: ChevronRight,
-            label: 'Public Learning Paths',
-            isSubmenu: true
-          },
-          {
             to: '/learner/certificates',
             icon: ChevronRight,
             label: 'Certificates',
