@@ -402,35 +402,40 @@ export function LearnerMyProgressPage() {
         </>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-2">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <button
-                type="button"
-                onClick={() => setActiveSelfEnrollmentSection('public')}
-                className={`flex items-center justify-center gap-3 w-full md:w-1/2 rounded-full px-6 py-3 text-sm font-semibold transition-all ${
-                  activeSelfEnrollmentSection === 'public'
-                    ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
-                    : 'text-secondary-600 hover:bg-white/70'
-                }`}
-              >
-                <Sparkles className="h-4 w-4" />
-                <span className="hidden md:inline">Public LPs</span>
-                <span className="md:hidden">Public</span>
-              </button>
-              <div className="md:w-4" />
-              <button
-                type="button"
-                onClick={() => setActiveSelfEnrollmentSection('other')}
-                className={`flex items-center justify-center gap-3 w-full md:w-1/2 rounded-full px-6 py-3 text-sm font-semibold transition-all ${
-                  activeSelfEnrollmentSection === 'other'
-                    ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
-                    : 'text-secondary-600 hover:bg-white/70'
-                }`}
-              >
-                <LibraryBig className="h-4 w-4" />
-                <span className="hidden md:inline">Other Courses</span>
-                <span className="md:hidden">Other</span>
-              </button>
+          <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3">
+            <div className="relative w-full max-w-3xl mx-auto">
+              <div className="relative rounded-full bg-white/10 p-1">
+                <div
+                  aria-hidden
+                  className={`absolute top-1 bottom-1 left-1 w-1/2 rounded-full bg-gradient-to-r from-primary-600 to-primary-500 shadow-md transition-transform duration-300 ${
+                    activeSelfEnrollmentSection === 'other' ? 'translate-x-full' : 'translate-x-0'
+                  }`}
+                />
+
+                <div className="relative z-10 grid grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSelfEnrollmentSection('public')}
+                    className={`flex items-center justify-center gap-3 px-6 py-3 rounded-full text-sm font-semibold transition-colors duration-200 ${
+                      activeSelfEnrollmentSection === 'public' ? 'text-white' : 'text-secondary-700'
+                    }`}
+                  >
+                    <Sparkles className={`h-4 w-4 ${activeSelfEnrollmentSection === 'public' ? 'text-white' : 'text-secondary-400'}`} />
+                    <span>Public LPs</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveSelfEnrollmentSection('other')}
+                    className={`flex items-center justify-center gap-3 px-6 py-3 rounded-full text-sm font-semibold transition-colors duration-200 ${
+                      activeSelfEnrollmentSection === 'other' ? 'text-white' : 'text-secondary-700'
+                    }`}
+                  >
+                    <LibraryBig className={`h-4 w-4 ${activeSelfEnrollmentSection === 'other' ? 'text-white' : 'text-secondary-400'}`} />
+                    <span>Other Courses</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -438,30 +443,37 @@ export function LearnerMyProgressPage() {
             <LearnerPublicPathsPanel showHeader={false} cardTitle="Public LPs" />
           ) : (
             <div className="space-y-4">
-              <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-2">
-                <div className="flex gap-2 items-center">
-                  <button
-                    type="button"
-                    onClick={() => setActiveOtherCourseSection('enrolled')}
-                    className={`flex-1 text-center rounded-full px-6 py-3 text-sm font-semibold transition-all ${
-                      activeOtherCourseSection === 'enrolled'
-                        ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
-                        : 'text-secondary-600 hover:bg-white/70'
-                    }`}
-                  >
-                    Already Enrolled Courses
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveOtherCourseSection('preferred')}
-                    className={`flex-1 text-center rounded-full px-6 py-3 text-sm font-semibold transition-all ${
-                      activeOtherCourseSection === 'preferred'
-                        ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
-                        : 'text-secondary-600 hover:bg-white/70'
-                    }`}
-                  >
-                    Preferred Courses
-                  </button>
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3">
+                <div className="relative w-full max-w-3xl mx-auto">
+                  <div className="relative rounded-full bg-white/10 p-1">
+                    <div
+                      aria-hidden
+                      className={`absolute top-1 bottom-1 left-1 w-1/2 rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                        activeOtherCourseSection === 'preferred' ? 'translate-x-full' : 'translate-x-0'
+                      }`}
+                    />
+
+                    <div className="relative z-10 grid grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveOtherCourseSection('enrolled')}
+                        className={`px-6 py-3 text-sm font-medium rounded-full transition-colors duration-200 ${
+                          activeOtherCourseSection === 'enrolled' ? 'text-primary-700' : 'text-secondary-600'
+                        }`}
+                      >
+                        Already Enrolled Courses ({alreadyEnrolledCourses.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveOtherCourseSection('preferred')}
+                        className={`px-6 py-3 text-sm font-medium rounded-full transition-colors duration-200 ${
+                          activeOtherCourseSection === 'preferred' ? 'text-primary-700' : 'text-secondary-600'
+                        }`}
+                      >
+                        Preferred Courses ({preferredCourses.length})
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -489,16 +501,22 @@ export function LearnerMyProgressPage() {
                           <div>
                             <p className="text-sm font-semibold text-secondary-900">
                               {course.title}{' '}
-                              {course.deliveryMode === 'ONLINE' ? 'Online' : course.deliveryMode === 'PHYSICAL' ? course.deliveryMode : ''}
+                              {course.deliveryMode === 'ONLINE' ? 'Online' : course.deliveryMode === 'PHYSICAL' ? 'Physical' : ''}
                             </p>
 
-                            <div className="flex items-center gap-2 mt-2">
-                              <span className="rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">Already Enrolled</span>
-                              <span className="rounded-full bg-secondary-100 px-2 py-0.5 text-xs font-semibold text-secondary-700">{course.learningPath.category}</span>
-                            </div>
+                            <p className="mt-2 text-xs font-medium tracking-wide text-secondary-500">{course.code}</p>
 
-                            <p className="mt-2 text-xs text-secondary-500">{course.code}</p>
-                            <p className="mt-1 text-xs text-secondary-600">Learning Path - {course.learningPath.title}</p>
+                            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-secondary-700">
+                              {course.learningPath.category}
+                            </p>
+
+                            <p className="mt-1 text-xs text-secondary-700">
+                              Learning Path - {course.learningPath.title}
+                            </p>
+
+                            <span className="mt-2 inline-flex rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
+                              Already Enrolled
+                            </span>
                           </div>
                         </div>
                       ))}
