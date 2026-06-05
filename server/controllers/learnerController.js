@@ -73,12 +73,25 @@ const normalizeErpCourse = (row, index = 0) => {
   const courseCode = String(row?.courseCode || '').trim();
   const courseName = String(row?.courseName || '').trim();
   const title = courseName || courseCode || `Course ${index + 1}`;
+  const duration = normalizeDisplayValue(
+    getFirstValue(row, [
+      'duration',
+      'Duration',
+      'courseDuration',
+      'CourseDuration',
+      'durationHours',
+      'DurationHours',
+      'hours',
+      'Hours'
+    ])
+  );
   return {
     id: courseCode || `ERP-COURSE-${index + 1}`,
     code: courseCode || `ERP-COURSE-${index + 1}`,
     title,
     description: null,
     durationHours: null,
+    duration,
     deliveryMode: null,
     venue: null,
     videoUrl: null
@@ -1153,19 +1166,52 @@ export const getCourses = async (_req, res) => {
 };
 
 export const getLearnerOtherCourses = async (req, res) => {
+  const employeeNo = normalizeEmployeeNo(req.user, req.body);
   const principalId = await resolvePrincipalForLearner(req.user);
 
   try {
+    let erpEnrollmentIndex = new Map();
+    if (employeeNo) {
+      try {
+        const erpEnrollmentResponse = await fetchCourseEnrollmentDetails(employeeNo);
+        erpEnrollmentIndex = buildErpEnrollmentIndex(extractErpRows(erpEnrollmentResponse));
+      } catch (error) {
+        console.warn('LPMS ERP other-course enrollment sync failed:', {
+          employeeNo,
+          message: error.message,
+          details: error.details
+        });
+      }
+    }
+
     const courseResponse = await fetchAllCourses();
     const erpCourses = (Array.isArray(courseResponse?.data) ? courseResponse.data : [])
       .map((row, index) => normalizeErpCourse(row, index))
       .filter((course) => Boolean(course.code) && Boolean(course.title));
+    const enrichWithErpEnrollment = (course) => {
+      const erpEnrollment = findErpEnrollmentForCourse(erpEnrollmentIndex, {
+        courseCode: course.code,
+        courseId: course.id,
+        title: course.title
+      });
+      return {
+        ...course,
+        duration: erpEnrollment?.duration || normalizeDisplayValue(course.duration),
+        erpStatus: erpEnrollment?.statusLabel || null,
+        isCompleted: Boolean(erpEnrollment?.isCompleted)
+      };
+    };
 
     if (!principalId) {
+      const courses = erpCourses.map((course) => ({
+        ...enrichWithErpEnrollment(course),
+        alreadyEnrolled: false,
+        learningPaths: []
+      }));
       return res.status(200).json({
         alreadyEnrolledCourses: [],
-        preferredCourses: erpCourses,
-        courses: erpCourses.map((course) => ({ ...course, alreadyEnrolled: false, learningPaths: [] }))
+        preferredCourses: courses,
+        courses
       });
     }
 
@@ -1236,30 +1282,44 @@ export const getLearnerOtherCourses = async (req, res) => {
       [principalId]
     );
 
-    const alreadyEnrolledCourses = enrolledResult.rows.map((row) => ({
-      id: row.course_id || row.course_code || row.course_title,
-      code: row.course_code || row.course_id || row.course_title,
-      title: row.course_title || row.course_code || 'Course',
-      description: row.course_description || null,
-      durationHours: null,
-      duration: row.course_duration || null,
-      deliveryMode: normalizeCourseDeliveryMode(row.delivery_mode),
-      stageTitle: row.stage_title,
-      stageOrder: Number(row.stage_order || 0),
-      courseOrder: Number(row.course_order || 0),
-      enrollment: {
-        id: row.enrollment_id,
-        status: row.enrollment_status,
-        progress: Number(row.progress || 0)
-      },
-      learningPath: {
-        id: row.learning_path_id,
-        title: row.learning_path_title,
-        description: row.learning_path_description,
-        category: row.learning_path_category,
-        totalDuration: row.learning_path_duration
-      }
-    }));
+    const alreadyEnrolledCourses = enrolledResult.rows.map((row) => {
+      const course = {
+        id: row.course_id || row.course_code || row.course_title,
+        code: row.course_code || row.course_id || row.course_title,
+        title: row.course_title || row.course_code || 'Course',
+        duration: normalizeDisplayValue(row.course_duration)
+      };
+      const erpEnrollment = findErpEnrollmentForCourse(erpEnrollmentIndex, {
+        courseCode: course.code,
+        courseId: course.id,
+        title: course.title
+      });
+
+      return {
+        ...course,
+        description: row.course_description || null,
+        durationHours: null,
+        duration: erpEnrollment?.duration || course.duration,
+        erpStatus: erpEnrollment?.statusLabel || null,
+        isCompleted: Boolean(erpEnrollment?.isCompleted),
+        deliveryMode: normalizeCourseDeliveryMode(row.delivery_mode),
+        stageTitle: row.stage_title,
+        stageOrder: Number(row.stage_order || 0),
+        courseOrder: Number(row.course_order || 0),
+        enrollment: {
+          id: row.enrollment_id,
+          status: row.enrollment_status,
+          progress: Number(row.progress || 0)
+        },
+        learningPath: {
+          id: row.learning_path_id,
+          title: row.learning_path_title,
+          description: row.learning_path_description,
+          category: row.learning_path_category,
+          totalDuration: row.learning_path_duration
+        }
+      };
+    });
 
     const enrolledKeys = new Set(
       alreadyEnrolledCourses
@@ -1290,7 +1350,7 @@ export const getLearnerOtherCourses = async (req, res) => {
       );
 
       return {
-        ...course,
+        ...enrichWithErpEnrollment(course),
         alreadyEnrolled,
         learningPaths: uniqueLearningPaths
       };

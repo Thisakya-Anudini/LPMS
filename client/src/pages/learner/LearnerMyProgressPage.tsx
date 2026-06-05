@@ -45,10 +45,13 @@ type OtherCourse = {
   code: string;
   title: string;
   description: string | null;
+  duration: string | null;
   durationHours?: number | null;
   deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
   videoUrl?: string | null;
   venue?: string | null;
+  erpStatus: string | null;
+  isCompleted: boolean;
   alreadyEnrolled: boolean;
   learningPaths: LearningPathSummary[];
 };
@@ -59,6 +62,8 @@ type AlreadyEnrolledCourse = {
   title: string;
   description: string | null;
   duration: string | null;
+  erpStatus: string | null;
+  isCompleted: boolean;
   deliveryMode: 'ONLINE' | 'PHYSICAL';
   stageTitle: string | null;
   stageOrder: number;
@@ -76,6 +81,16 @@ const normalizeDisplayValue = (value: string | null | undefined) => {
   return normalized && !['-', 'n/a', 'na', 'null', 'undefined'].includes(normalized.toLowerCase())
     ? normalized
     : null;
+};
+
+const getCourseStatusClassName = (isCompleted: boolean, status: string | null | undefined) => {
+  if (isCompleted) {
+    return 'bg-success-100 text-success-700';
+  }
+  if (normalizeDisplayValue(status)) {
+    return 'bg-primary-50 text-primary-700';
+  }
+  return 'bg-secondary-100 text-secondary-700';
 };
 
 export function LearnerMyProgressPage() {
@@ -465,7 +480,10 @@ export function LearnerMyProgressPage() {
                     <p className="text-sm text-secondary-500">No already enrolled courses found.</p>
                   ) : (
                     <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
-                      {alreadyEnrolledCourses.map((course, index) => (
+                      {alreadyEnrolledCourses.map((course, index) => {
+                        const courseDuration = normalizeDisplayValue(course.duration);
+                        const courseStatus = normalizeDisplayValue(course.erpStatus) || 'Already Enrolled';
+                        return (
                         <div
                           key={`${course.learningPath.id}-${course.code || course.id}-${index}`}
                           className="rounded-lg border border-secondary-200 bg-white p-3"
@@ -477,6 +495,9 @@ export function LearnerMyProgressPage() {
                             </p>
 
                             <p className="mt-2 text-xs font-medium tracking-wide text-secondary-500">{course.code}</p>
+                            {courseDuration ? (
+                              <p className="mt-1 text-xs text-secondary-600">Duration: {courseDuration}</p>
+                            ) : null}
 
                             <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-secondary-700">
                               {course.learningPath.category}
@@ -486,12 +507,13 @@ export function LearnerMyProgressPage() {
                               Learning Path - {course.learningPath.title}
                             </p>
 
-                            <span className="mt-2 inline-flex rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
-                              Already Enrolled
+                            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getCourseStatusClassName(course.isCompleted, course.erpStatus)}`}>
+                              {courseStatus}
                             </span>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </Card>
@@ -520,17 +542,23 @@ export function LearnerMyProgressPage() {
                   <p className="text-sm text-secondary-500">No preferred courses found.</p>
                 ) : (
                   <div className="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-2 lg:grid-cols-2">
-                    {filteredPreferredCourses.map((course, index) => (
+                    {filteredPreferredCourses.map((course, index) => {
+                      const courseDuration = normalizeDisplayValue(course.duration);
+                      const courseStatus = normalizeDisplayValue(course.erpStatus);
+                      return (
                       <div key={`${course.code || course.id}-preferred-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
                         <div className="flex h-full flex-col gap-2">
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
                             <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
+                            {courseDuration ? (
+                              <p className="mt-1 text-xs text-secondary-600">Duration: {courseDuration}</p>
+                            ) : null}
                             {course.description ? (
                               <p className="mt-1 text-xs text-secondary-600">{course.description}</p>
                             ) : null}
-                            <span className="mt-2 inline-flex rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
-                              Preferred
+                            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getCourseStatusClassName(course.isCompleted, course.erpStatus)}`}>
+                              {courseStatus || 'Preferred'}
                             </span>
                           </div>
                           <Button type="button" size="sm" className="w-full" disabled>
@@ -538,7 +566,8 @@ export function LearnerMyProgressPage() {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 </Card>

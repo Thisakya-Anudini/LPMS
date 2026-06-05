@@ -796,6 +796,8 @@ export const learnerApi = {
         title: string;
         description: string | null;
         duration: string | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
         deliveryMode: 'ONLINE' | 'PHYSICAL';
         stageTitle: string | null;
         stageOrder: number;
@@ -818,7 +820,10 @@ export const learnerApi = {
         code: string;
         title: string;
         description: string | null;
+        duration: string | null;
         durationHours: number | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
         deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
         videoUrl: string | null;
         venue: string | null;
@@ -836,7 +841,10 @@ export const learnerApi = {
         code: string;
         title: string;
         description: string | null;
+        duration: string | null;
         durationHours: number | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
         deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
         videoUrl: string | null;
         venue: string | null;
