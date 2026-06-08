@@ -287,7 +287,7 @@ const findActiveLearningPath = (learningPathId) =>
 // EXPORTS
 
 // export functions testing
-test("SUPERVISOR EXPORTS TESTS", async (t) => {
+test("SUPERVISOR CONTROLLER EXPORTS TESTS", async (t) => {
   const expectedExports = [
     "getTeam",
     "getTeamProgress",

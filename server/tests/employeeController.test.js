@@ -477,8 +477,27 @@ const mockLogAudit = async (audit) => {
 
 // TEST SUITES
 
+// exports testing
+test("EMPLOYEE CONTROLLER EXPORTS TESTS", async (t) => {
+  const expectedExports = {
+    getMyPaths,
+    getPublicPaths,
+    getMyProgress,
+    getNotifications,
+    getMyCertificates,
+    updateMyEnrollmentProgress,
+    selfEnrollPublicPath,
+  };
+
+  for (const [exportName, exportFn] of Object.entries(expectedExports)) {
+    await t.test(`should export ${exportName}`, async () => {
+      assert.equal(typeof exportFn, "function");
+    });
+  }
+});
+
 // getMyPaths testing
-test("GETMYPATHS TESTS", async (t) => {
+test("GET MY PATHS TESTS", async (t) => {
   await t.test("should return all enrollments for current user", async () => {
     setupMockDatabase();
 
@@ -566,7 +585,7 @@ test("GETMYPATHS TESTS", async (t) => {
 });
 
 // getPublicPaths testing
-test("GETPUBLICPATHS TESTS", async (t) => {
+test("GET PUBLIC PATHS TESTS", async (t) => {
   await t.test("should return only PUBLIC learning paths", async () => {
     setupMockDatabase();
 
@@ -675,7 +694,7 @@ test("GETPUBLICPATHS TESTS", async (t) => {
 });
 
 // getMyProgress testing
-test("GETMYPROGRESS TESTS", async (t) => {
+test("GET MY PROGRESS TESTS", async (t) => {
   await t.test("should calculate total_enrollments correctly", async () => {
     setupMockDatabase();
 
@@ -776,7 +795,7 @@ test("GETMYPROGRESS TESTS", async (t) => {
 });
 
 // getNotifications testing
-test("GETNOTIFICATIONS TESTS", async (t) => {
+test("GET NOTIFICATIONS TESTS", async (t) => {
   await t.test("should return notifications for current user", async () => {
     setupMockDatabase();
 
@@ -862,7 +881,7 @@ test("GETNOTIFICATIONS TESTS", async (t) => {
 });
 
 // getMyCertificates testing
-test("GETMYCERTIFICATES TESTS", async (t) => {
+test("GET MY CERTIFICATES TESTS", async (t) => {
   await t.test("should return certificates for current user", async () => {
     setupMockDatabase();
 
@@ -931,7 +950,7 @@ test("GETMYCERTIFICATES TESTS", async (t) => {
 });
 
 // updateMyEnrollmentProgress testing
-test("UPDATEMYENROLLMENTPROGRESS TESTS", async (t) => {
+test("UPDATE MY ENROLLMENT PROGRESS TESTS", async (t) => {
   await t.test("should accept valid progress (45%)", async () => {
     setupMockDatabase();
 
@@ -1121,7 +1140,7 @@ test("UPDATEMYENROLLMENTPROGRESS TESTS", async (t) => {
 });
 
 // selfEnrollPublicPath testing
-test("SELFENROLLPUBLICPATH TESTS", async (t) => {
+test("SELF ENROLL PUBLIC PATH TESTS", async (t) => {
   await t.test("should enroll in valid PUBLIC path", async () => {
     setupMockDatabase();
 

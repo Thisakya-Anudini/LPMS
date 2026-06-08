@@ -407,8 +407,34 @@ const mockQuery = async (sql, params = []) => {
 
 // TEST SUITES
 
+// export functions testing
+test("LEARNER CONTROLLER EXPORTS TESTS", async (t) => {
+  const expectedExports = [
+    "getLearnerProfile",
+    "getLearnerDashboard",
+    "getLearnerTeam",
+    "enrollLearnerTeam",
+    "getCourses",
+    "getLearnerOtherCourses",
+    "getLearningPaths",
+    "getPublicLearningPaths",
+    "getPublicLearningPathById",
+    "selfEnrollPublicLearningPath",
+    "getLearnerPathCourses",
+    "updateLearnerCourseCompletion",
+    "getLearnerCertificates",
+    "downloadLearnerCertificate",
+  ];
+
+  for (const exportName of expectedExports) {
+    await t.test(`should export ${exportName}`, async () => {
+      assert.equal(typeof learnerController[exportName], "function");
+    });
+  }
+});
+
 // getLearnerProfile testing
-test("GETLEARNERPROFILE TESTS", async (t) => {
+test("GET LEARNER PROFILE TESTS", async (t) => {
   await t.test("should validate employeeNo is provided", async () => {
     const req = createMockReq({ user: { employeeNo: "" } });
     assert.equal(req.user.employeeNo, "");
@@ -428,7 +454,7 @@ test("GETLEARNERPROFILE TESTS", async (t) => {
 });
 
 // getLearnerDashboard testing
-test("GETLEARNERDASHBOARD TESTS", async (t) => {
+test("GET LEARNER DASHBOARD TESTS", async (t) => {
   await t.test(
     "should return empty paths and notifications when no principal",
     async () => {
@@ -503,7 +529,7 @@ test("GETLEARNERDASHBOARD TESTS", async (t) => {
 });
 
 // getLearnerTeam testing
-test("GETLEARNERTEAM TESTS", async (t) => {
+test("GET LEARNER TEAM TESTS", async (t) => {
   await t.test("should validate employeeNo is provided", async () => {
     const req = createMockReq({ user: { employeeNo: "" } });
     assert.equal(req.user.employeeNo, "");
@@ -528,7 +554,7 @@ test("GETLEARNERTEAM TESTS", async (t) => {
 });
 
 // enrollLearnerTeam testing
-test("ENROLLLEARNERTEAM TESTS", async (t) => {
+test("ENROLL LEARNER TEAM TESTS", async (t) => {
   await t.test(
     "should validate employeeNumbers is non-empty array",
     async () => {
@@ -612,7 +638,7 @@ test("ENROLLLEARNERTEAM TESTS", async (t) => {
 });
 
 // getCourses testing
-test("GETCOURSES TESTS", async (t) => {
+test("GET COURSES TESTS", async (t) => {
   await t.test("should fetch and normalize courses from ERP", async () => {
     const courses = [
       { courseCode: "COURSE-001", courseName: "Python Basics" },
@@ -636,7 +662,7 @@ test("GETCOURSES TESTS", async (t) => {
 });
 
 // getLearnerOtherCourses testing
-test("GETLEARNEROTHERCOURSES TESTS", async (t) => {
+test("GET LEARNER OTHER COURSES TESTS", async (t) => {
   await t.test(
     "should return all courses when no principal (temporary auth)",
     async () => {
@@ -716,7 +742,7 @@ test("GETLEARNEROTHERCOURSES TESTS", async (t) => {
 });
 
 // getLearningPaths testing
-test("GETLEARNINGPATHS TESTS", async (t) => {
+test("GET LEARNING PATHS TESTS", async (t) => {
   await t.test("should return all active learning paths", async () => {
     setupMockDatabase();
     const paths = mockDatabase.learning_paths.filter(
@@ -743,7 +769,7 @@ test("GETLEARNINGPATHS TESTS", async (t) => {
 });
 
 // getPublicLearningPaths testing
-test("GETPUBLICLEARNINGPATHS TESTS", async (t) => {
+test("GET PUBLIC LEARNING PATHS TESTS", async (t) => {
   await t.test("should return only PUBLIC category paths", async () => {
     setupMockDatabase();
     const publicPaths = mockDatabase.learning_paths.filter(
@@ -817,7 +843,7 @@ test("GETPUBLICLEARNINGPATHS TESTS", async (t) => {
 });
 
 // getPublicLearningPathById testing
-test("GETPUBLICLEARNINGPATHBYID TESTS", async (t) => {
+test("GET PUBLIC LEARNING PATH BY ID TESTS", async (t) => {
   await t.test("should return 404 if path not found", async () => {
     setupMockDatabase();
     const pathId = "nonexistent";
@@ -870,7 +896,7 @@ test("GETPUBLICLEARNINGPATHBYID TESTS", async (t) => {
 });
 
 // selfEnrollPublicLearningPath testing
-test("SELFENROLLPUBLICLEARNINGPATH TESTS", async (t) => {
+test("SELF ENROLL PUBLIC LEARNING PATH TESTS", async (t) => {
   await t.test("should validate employeeNo is provided", async () => {
     const employeeNo = "";
     assert.equal(employeeNo, "");
@@ -924,7 +950,7 @@ test("SELFENROLLPUBLICLEARNINGPATH TESTS", async (t) => {
 });
 
 // getLearnerPathCourses testing
-test("GETLEARNERPATHCOURSES TESTS", async (t) => {
+test("GET LEARNER PATH COURSES TESTS", async (t) => {
   await t.test("should validate principal exists", async () => {
     const principalId = "principal-1";
     assert.ok(principalId);
@@ -971,7 +997,7 @@ test("GETLEARNERPATHCOURSES TESTS", async (t) => {
 });
 
 // updateLearnerCourseCompletion testing
-test("UPDATELEARNERCOURSECOMPLETION TESTS", async (t) => {
+test("UPDATE LEARNER COURSE COMPLETION TESTS", async (t) => {
   await t.test("should validate employeeNo is provided", async () => {
     const employeeNo = "";
     assert.equal(employeeNo, "");
@@ -1051,7 +1077,7 @@ test("UPDATELEARNERCOURSECOMPLETION TESTS", async (t) => {
 });
 
 // getLearnerCertificates testing
-test("GETLEARNERCERTIFICATES TESTS", async (t) => {
+test("GET LEARNER CERTIFICATES TESTS", async (t) => {
   await t.test(
     "should return empty array if principal does not exist",
     async () => {
@@ -1078,7 +1104,7 @@ test("GETLEARNERCERTIFICATES TESTS", async (t) => {
 });
 
 // downloadLearnerCertificate testing
-test("DOWNLOADLEARNERCERTIFICATE TESTS", async (t) => {
+test("DOWNLOAD LEARNER CERTIFICATE TESTS", async (t) => {
   await t.test("should validate employeeNo is provided", async () => {
     const employeeNo = "";
     assert.equal(employeeNo, "");

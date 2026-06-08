@@ -225,7 +225,24 @@ const mockBcrypt = {
   },
 };
 
-// TEST SUITES - Organized by function
+// TEST SUITES
+
+// exports testing
+test("AUTH CONTROLLER EXPORTS TESTS", async (t) => {
+  const expectedExports = {
+    login,
+    refresh,
+    logout,
+    me,
+    changePassword,
+  };
+
+  for (const [exportName, exportFn] of Object.entries(expectedExports)) {
+    await t.test(`should export ${exportName}`, async () => {
+      assert.equal(typeof exportFn, "function");
+    });
+  }
+});
 
 // login function
 test("LOGIN TESTS", async (t) => {

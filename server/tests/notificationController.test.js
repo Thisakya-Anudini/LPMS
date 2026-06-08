@@ -324,12 +324,24 @@ const simulateClearAllNotifications = async (req, res) => {
 
 // TEST SUITES
 
-// getMyNotifications testing
-test("GETMYNOTIFICATIONS TESTS", async (t) => {
-  await t.test("should export getMyNotifications function", async () => {
-    assert.equal(typeof notificationController.getMyNotifications, "function");
-  });
+// export functions testing
+test("NOTIFICATION CONTROLLER EXPORTS TESTS", async (t) => {
+  const expectedExports = [
+    "getMyNotifications",
+    "markNotificationAsRead",
+    "markAllNotificationsAsRead",
+    "clearAllNotifications",
+  ];
 
+  for (const exportName of expectedExports) {
+    await t.test(`should export ${exportName}`, async () => {
+      assert.equal(typeof notificationController[exportName], "function");
+    });
+  }
+});
+
+// getMyNotifications testing
+test("GET MY NOTIFICATIONS TESTS", async (t) => {
   await t.test(
     "should resolve normal user principal from req.user.id",
     async () => {
@@ -444,14 +456,7 @@ test("GETMYNOTIFICATIONS TESTS", async (t) => {
 });
 
 // markNotificationAsRead testing
-test("MARKNOTIFICATIONASREAD TESTS", async (t) => {
-  await t.test("should export markNotificationAsRead function", async () => {
-    assert.equal(
-      typeof notificationController.markNotificationAsRead,
-      "function",
-    );
-  });
-
+test("MARK NOTIFICATION AS READ TESTS", async (t) => {
   await t.test(
     "should return 404 when principal cannot be resolved",
     async () => {
@@ -559,17 +564,7 @@ test("MARKNOTIFICATIONASREAD TESTS", async (t) => {
 });
 
 // markAllNotificationsAsRead testing
-test("MARKALLNOTIFICATIONSASREAD TESTS", async (t) => {
-  await t.test(
-    "should export markAllNotificationsAsRead function",
-    async () => {
-      assert.equal(
-        typeof notificationController.markAllNotificationsAsRead,
-        "function",
-      );
-    },
-  );
-
+test("MARK ALL NOTIFICATIONS AS READ TESTS", async (t) => {
   await t.test(
     "should return updatedCount 0 when principal cannot be resolved",
     async () => {
@@ -657,14 +652,7 @@ test("MARKALLNOTIFICATIONSASREAD TESTS", async (t) => {
 });
 
 // clearAllNotifications testing
-test("CLEARALLNOTIFICATIONS TESTS", async (t) => {
-  await t.test("should export clearAllNotifications function", async () => {
-    assert.equal(
-      typeof notificationController.clearAllNotifications,
-      "function",
-    );
-  });
-
+test("CLEAR ALL NOTIFICATIONS TESTS", async (t) => {
   await t.test(
     "should return deletedCount 0 when principal cannot be resolved",
     async () => {

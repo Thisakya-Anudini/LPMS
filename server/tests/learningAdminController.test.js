@@ -407,7 +407,7 @@ const mockSendClassAssignedEmail = (payload) => {
 // TEST SUITES
 
 // functions exports testing
-test("LEARNING ADMIN EXPORTS TESTS", async (t) => {
+test("LEARNING ADMIN CONTROLLER EXPORTS TESTS", async (t) => {
   const expectedExports = [
     "createLearningPath",
     "getLearningPaths",

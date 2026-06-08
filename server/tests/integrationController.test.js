@@ -361,12 +361,23 @@ const simulateImportErpEmployees = async (req, res) => {
 
 // TEST SUITES
 
-// getErpLearnerDetails testing
-test("GETERPLEARNERDETAILS TESTS", async (t) => {
-  await t.test("should export getErpLearnerDetails function", async () => {
-    assert.equal(typeof integrationController.getErpLearnerDetails, "function");
-  });
+// export functions testing
+test("INTEGRATION CONTROLLER EXPORTS TESTS", async (t) => {
+  const expectedExports = [
+    "getErpLearnerDetails",
+    "getErpSubordinates",
+    "importErpEmployees",
+  ];
 
+  for (const exportName of expectedExports) {
+    await t.test(`should export ${exportName}`, async () => {
+      assert.equal(typeof integrationController[exportName], "function");
+    });
+  }
+});
+
+// getErpLearnerDetails testing
+test("GET ERP LEARNER DETAILS TESTS", async (t) => {
   await t.test("should require employeeNo", async () => {
     const req = createMockReq({ body: {} });
     const res = createMockRes();
@@ -449,11 +460,7 @@ test("GETERPLEARNERDETAILS TESTS", async (t) => {
 });
 
 // getErpSubordinates testing
-test("GETERPSUBORDINATES TESTS", async (t) => {
-  await t.test("should export getErpSubordinates function", async () => {
-    assert.equal(typeof integrationController.getErpSubordinates, "function");
-  });
-
+test("GET ERP SUBORDINATES TESTS", async (t) => {
   await t.test("should require employeeNo", async () => {
     const req = createMockReq({ body: { employeeNo: "" } });
     const isValid =
@@ -532,11 +539,7 @@ test("GETERPSUBORDINATES TESTS", async (t) => {
 });
 
 // importErpEmployees testing
-test("IMPORTERPEMPLOYEES TESTS", async (t) => {
-  await t.test("should export importErpEmployees function", async () => {
-    assert.equal(typeof integrationController.importErpEmployees, "function");
-  });
-
+test("IMPORT ERPEMPLOYEES TESTS", async (t) => {
   await t.test("should require employees to be a non-empty array", async () => {
     const req = createMockReq({ body: { employees: [] } });
     const res = createMockRes();

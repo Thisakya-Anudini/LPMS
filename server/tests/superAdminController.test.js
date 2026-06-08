@@ -324,7 +324,7 @@ const getLearnerLearningPathsPayload = (principalId) => {
 // EXPORTS
 
 // functions export testing
-test("SUPERADMIN EXPORTS TESTS", async (t) => {
+test("SUPERADMIN CONTROLLER EXPORTS TESTS", async (t) => {
   const expectedExports = [
     "createUser",
     "getAllUsers",
