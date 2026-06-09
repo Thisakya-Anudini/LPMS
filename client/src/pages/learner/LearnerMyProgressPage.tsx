@@ -332,14 +332,14 @@ export function LearnerMyProgressPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {statSkeletons.map((index) => (
-              <Card key={`progress-stat-${index}`} className="p-6">
-                <p className="text-sm font-medium text-secondary-600">
+              <Card key={`progress-stat-${index}`} className="px-4 py-1.5">
+                <p className="text-lg font-medium text-secondary-600">
                   {index === 0 ? 'Assigned Learning Paths' : index === 1 ? 'Completed Learning Paths' : 'Pending Learning Paths'}
                 </p>
                 {loading ? (
                   <Skeleton className="mt-2 h-9 w-16" />
                 ) : (
-                  <p className={`text-3xl font-bold ${index === 1 ? 'text-success-600' : index === 2 ? 'text-warning-600' : 'text-secondary-900'}`}>
+                  <p className={`text-2xl font-bold ${index === 1 ? 'text-success-600' : index === 2 ? 'text-warning-600' : 'text-secondary-900'}`}>
                     {index === 0 ? summary.totalLearningPaths : index === 1 ? summary.completedLearningPaths : summary.remainingLearningPaths}
                   </p>
                 )}
