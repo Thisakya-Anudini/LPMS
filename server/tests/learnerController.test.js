@@ -294,7 +294,10 @@ const mockQuery = async (sql, params = []) => {
   }
 
   // GET STAGE COURSES
-  if (sql.includes("SELECT lps.id AS stage_id, COALESCE(sc.course_code")) {
+  if (
+    sql.includes("SELECT lps.id AS stage_id, COALESCE(sc.course_code") ||
+    sql.includes("SELECT lps.id AS stage_id, course.id AS course_id")
+  ) {
     const pathId = params[0];
     const stages = mockDatabase.learning_path_stages.filter(
       (s) => s.learning_path_id === pathId,
@@ -400,6 +403,36 @@ const mockQuery = async (sql, params = []) => {
       .sort((a, b) => new Date(b.issued_at) - new Date(a.issued_at));
 
     return { rows: certs, rowCount: certs.length };
+  }
+
+  // MOCK SCHEMA CHECKS
+  if (
+    sql.includes("information_schema.tables") ||
+    sql.includes("information_schema.columns")
+  ) {
+    // Return true to test the new schema, or false for the legacy fallback
+    return { rows: [{ present: false }], rowCount: 1 };
+  }
+
+  // GET OR CREATE PRINCIPAL - SELECT
+  if (sql.includes("SELECT ap.id, e.employee_number FROM auth_principals ap")) {
+    const email = params[0];
+    const principal = mockDatabase.principals?.find((p) => p.email === email);
+    if (principal) {
+      return {
+        rows: [{ id: principal.id, employee_number: "EMP-001" }],
+        rowCount: 1,
+      };
+    }
+    return { rows: [], rowCount: 0 };
+  }
+
+  // GET OR CREATE PRINCIPAL - INSERT
+  if (sql.includes("INSERT INTO auth_principals (email, password_hash, role")) {
+    return { rows: [{ id: `principal-new-${Date.now()}` }], rowCount: 1 };
+  }
+  if (sql.includes("INSERT INTO employees (principal_id, employee_number")) {
+    return { rows: [], rowCount: 1 };
   }
 
   return { rows: [], rowCount: 0 };
