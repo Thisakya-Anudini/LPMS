@@ -42,13 +42,17 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
     try {
       const payload = await response.json();
       if (response.status === 409 && payload?.error?.code === 'DUPLICATE_LEARNING_PATH') {
-        const error = new Error(payload.error.message || 'Conflict');
-        (error as any).status = response.status;
-        (error as any).payload = payload;
-        throw error;
+        type ApiErrorPayload = { error?: { code?: string; message?: string; details?: unknown } };
+        const apiError = new Error(payload.error?.message || 'Conflict') as Error & {
+          status?: number;
+          payload?: ApiErrorPayload;
+        };
+        apiError.status = response.status;
+        apiError.payload = payload as ApiErrorPayload;
+        throw apiError;
       }
       throw new Error(await parseApiError(response));
-    } catch (err) {
+    } catch {
       throw new Error(await parseApiError(response));
     }
   }

@@ -26,7 +26,7 @@ export function Select({
   const selectId = id || props.name || Math.random().toString(36).substr(2, 9);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const renderedOptions = isLoading ? [{ value: '', label: loadingLabel }] : options;
+  const renderedOptions = useMemo(() => (isLoading ? [{ value: '', label: loadingLabel }] : options), [isLoading, options, loadingLabel]);
   const selectedValue = String((props.value === undefined ? props.defaultValue : props.value) ?? '');
   const selectedLabel = useMemo(
     () => renderedOptions.find((option) => option.value === String(selectedValue ?? ''))?.label || renderedOptions[0]?.label || '',

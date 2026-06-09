@@ -131,7 +131,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [query, setQuery] = useState('');
 
   const [pathForm, setPathForm] = useState(initialPathForm);
-  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<any> }>(null);
+  type DuplicateExisting = { id?: string; title?: string; overlappingCourses?: Array<{ title?: string; code?: string }> };
+  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<DuplicateExisting> }>(null);
   const [pathTitleError, setPathTitleError] = useState<string | null>(null);
   const [pathDurationError, setPathDurationError] = useState<string | null>(null);
   const [editTitleError, setEditTitleError] = useState<string | null>(null);
@@ -409,10 +410,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       await loadData();
     } catch (err) {
       // If server returned structured DUPLICATE_LEARNING_PATH details, show inline warning
-      if (err instanceof Error && (err as any).payload?.error?.code === 'DUPLICATE_LEARNING_PATH') {
-        const payload = (err as any).payload;
-        setPathDuplicateWarning({ message: payload.error.message || 'Duplicate learning path detected.', existing: payload.error.details?.existing || payload.existing || [] });
-        showToast(payload.error.message || 'Duplicate learning path detected.', 'info');
+      type ApiErrorPayload = { error?: { code?: string; message?: string; details?: { existing?: Array<DuplicateExisting> } }; existing?: Array<DuplicateExisting> };
+      const maybePayload = (err as unknown as { payload?: ApiErrorPayload }).payload;
+      if (err instanceof Error && maybePayload && (maybePayload.error?.code === 'DUPLICATE_LEARNING_PATH' || maybePayload.existing)) {
+        const existing = maybePayload.error?.details?.existing || maybePayload.existing || [];
+        setPathDuplicateWarning({ message: maybePayload.error?.message || 'Duplicate learning path detected.', existing });
+        showToast(maybePayload.error?.message || 'Duplicate learning path detected.', 'info');
       } else {
         showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
       }
@@ -940,8 +943,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <div className="col-span-2 mt-1 text-sm text-amber-700">
                     <p className="font-medium">{pathDuplicateWarning.message}</p>
                     <ul className="list-disc list-inside">
-                      {pathDuplicateWarning.existing.map((e: any) => (
-                        <li key={e.id}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c: any) => c.title || c.code).join(', ')}` : ''}</li>
+                      {pathDuplicateWarning.existing.map((e) => (
+                        <li key={e.id ?? String(e.title)}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}</li>
                       ))}
                     </ul>
                   </div>
