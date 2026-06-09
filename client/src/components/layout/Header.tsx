@@ -162,6 +162,7 @@ export function Header() {
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  const [showAllUnreadNotifications, setShowAllUnreadNotifications] = useState(false);
 
   const navigation = useMemo(() => (user ? getNavigationModel(user) : null), [user]);
 
@@ -221,11 +222,13 @@ export function Header() {
 
   useEffect(() => {
     setOpenMenu(null);
+    setShowAllUnreadNotifications(false);
   }, [pathname]);
 
   const handleToggleMenu = async (menu: OpenMenu) => {
     const nextMenu = openMenu === menu ? null : menu;
     setOpenMenu(nextMenu);
+    setShowAllUnreadNotifications(false);
 
     if (nextMenu === 'notifications') {
       try {
@@ -283,6 +286,24 @@ export function Header() {
     return String(unreadCount);
   }, [unreadCount]);
 
+  const unreadNotifications = useMemo(
+    () =>
+      notifications
+        .filter((notification) => !notification.is_read)
+        .sort(
+          (firstNotification, secondNotification) =>
+            new Date(secondNotification.created_at).getTime() -
+            new Date(firstNotification.created_at).getTime()
+        ),
+    [notifications]
+  );
+
+  const visibleUnreadNotifications = showAllUnreadNotifications
+    ? unreadNotifications
+    : unreadNotifications.slice(0, 1);
+
+  const hiddenUnreadCount = Math.max(unreadNotifications.length - visibleUnreadNotifications.length, 0);
+
   if (!user || !navigation) {
     return null;
   }
@@ -319,58 +340,51 @@ export function Header() {
               <button
                 type="button"
                 onClick={() => handleToggleMenu('notifications')}
-                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-white transition-colors hover:bg-white/20"
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 aria-label="Notifications"
               >
-                <Bell className="h-5 w-5" />
+                <Bell className="h-5 w-5 stroke-[1.8]" />
                 {unreadLabel ? (
-                  <span className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-white px-1.5 text-[10px] font-bold leading-5 text-slate-950 shadow-sm">
+                  <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
                     {unreadLabel}
                   </span>
                 ) : null}
               </button>
 
               {openMenu === 'notifications' ? (
-                <div className="absolute right-0 top-14 z-50 w-[360px] max-w-[90vw] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-                  <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">Notifications</p>
-                      <p className="text-xs text-slate-500">Stay on top of assignments and updates.</p>
-                    </div>
+                <div className="absolute right-0 top-14 z-50 w-[380px] max-w-[90vw] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2">
+                    <p className="text-lg font-semibold text-slate-900">Notifications</p>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={handleMarkAllAsRead}
                       isLoading={markingAll}
                       disabled={unreadCount === 0}
+                      className="shrink-0 px-2 text-xs"
                     >
-                      Mark all read
+                      Clear all
                     </Button>
                   </div>
-                  <div className="max-h-96 overflow-auto">
+                  <div className="max-h-80 overflow-auto">
                     {loadingNotifications ? (
-                      <p className="px-4 py-4 text-sm text-slate-500">Loading notifications...</p>
+                      <p className="px-4 py-2.5 text-sm text-slate-500">Loading notifications...</p>
                     ) : notificationError ? (
-                      <p className="px-4 py-4 text-sm text-red-600">{notificationError}</p>
-                    ) : notifications.length === 0 ? (
-                      <p className="px-4 py-4 text-sm text-slate-500">No notifications.</p>
+                      <p className="px-4 py-3 text-sm text-red-600">{notificationError}</p>
+                    ) : unreadNotifications.length === 0 ? (
+                      <p className="px-4 py-3 text-sm text-slate-500">No unread notifications.</p>
                     ) : (
-                      notifications.map((notification) => (
-                        <div
-                          key={notification.id}
-                          className={`border-b border-slate-100 px-4 py-4 ${
-                            notification.is_read ? 'bg-white' : 'bg-violet-50/60'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
-                              <p className="mt-1 text-xs leading-5 text-slate-600">{notification.message}</p>
-                              <p className="mt-2 text-[11px] text-slate-500">
-                                {new Date(notification.created_at).toLocaleString()}
-                              </p>
-                            </div>
-                            {!notification.is_read ? (
+                      <>
+                        {visibleUnreadNotifications.map((notification) => (
+                          <div key={notification.id} className="border-b border-slate-100 bg-violet-50/60 px-4 py-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-600">{notification.message}</p>
+                                <p className="mt-2 text-[11px] text-slate-500">
+                                  {new Date(notification.created_at).toLocaleString()}
+                                </p>
+                              </div>
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -379,10 +393,21 @@ export function Header() {
                               >
                                 Read
                               </Button>
-                            ) : null}
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        ))}
+
+                        {hiddenUnreadCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllUnreadNotifications(true)}
+                            className="flex w-full items-center justify-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
+                          >
+                            Show {hiddenUnreadCount} more unread
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </>
                     )}
                   </div>
                   <div className="border-t border-slate-100 px-4 py-3">
