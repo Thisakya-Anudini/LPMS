@@ -330,9 +330,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       return { valid: false, message: 'Title is required.' };
     }
 
-    const allowedTitleRegex = /^[A-Za-z\s\-_,.&()'"@:/]+$/;
+    const allowedTitleRegex = /^[A-Za-z\s]+$/;
     if (!allowedTitleRegex.test(normalized)) {
-      return { valid: false, message: 'Title may only contain letters, spaces, and common punctuation.' };
+      return { valid: false, message: 'Title may only contain alphabetic characters and spaces.' };
     }
 
     if (!/[A-Za-z]/.test(normalized)) {
@@ -929,7 +929,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   value={pathForm.title}
                   error={pathTitleError ?? undefined}
                   onChange={(event) => {
-                    setPathForm((prev) => ({ ...prev, title: event.target.value }));
+                    const sanitized = event.target.value.replace(/[^A-Za-z\s]/g, '');
+                    setPathForm((prev) => ({ ...prev, title: sanitized }));
                     setPathTitleError(null);
                   }}
                   maxLength={50}
@@ -1386,7 +1387,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={editForm.title}
                     error={editTitleError ?? undefined}
                     onChange={(event) => {
-                      setEditForm((prev) => ({ ...prev, title: event.target.value }));
+                      const sanitized = event.target.value.replace(/[^A-Za-z\s]/g, '');
+                      setEditForm((prev) => ({ ...prev, title: sanitized }));
                       setEditTitleError(null);
                     }}
                     required
