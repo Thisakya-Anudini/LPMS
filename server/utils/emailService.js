@@ -45,6 +45,8 @@ const getSmtpConfig = () => ({
   fromName: process.env.SMTP_FROM_NAME || 'LPMS'
 });
 
+const getTestRecipientOverride = () => String(process.env.EMAIL_TEST_REDIRECT_TO || '').trim().toLowerCase();
+
 const encodeAddress = ({ name, email }) => {
   const safeEmail = String(email || '').trim();
   const safeName = String(name || '').replace(/"/g, "'");
@@ -92,6 +94,18 @@ const createMessage = ({ to, subject, html, text }) => {
 
 const getSmtpTimeoutMs = () => Number(process.env.SMTP_TIMEOUT_MS || 15000);
 
+const upgradeToTls = (socket, config) =>
+  new Promise((resolve, reject) => {
+    const tlsSocket = tls.connect({
+      socket,
+      servername: config.host,
+      rejectUnauthorized: config.rejectUnauthorized
+    });
+
+    tlsSocket.once('secureConnect', () => resolve(tlsSocket));
+    tlsSocket.once('error', reject);
+  });
+
 const createSmtpSession = (config) => new Promise((resolve, reject) => {
   const socket = config.secure
     ? tls.connect({
@@ -133,6 +147,30 @@ const createSmtpSession = (config) => new Promise((resolve, reject) => {
   socket.once('timeout', onTimeout);
   socket.once('error', onError);
 });
+
+const createSmtpSessionWithFallback = async (config) => {
+  try {
+    return await createSmtpSession(config);
+  } catch (error) {
+    const password = String(config.password || '').trim();
+    const hasPassword = Boolean(password && password.toUpperCase() !== 'N/A');
+    if (!config.secure || hasPassword) {
+      throw error;
+    }
+
+    console.warn('LPMS SMTP secure connection failed; retrying without TLS.', {
+      message: error.message,
+      host: config.host,
+      port: config.port
+    });
+
+    return createSmtpSession({
+      ...config,
+      secure: false,
+      startTls: false
+    });
+  }
+};
 
 const readResponse = (socket) => new Promise((resolve, reject) => {
   let buffer = '';
@@ -224,35 +262,33 @@ const authenticateIfConfigured = async (socket, config) => {
 
 export const sendEmail = async ({ to, subject, html, text }) => {
   const config = getSmtpConfig();
+  const overrideRecipient = getTestRecipientOverride();
+  const effectiveRecipient = overrideRecipient || String(to || '').trim().toLowerCase();
   if (!to) {
     return { skipped: true, reason: 'Recipient email is empty.' };
   }
-  if (!canSendToEmailAddress(to)) {
+  if (!canSendToEmailAddress(effectiveRecipient)) {
     return { skipped: true, reason: 'Recipient email is not deliverable.' };
   }
 
   let socket;
   try {
-    socket = await createSmtpSession(config);
+    socket = await createSmtpSessionWithFallback(config);
     await readInitialGreeting(socket);
     await introduceSmtpClient(socket);
 
     if (!config.secure && config.startTls) {
       await writeCommand(socket, 'STARTTLS', [220]);
-      socket = tls.connect({
-        socket,
-        servername: config.host,
-        rejectUnauthorized: config.rejectUnauthorized
-      });
+      socket = await upgradeToTls(socket, config);
       await introduceSmtpClient(socket);
     }
 
     await authenticateIfConfigured(socket, config);
     await writeCommand(socket, `MAIL FROM:<${config.from}>`, [250]);
-    await writeCommand(socket, `RCPT TO:<${to}>`, [250, 251]);
+    await writeCommand(socket, `RCPT TO:<${effectiveRecipient}>`, [250, 251]);
     await writeCommand(socket, 'DATA', [354]);
 
-    const message = createMessage({ to, subject, html, text }).replace(/^\./gm, '..');
+    const message = createMessage({ to: effectiveRecipient, subject, html, text }).replace(/^\./gm, '..');
     socket.write(`${message}\r\n.\r\n`);
     await readResponse(socket);
     await writeCommand(socket, 'QUIT', [221]);

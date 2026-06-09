@@ -659,6 +659,7 @@ export const learnerApi = {
         id: string;
         learningPathId: string;
         learningPathTitle: string;
+        totalDuration: string | null;
         progress: number;
         status: string;
         totalCourses: number;
@@ -667,10 +668,12 @@ export const learnerApi = {
       courses: Array<{
         courseId: string;
         title: string;
+        duration: string | null;
         order: number;
         stageTitle: string | null;
         stageOrder: number;
         isCompleted: boolean;
+        erpStatus: string | null;
         deliveryMode: 'ONLINE' | 'PHYSICAL';
         venue: string | null;
         videoUrl: string | null;
@@ -688,6 +691,7 @@ export const learnerApi = {
         id: string;
         learningPathId: string;
         learningPathTitle: string;
+        totalDuration?: string | null;
         progress: number;
         status: string;
         totalCourses: number;
@@ -696,10 +700,12 @@ export const learnerApi = {
       courses: Array<{
         courseId: string;
         title: string;
+        duration?: string | null;
         order: number;
         stageTitle: string | null;
         stageOrder: number;
         isCompleted: boolean;
+        erpStatus: string | null;
         deliveryMode: 'ONLINE' | 'PHYSICAL';
         venue: string | null;
         videoUrl: string | null;
@@ -790,6 +796,8 @@ export const learnerApi = {
         title: string;
         description: string | null;
         duration: string | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
         deliveryMode: 'ONLINE' | 'PHYSICAL';
         stageTitle: string | null;
         stageOrder: number;
@@ -812,7 +820,10 @@ export const learnerApi = {
         code: string;
         title: string;
         description: string | null;
+        duration: string | null;
         durationHours: number | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
         deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
         videoUrl: string | null;
         venue: string | null;
@@ -830,7 +841,10 @@ export const learnerApi = {
         code: string;
         title: string;
         description: string | null;
+        duration: string | null;
         durationHours: number | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
         deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
         videoUrl: string | null;
         venue: string | null;

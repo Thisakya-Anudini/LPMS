@@ -21,10 +21,12 @@ type AssignedLearningPath = {
 type PathCourse = {
   courseId: string;
   title: string;
+  duration: string | null;
   order: number;
   stageTitle: string | null;
   stageOrder: number;
   isCompleted: boolean;
+  erpStatus: string | null;
   deliveryMode: 'ONLINE' | 'PHYSICAL';
   venue: string | null;
   videoUrl: string | null;
@@ -43,10 +45,13 @@ type OtherCourse = {
   code: string;
   title: string;
   description: string | null;
+  duration: string | null;
   durationHours?: number | null;
   deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
   videoUrl?: string | null;
   venue?: string | null;
+  erpStatus: string | null;
+  isCompleted: boolean;
   alreadyEnrolled: boolean;
   learningPaths: LearningPathSummary[];
 };
@@ -57,6 +62,8 @@ type AlreadyEnrolledCourse = {
   title: string;
   description: string | null;
   duration: string | null;
+  erpStatus: string | null;
+  isCompleted: boolean;
   deliveryMode: 'ONLINE' | 'PHYSICAL';
   stageTitle: string | null;
   stageOrder: number;
@@ -69,13 +76,29 @@ type AlreadyEnrolledCourse = {
   learningPath: LearningPathSummary;
 };
 
+const normalizeDisplayValue = (value: string | null | undefined) => {
+  const normalized = String(value ?? '').trim();
+  return normalized && !['-', 'n/a', 'na', 'null', 'undefined'].includes(normalized.toLowerCase())
+    ? normalized
+    : null;
+};
+
+const getCourseStatusClassName = (isCompleted: boolean, status: string | null | undefined) => {
+  if (isCompleted) {
+    return 'bg-success-100 text-success-700';
+  }
+  if (normalizeDisplayValue(status)) {
+    return 'bg-primary-50 text-primary-700';
+  }
+  return 'bg-secondary-100 text-secondary-700';
+};
+
 export function LearnerMyProgressPage() {
   const { getAccessToken, user } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
-  const [courseUpdateLoadingId, setCourseUpdateLoadingId] = useState<string | null>(null);
   const [activeLearningSection, setActiveLearningSection] = useState<'assigned' | 'self'>('assigned');
   const [activeSelfEnrollmentSection, setActiveSelfEnrollmentSection] = useState<'public' | 'other'>('public');
   const [activeOtherCourseSection, setActiveOtherCourseSection] = useState<'enrolled' | 'preferred'>('enrolled');
@@ -91,6 +114,7 @@ export function LearnerMyProgressPage() {
   const [selectedPathMeta, setSelectedPathMeta] = useState<{
     enrollmentId: string;
     learningPathTitle: string;
+    totalDuration: string | null;
     progress: number;
     status: string;
     totalCourses: number;
@@ -210,6 +234,8 @@ export function LearnerMyProgressPage() {
     );
   }, [normalizedCourseSearch, preferredCourses]);
 
+  const selectedPathDuration = normalizeDisplayValue(selectedPathMeta?.totalDuration);
+
   // 'All Courses' list and filtering removed
 
   const openLearningPathModal = async (enrollmentId: string) => {
@@ -226,48 +252,7 @@ export function LearnerMyProgressPage() {
       setSelectedPathMeta({
         enrollmentId: response.enrollment.id,
         learningPathTitle: response.enrollment.learningPathTitle,
-        progress: response.enrollment.progress,
-        status: response.enrollment.status,
-        totalCourses: response.enrollment.totalCourses,
-        completedCourses: response.enrollment.completedCourses
-      });
-      setSelectedPathCourses(response.courses);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to load learning path courses.', 'error');
-    } finally {
-      setModalLoading(false);
-    }
-  };
-
-  const closeModal = () => {
-    setSelectedEnrollmentId(null);
-    setSelectedPathCourses([]);
-    setSelectedPathMeta(null);
-  };
-
-  const handleToggleCourse = async (course: PathCourse, completed: boolean) => {
-    if (!selectedEnrollmentId) {
-      return;
-    }
-
-    try {
-      setCourseUpdateLoadingId(course.courseId);
-      const token = await getAccessToken();
-      if (!token) {
-        showToast('Session expired. Please login again.', 'error');
-        return;
-      }
-
-      const response = await learnerApi.updateCourseCompletion(
-        token,
-        selectedEnrollmentId,
-        course.courseId,
-        completed
-      );
-
-      setSelectedPathMeta({
-        enrollmentId: response.enrollment.id,
-        learningPathTitle: response.enrollment.learningPathTitle,
+        totalDuration: response.enrollment.totalDuration,
         progress: response.enrollment.progress,
         status: response.enrollment.status,
         totalCourses: response.enrollment.totalCourses,
@@ -281,15 +266,17 @@ export function LearnerMyProgressPage() {
             : path
         )
       );
-      if (response.enrollment.progress >= 100) {
-        window.dispatchEvent(new Event('notifications:updated'));
-        showToast('Learning path completed. Certificate generated.', 'success');
-      }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update course completion.', 'error');
+      showToast(err instanceof Error ? err.message : 'Failed to load learning path courses.', 'error');
     } finally {
-      setCourseUpdateLoadingId(null);
+      setModalLoading(false);
     }
+  };
+
+  const closeModal = () => {
+    setSelectedEnrollmentId(null);
+    setSelectedPathCourses([]);
+    setSelectedPathMeta(null);
   };
 
   return (
@@ -493,7 +480,10 @@ export function LearnerMyProgressPage() {
                     <p className="text-sm text-secondary-500">No already enrolled courses found.</p>
                   ) : (
                     <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
-                      {alreadyEnrolledCourses.map((course, index) => (
+                      {alreadyEnrolledCourses.map((course, index) => {
+                        const courseDuration = normalizeDisplayValue(course.duration);
+                        const courseStatus = normalizeDisplayValue(course.erpStatus) || 'Already Enrolled';
+                        return (
                         <div
                           key={`${course.learningPath.id}-${course.code || course.id}-${index}`}
                           className="rounded-lg border border-secondary-200 bg-white p-3"
@@ -505,6 +495,9 @@ export function LearnerMyProgressPage() {
                             </p>
 
                             <p className="mt-2 text-xs font-medium tracking-wide text-secondary-500">{course.code}</p>
+                            {courseDuration ? (
+                              <p className="mt-1 text-xs text-secondary-600">Duration: {courseDuration}</p>
+                            ) : null}
 
                             <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-secondary-700">
                               {course.learningPath.category}
@@ -514,12 +507,13 @@ export function LearnerMyProgressPage() {
                               Learning Path - {course.learningPath.title}
                             </p>
 
-                            <span className="mt-2 inline-flex rounded-full bg-success-100 px-2 py-0.5 text-xs font-semibold text-success-700">
-                              Already Enrolled
+                            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getCourseStatusClassName(course.isCompleted, course.erpStatus)}`}>
+                              {courseStatus}
                             </span>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </Card>
@@ -548,17 +542,23 @@ export function LearnerMyProgressPage() {
                   <p className="text-sm text-secondary-500">No preferred courses found.</p>
                 ) : (
                   <div className="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-2 lg:grid-cols-2">
-                    {filteredPreferredCourses.map((course, index) => (
+                    {filteredPreferredCourses.map((course, index) => {
+                      const courseDuration = normalizeDisplayValue(course.duration);
+                      const courseStatus = normalizeDisplayValue(course.erpStatus);
+                      return (
                       <div key={`${course.code || course.id}-preferred-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
                         <div className="flex h-full flex-col gap-2">
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
                             <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
+                            {courseDuration ? (
+                              <p className="mt-1 text-xs text-secondary-600">Duration: {courseDuration}</p>
+                            ) : null}
                             {course.description ? (
                               <p className="mt-1 text-xs text-secondary-600">{course.description}</p>
                             ) : null}
-                            <span className="mt-2 inline-flex rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
-                              Preferred
+                            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getCourseStatusClassName(course.isCompleted, course.erpStatus)}`}>
+                              {courseStatus || 'Preferred'}
                             </span>
                           </div>
                           <Button type="button" size="sm" className="w-full" disabled>
@@ -566,7 +566,8 @@ export function LearnerMyProgressPage() {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 </Card>
@@ -614,6 +615,7 @@ export function LearnerMyProgressPage() {
                     <p className="font-semibold text-secondary-900 text-lg">{selectedPathMeta.learningPathTitle}</p>
                     <p className="text-sm text-secondary-600 mt-1">
                       {selectedPathMeta.completedCourses}/{selectedPathMeta.totalCourses} courses completed
+                      {selectedPathDuration ? ` | Duration: ${selectedPathDuration}` : ''}
                       {' | '}
                       <span className={`font-medium ${
                         selectedPathMeta.status === 'COMPLETED'
@@ -636,7 +638,9 @@ export function LearnerMyProgressPage() {
                         <p className="text-sm font-semibold text-secondary-800 mb-3">
                           Stage {stage.stageOrder}: {stage.stageTitle}
                         </p>
-                        {stage.courses.map((course) => (
+                        {stage.courses.map((course) => {
+                          const courseDuration = normalizeDisplayValue(course.duration);
+                          return (
                           <div
                             key={course.courseId}
                             className="flex items-start gap-4 p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200"
@@ -644,8 +648,8 @@ export function LearnerMyProgressPage() {
                             <input
                               type="checkbox"
                               checked={course.isCompleted}
-                              disabled={courseUpdateLoadingId === course.courseId}
-                              onChange={(event) => handleToggleCourse(course, event.target.checked)}
+                              disabled
+                              readOnly
                               className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
                             />
                             <div className="flex-1">
@@ -657,12 +661,13 @@ export function LearnerMyProgressPage() {
                                   ? 'bg-success-100 text-success-700'
                                   : 'bg-secondary-100 text-secondary-700'
                               }`}>
-                                {course.isCompleted ? 'Completed' : 'Pending'}
+                                {course.erpStatus || (course.isCompleted ? 'Completed' : 'Not Enrolled')}
                               </span>
                               <span className="block text-xs text-secondary-500 mt-2">
                                 {course.deliveryMode === 'ONLINE'
                                   ? 'Mode: Online'
                                   : `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`}
+                                {courseDuration ? ` | Duration: ${courseDuration}` : ''}
                               </span>
                             </div>
                             {course.deliveryMode === 'ONLINE' ? (
@@ -683,7 +688,8 @@ export function LearnerMyProgressPage() {
                               </span>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))}
                     {selectedPathCourses.length === 0 ? (
