@@ -38,7 +38,19 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
   });
 
   if (!response.ok) {
-    throw new Error(await parseApiError(response));
+    // Attempt to parse structured error payload
+    try {
+      const payload = await response.json();
+      if (response.status === 409 && payload?.error?.code === 'DUPLICATE_LEARNING_PATH') {
+        const error = new Error(payload.error.message || 'Conflict');
+        (error as any).status = response.status;
+        (error as any).payload = payload;
+        throw error;
+      }
+      throw new Error(await parseApiError(response));
+    } catch (err) {
+      throw new Error(await parseApiError(response));
+    }
   }
 
   if (response.status === 204) {

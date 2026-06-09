@@ -31,6 +31,52 @@ const parseCategory = (value) => {
   return value;
 };
 
+const validateLearningPathTitle = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return { valid: false, message: 'title is required.' };
+  }
+
+  const allowedTitleRegex = /^[A-Za-z\s\-_.,&()'":\/]+$/;
+  if (!allowedTitleRegex.test(normalized)) {
+    return { valid: false, message: 'title may only contain letters, spaces, and common punctuation.' };
+  }
+
+  if (!/[A-Za-z]/.test(normalized)) {
+    return { valid: false, message: 'title must include at least one letter.' };
+  }
+
+  return { valid: true };
+};
+
+const parseTotalDurationValue = (value) => {
+  const normalized = String(value || '').trim();
+  if (normalized === '') {
+    return { valid: true };
+  }
+  if (normalized.startsWith('-')) {
+    return { valid: false, message: 'totalDuration must not be negative.' };
+  }
+
+  const durationMatch = normalized.match(/^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i);
+  if (!durationMatch) {
+    return { valid: false, message: 'totalDuration format is invalid. Use years or months.' };
+  }
+
+  const numericValue = Number(durationMatch[1]);
+  const unit = durationMatch[2]?.toLowerCase() ?? 'years';
+
+  if (unit === 'month' || unit === 'months') {
+    return numericValue <= 24
+      ? { valid: true }
+      : { valid: false, message: 'totalDuration must be 2 years or less.' };
+  }
+
+  return numericValue <= 2
+    ? { valid: true }
+    : { valid: false, message: 'totalDuration must be 2 years or less.' };
+};
+
 const isStructuredStagePayload = (stages) =>
   Array.isArray(stages) && stages.some((stage) => Array.isArray(stage?.courses));
 
@@ -665,6 +711,111 @@ export const createLearningPath = async (req, res) => {
   if (!normalizedCategory) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid category.');
   }
+  const titleValidation = validateLearningPathTitle(title);
+  if (!titleValidation.valid) {
+    return sendError(res, 400, 'VALIDATION_ERROR', titleValidation.message);
+  }
+  const durationValidation = parseTotalDurationValue(totalDuration);
+  if (!durationValidation.valid) {
+    return sendError(res, 400, 'VALIDATION_ERROR', durationValidation.message);
+  }
+
+  const normalizedTitle = String(title || '').trim();
+  if (!normalizedTitle) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'title is required.');
+  }
+
+  // Prevent exact-title duplicates (case-insensitive). If an existing learning path
+  // with the same title exists, return 409 with details so the client can warn the user.
+  const existingTitleResult = await query(
+    `
+      SELECT id, title
+      FROM learning_paths
+      WHERE lower(title) = lower($1) AND is_deleted = FALSE
+    `,
+    [normalizedTitle]
+  );
+
+  if (existingTitleResult.rowCount > 0) {
+    // Check for overlapping courses between the new payload and existing learning paths
+    const existingIds = existingTitleResult.rows.map((r) => r.id);
+    const usesCourseReferenceTable =
+      (await hasTable('courses')) &&
+      (await hasColumn('stage_courses', 'course_id'));
+
+    let courseRows = [];
+    if (usesCourseReferenceTable) {
+      courseRows = (
+        await query(
+          `
+            SELECT lps.learning_path_id AS learning_path_id, c.id AS course_id, c.title AS course_title
+            FROM learning_path_stages lps
+            JOIN stage_courses sc ON sc.stage_id = lps.id
+            JOIN courses c ON c.id = sc.course_id
+            WHERE lps.learning_path_id = ANY($1::uuid[])
+          `,
+          [existingIds]
+        )
+      ).rows;
+    } else {
+      courseRows = (
+        await query(
+          `
+            SELECT lps.learning_path_id AS learning_path_id, sc.course_code AS course_code, sc.course_title AS course_title
+            FROM learning_path_stages lps
+            JOIN stage_courses sc ON sc.stage_id = lps.id
+            WHERE lps.learning_path_id = ANY($1::uuid[])
+          `,
+          [existingIds]
+        )
+      ).rows;
+    }
+
+    // Build set of course identifiers from incoming payload
+    const incomingCourseIds = new Set();
+    const incomingCourseCodes = new Set();
+    if (Array.isArray(stages)) {
+      for (const stage of stages) {
+        if (Array.isArray(stage?.courses)) {
+          for (const c of stage.courses) {
+            const cid = String(c?.courseId || '').trim();
+            if (!cid) continue;
+            if (usesCourseReferenceTable) incomingCourseIds.add(cid);
+            else incomingCourseCodes.add(cid);
+          }
+        }
+      }
+    }
+
+    const existingDetails = existingTitleResult.rows.map((row) => ({ id: row.id, title: row.title, overlappingCourses: [] }));
+
+    for (const r of courseRows) {
+      if (usesCourseReferenceTable) {
+        if (incomingCourseIds.has(String(r.course_id))) {
+          const target = existingDetails.find((d) => d.id === r.learning_path_id);
+          if (target) {
+            target.overlappingCourses.push({ id: r.course_id, title: r.course_title });
+          }
+        }
+      } else {
+        if (incomingCourseCodes.has(String(r.course_code))) {
+          const target = existingDetails.find((d) => d.id === r.learning_path_id);
+          if (target) {
+            target.overlappingCourses.push({ code: r.course_code, title: r.course_title });
+          }
+        }
+      }
+    }
+
+    // Only treat as a duplicate if there is at least one overlapping course between
+    // the incoming payload and an existing learning path with the same title.
+    const hasOverlap = existingDetails.some((d) => Array.isArray(d.overlappingCourses) && d.overlappingCourses.length > 0);
+    if (hasOverlap) {
+      return sendError(res, 409, 'DUPLICATE_LEARNING_PATH', 'Learning path with same title and overlapping courses already exists.', {
+        existing: existingDetails
+      });
+    }
+  }
 
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
 
@@ -829,6 +980,20 @@ export const updateLearningPath = async (req, res) => {
     certificateSignerName,
     certificateSignerTitle
   } = req.body;
+
+  if (title !== undefined) {
+    const titleValidation = validateLearningPathTitle(title);
+    if (!titleValidation.valid) {
+      return sendError(res, 400, 'VALIDATION_ERROR', titleValidation.message);
+    }
+  }
+
+  if (totalDuration !== undefined) {
+    const durationValidation = parseTotalDurationValue(totalDuration);
+    if (!durationValidation.valid) {
+      return sendError(res, 400, 'VALIDATION_ERROR', durationValidation.message);
+    }
+  }
 
   const result = await query(
     `
