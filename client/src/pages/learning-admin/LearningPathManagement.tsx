@@ -966,7 +966,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }));
                     setPathDurationError(null);
                   }}
-                  placeholder="e.g. 4yr"
+                  placeholder="e.g. 2yr"
                   required
                 />
                 <Input
