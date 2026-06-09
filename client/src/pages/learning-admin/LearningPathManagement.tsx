@@ -131,6 +131,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [query, setQuery] = useState('');
 
   const [pathForm, setPathForm] = useState(initialPathForm);
+  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<any> }>(null);
+  const [pathTitleError, setPathTitleError] = useState<string | null>(null);
+  const [pathDurationError, setPathDurationError] = useState<string | null>(null);
+  const [editTitleError, setEditTitleError] = useState<string | null>(null);
+  const [editDurationError, setEditDurationError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
   const [createCourseSearch, setCreateCourseSearch] = useState('');
 
@@ -319,9 +324,72 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     return toStages(combined);
   };
 
+  const validateTitleValue = (value: string): { valid: true } | { valid: false; message: string } => {
+    const normalized = String(value || '').trim();
+    if (normalized === '') {
+      return { valid: false, message: 'Title is required.' };
+    }
+
+    const allowedTitleRegex = /^[A-Za-z\s\-_,.&()'"@:/]+$/;
+    if (!allowedTitleRegex.test(normalized)) {
+      return { valid: false, message: 'Title may only contain letters, spaces, and common punctuation.' };
+    }
+
+    if (!/[A-Za-z]/.test(normalized)) {
+      return { valid: false, message: 'Title must include at least one letter.' };
+    }
+
+    return { valid: true };
+  };
+
+  const validateDurationValue = (value: string): { valid: true } | { valid: false; message: string } => {
+    const normalized = String(value || '').trim();
+    if (normalized === '') {
+      return { valid: true };
+    }
+    if (normalized.startsWith('-')) {
+      return { valid: false, message: 'Duration must not be negative.' };
+    }
+
+    const durationMatch = normalized.match(/^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i);
+    if (!durationMatch) {
+      return { valid: false, message: 'Duration format is invalid. Use years or months.' };
+    }
+
+    const numericValue = Number(durationMatch[1]);
+    const unit = durationMatch[2]?.toLowerCase() ?? 'years';
+
+    if (unit === 'month' || unit === 'months') {
+      return numericValue <= 24
+        ? { valid: true }
+        : { valid: false, message: 'Duration must be 2 years or less.' };
+    }
+
+    return numericValue <= 2
+      ? { valid: true }
+      : { valid: false, message: 'Duration must be 2 years or less.' };
+  };
+
   const handleCreatePath = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPathFormLoading(true);
+    setPathDuplicateWarning(null);
+    setPathTitleError(null);
+    setPathDurationError(null);
+    const titleValidation = validateTitleValue(pathForm.title);
+    if (!titleValidation.valid) {
+      setPathTitleError(titleValidation.message);
+      showToast(titleValidation.message, 'error');
+      setPathFormLoading(false);
+      return;
+    }
+    const durationValidation = validateDurationValue(pathForm.totalDuration);
+    if (!durationValidation.valid) {
+      setPathDurationError(durationValidation.message);
+      showToast(durationValidation.message, 'error');
+      setPathFormLoading(false);
+      return;
+    }
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -340,7 +408,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       showToast('Learning path created successfully.', 'success');
       await loadData();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
+      // If server returned structured DUPLICATE_LEARNING_PATH details, show inline warning
+      if (err instanceof Error && (err as any).payload?.error?.code === 'DUPLICATE_LEARNING_PATH') {
+        const payload = (err as any).payload;
+        setPathDuplicateWarning({ message: payload.error.message || 'Duplicate learning path detected.', existing: payload.error.details?.existing || payload.existing || [] });
+        showToast(payload.error.message || 'Duplicate learning path detected.', 'info');
+      } else {
+        showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
+      }
     } finally {
       setPathFormLoading(false);
     }
@@ -388,6 +463,22 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       return;
     }
     setEditLoading(true);
+    setEditTitleError(null);
+    setEditDurationError(null);
+    const titleValidation = validateTitleValue(editForm.title);
+    if (!titleValidation.valid) {
+      setEditTitleError(titleValidation.message);
+      showToast(titleValidation.message, 'error');
+      setEditLoading(false);
+      return;
+    }
+    const durationValidation = validateDurationValue(editForm.totalDuration);
+    if (!durationValidation.valid) {
+      setEditDurationError(durationValidation.message);
+      showToast(durationValidation.message, 'error');
+      setEditLoading(false);
+      return;
+    }
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -836,9 +927,25 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 <Input
                   label="Title"
                   value={pathForm.title}
-                  onChange={(event) => setPathForm((prev) => ({ ...prev, title: event.target.value }))}
+                  error={pathTitleError ?? undefined}
+                  onChange={(event) => {
+                    setPathForm((prev) => ({ ...prev, title: event.target.value }));
+                    setPathTitleError(null);
+                  }}
+                  maxLength={50}
+                  helperText={`${pathForm.title.length}/50 characters entered, ${50 - pathForm.title.length} remaining`}
                   required
                 />
+                {pathDuplicateWarning ? (
+                  <div className="col-span-2 mt-1 text-sm text-amber-700">
+                    <p className="font-medium">{pathDuplicateWarning.message}</p>
+                    <ul className="list-disc list-inside">
+                      {pathDuplicateWarning.existing.map((e: any) => (
+                        <li key={e.id}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c: any) => c.title || c.code).join(', ')}` : ''}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <Select
                   label="Category"
                   value={pathForm.category}
@@ -853,9 +960,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 <Input
                   label="Total Duration"
                   value={pathForm.totalDuration}
-                  onChange={(event) =>
-                    setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }))
-                  }
+                  error={pathDurationError ?? undefined}
+                  onChange={(event) => {
+                    setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }));
+                    setPathDurationError(null);
+                  }}
                   placeholder="e.g. 4yr"
                   required
                 />
@@ -1275,7 +1384,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Input
                     label="Title"
                     value={editForm.title}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
+                    error={editTitleError ?? undefined}
+                    onChange={(event) => {
+                      setEditForm((prev) => ({ ...prev, title: event.target.value }));
+                      setEditTitleError(null);
+                    }}
                     required
                   />
                   <Select
@@ -1292,9 +1405,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Input
                     label="Total Duration"
                     value={editForm.totalDuration}
-                    onChange={(event) =>
-                      setEditForm((prev) => ({ ...prev, totalDuration: event.target.value }))
-                    }
+                    error={editDurationError ?? undefined}
+                    onChange={(event) => {
+                      setEditForm((prev) => ({ ...prev, totalDuration: event.target.value }));
+                      setEditDurationError(null);
+                    }}
                     required
                   />
                   <Select
