@@ -28,7 +28,7 @@ router.post(
   '/learning-paths',
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['title', 'description', 'category', 'totalDuration']),
+  requireFields(['title', 'description', 'category']),
   createLearningPath
 );
 router.get('/learning-paths', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPaths);

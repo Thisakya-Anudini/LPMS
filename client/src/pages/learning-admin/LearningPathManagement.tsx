@@ -93,7 +93,6 @@ const initialPathForm = {
   title: '',
   description: '',
   category: 'PUBLIC' as Category,
-  totalDuration: '',
   stages: [] as StageForm[],
   draftStage: createStageForm(0) as StageForm
 };
@@ -134,7 +133,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   type DuplicateExisting = { id?: string; title?: string; overlappingCourses?: Array<{ title?: string; code?: string }> };
   const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<DuplicateExisting> }>(null);
   const [pathTitleError, setPathTitleError] = useState<string | null>(null);
-  const [pathDurationError, setPathDurationError] = useState<string | null>(null);
   const [editTitleError, setEditTitleError] = useState<string | null>(null);
   const [editDurationError, setEditDurationError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
@@ -376,18 +374,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     setPathFormLoading(true);
     setPathDuplicateWarning(null);
     setPathTitleError(null);
-    setPathDurationError(null);
     const titleValidation = validateTitleValue(pathForm.title);
     if (!titleValidation.valid) {
       setPathTitleError(titleValidation.message);
       showToast(titleValidation.message, 'error');
-      setPathFormLoading(false);
-      return;
-    }
-    const durationValidation = validateDurationValue(pathForm.totalDuration);
-    if (!durationValidation.valid) {
-      setPathDurationError(durationValidation.message);
-      showToast(durationValidation.message, 'error');
       setPathFormLoading(false);
       return;
     }
@@ -402,7 +392,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         title: pathForm.title,
         description: pathForm.description,
         category: pathForm.category,
-        totalDuration: pathForm.totalDuration,
+        totalDuration: '',
         stages: getCreateStagesPayload()
       });
       setPathForm(initialPathForm);
@@ -961,17 +951,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   ]}
                 />
                 <Input
-                  label="Total Duration"
-                  value={pathForm.totalDuration}
-                  error={pathDurationError ?? undefined}
-                  onChange={(event) => {
-                    setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }));
-                    setPathDurationError(null);
-                  }}
-                  placeholder="e.g. 4yr"
-                  required
-                />
-                <Input
                   label="Description"
                   value={pathForm.description}
                   onChange={(event) =>
@@ -999,7 +978,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   {pathForm.description.trim() || 'Add a description to preview details.'}
                 </p>
                 <p className="text-xs text-slate-500 mt-2">
-                  {pathForm.category.replace('_', ' ')} | {pathForm.totalDuration || 'Duration not set'}
+                  {pathForm.category.replace('_', ' ')}
                 </p>
               </div>
               <div>
