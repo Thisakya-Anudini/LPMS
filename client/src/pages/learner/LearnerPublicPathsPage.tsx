@@ -147,7 +147,6 @@ export function LearnerPublicPathsPanel({
                 <div>
                   <p className="font-medium text-slate-900">{path.title}</p>
                   <p className="text-xs text-slate-500">{path.description}</p>
-                  <p className="text-xs text-slate-500 mt-1">Duration: {path.total_duration}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" onClick={() => handleOpenDetails(path.id)}>

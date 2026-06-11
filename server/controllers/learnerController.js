@@ -108,6 +108,52 @@ const normalizeDisplayValue = (value) => {
   return normalized;
 };
 
+const parseDurationToHours = (value) => {
+  const normalized = normalizeDisplayValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const compact = normalized.toLowerCase().replace(/,/g, ' ');
+  const durationPattern = /([0-9]+(?:\.[0-9]+)?)\s*(days?|d|hours?|hrs?|hr|h)?/gi;
+  let totalHours = 0;
+  let matched = false;
+
+  for (const match of compact.matchAll(durationPattern)) {
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+    const unit = String(match[2] || 'hours').toLowerCase();
+    matched = true;
+    totalHours += unit.startsWith('d') ? amount * 6 : amount;
+  }
+
+  return matched ? totalHours : null;
+};
+
+const formatDurationHours = (hours) => {
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return null;
+  }
+  const rounded = Math.round(hours * 10) / 10;
+  const displayValue = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace(/\.0$/, '');
+  return `${displayValue} ${rounded === 1 ? 'hour' : 'hours'}`;
+};
+
+const normalizeDurationDisplay = (value) => {
+  const hours = parseDurationToHours(value);
+  return hours === null ? normalizeDisplayValue(value) : formatDurationHours(hours);
+};
+
+const sumCourseDurations = (courses) => {
+  const totalHours = courses.reduce((sum, course) => {
+    const hours = parseDurationToHours(course?.duration);
+    return hours === null ? sum : sum + hours;
+  }, 0);
+  return formatDurationHours(totalHours);
+};
+
 const normalizeLooseKey = (value) =>
   String(value || '')
     .trim()
@@ -764,9 +810,10 @@ const applyErpCourseStatuses = async ({
   const enrichedCourses = courses.map((course) => {
     const erpEnrollment = findErpEnrollmentForCourse(erpEnrollmentIndex, course);
     const erpCompleted = Boolean(erpEnrollment?.isCompleted);
+    const duration = normalizeDurationDisplay(erpEnrollment?.duration || course.duration);
     return {
       ...course,
-      duration: erpEnrollment?.duration || course.duration,
+      duration,
       isCompleted: erpCompleted,
       erpStatus: erpEnrollment?.statusLabel || 'Not Enrolled',
       erpStatusRaw: erpEnrollment?.status || null
@@ -811,6 +858,7 @@ const applyErpCourseStatuses = async ({
   return {
     enrollment: updatedEnrollment,
     courses: enrichedCourses.map(({ courseCode, progressCourseId, stageId, erpStatusRaw, ...course }) => course),
+    totalDuration: sumCourseDurations(enrichedCourses),
     totalCourses,
     completedCourses,
     computedProgress
@@ -933,6 +981,7 @@ export const getLearnerDashboard = async (req, res) => {
       enrollmentId: row.enrollment_id,
       learningPathId: row.learning_path_id,
       title: row.title,
+      totalDuration: synced?.totalDuration || null,
       progress: Number(synced?.enrollment?.progress ?? row.progress ?? 0),
       status: synced?.enrollment?.status || row.status
     });
@@ -1637,22 +1686,27 @@ export const getLearnerPathCourses = async (req, res) => {
     learningPathId: enrollment.learning_path_id,
     useCourseReference
   });
+  const durationAwareCourses = courses.map((course) => ({
+    ...course,
+    duration: normalizeDurationDisplay(course.duration)
+  }));
   const totalCourses = synced?.totalCourses ?? courses.length;
   const completedCourses =
-    synced?.completedCourses ?? courses.filter((course) => course.isCompleted).length;
+    synced?.completedCourses ?? durationAwareCourses.filter((course) => course.isCompleted).length;
+  const totalDuration = synced?.totalDuration || sumCourseDurations(durationAwareCourses) || null;
 
   return res.status(200).json({
     enrollment: {
       id: synced?.enrollment?.id || enrollment.id,
       learningPathId: synced?.enrollment?.learning_path_id || enrollment.learning_path_id,
       learningPathTitle: enrollment.title,
-      totalDuration: enrollment.total_duration,
+      totalDuration,
       progress: Number(synced?.enrollment?.progress ?? enrollment.progress ?? 0),
       status: synced?.enrollment?.status || enrollment.status,
       totalCourses,
       completedCourses
     },
-    courses
+    courses: durationAwareCourses
   });
 };
 

@@ -662,6 +662,7 @@ export const learnerApi = {
         enrollmentId: string;
         learningPathId: string;
         title: string;
+        totalDuration: string | null;
         progress: number;
         status: string;
       }>;

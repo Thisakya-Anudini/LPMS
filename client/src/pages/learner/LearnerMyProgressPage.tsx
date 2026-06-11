@@ -14,6 +14,7 @@ type AssignedLearningPath = {
   enrollmentId: string;
   learningPathId: string;
   title: string;
+  totalDuration: string | null;
   progress: number;
   status: string;
 };
@@ -359,28 +360,36 @@ export function LearnerMyProgressPage() {
                     <Skeleton className="h-3 w-full" />
                   </div>
                 ))
-              ) : assignedLearningPaths.map((path) => (
-                <button
-                  key={path.enrollmentId}
-                  type="button"
-                  onClick={() => openLearningPathModal(path.enrollmentId)}
-                  className="w-full text-left p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200 group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="font-semibold text-secondary-900 group-hover:text-primary-700">{path.title}</p>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      path.status === 'COMPLETED'
-                        ? 'bg-success-100 text-success-700'
-                        : path.status === 'IN_PROGRESS'
-                        ? 'bg-warning-100 text-warning-700'
-                        : 'bg-secondary-100 text-secondary-700'
-                    }`}>
-                      {path.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <ProgressBar progress={path.progress} showLabel size="sm" />
-                </button>
-              ))}
+              ) : assignedLearningPaths.map((path) => {
+                const pathDuration = normalizeDisplayValue(path.totalDuration);
+                return (
+                  <button
+                    key={path.enrollmentId}
+                    type="button"
+                    onClick={() => openLearningPathModal(path.enrollmentId)}
+                    className="w-full text-left p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200 group"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="font-semibold text-secondary-900 group-hover:text-primary-700">{path.title}</p>
+                        {pathDuration ? (
+                          <p className="mt-1 text-xs text-secondary-600">Total Duration: {pathDuration}</p>
+                        ) : null}
+                      </div>
+                      <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${
+                        path.status === 'COMPLETED'
+                          ? 'bg-success-100 text-success-700'
+                          : path.status === 'IN_PROGRESS'
+                          ? 'bg-warning-100 text-warning-700'
+                          : 'bg-secondary-100 text-secondary-700'
+                      }`}>
+                        {path.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <ProgressBar progress={path.progress} showLabel size="sm" />
+                  </button>
+                );
+              })}
               {!loading && assignedLearningPaths.length === 0 ? (
                 <p className="text-sm text-secondary-500 text-center py-8">No assigned learning paths yet.</p>
               ) : null}
