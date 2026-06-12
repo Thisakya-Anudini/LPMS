@@ -266,7 +266,20 @@ const normalizeErpCourseCatalog = (rows) =>
       .map((row, index) => {
         const code = String(row?.courseCode || '').trim();
         const title = String(row?.courseName || '').trim() || code || `Course ${index + 1}`;
-        return code ? [code, { code, title }] : null;
+        const duration = pickFirstString(row, [
+          'duration',
+          'Duration',
+          'courseDuration',
+          'CourseDuration',
+          'durationHours',
+          'DurationHours',
+          'courseDurationHours',
+          'CourseDurationHours',
+          'hours',
+          'Hours'
+        ]);
+        const deliveryMode = pickFirstString(row, ['deliveryMode', 'DeliveryMode', 'type', 'Type']);
+        return code ? [code, { code, title, duration, deliveryMode }] : null;
       })
       .filter(Boolean)
   );
@@ -519,8 +532,8 @@ const resolveCourseUuid = async (courseId, courseCatalogByCode = new Map()) => {
       courseFromCatalog.code,
       courseFromCatalog.title,
       courseFromCatalog.title,
-      '-',
-      'ONLINE'
+      courseFromCatalog.duration || '-',
+      courseFromCatalog.deliveryMode || 'ONLINE'
     ]
   );
 
@@ -791,8 +804,8 @@ const insertLearningPathStages = async ({ learningPathId, stages = [] }) => {
           stageId,
           courseCode || null,
           courseFromCatalog?.title || courseCode || `Course ${courseIndex + 1}`,
-          '-',
-          'ONLINE',
+          courseFromCatalog?.duration || '-',
+          courseFromCatalog?.deliveryMode || 'ONLINE',
           null,
           null,
           stageCourse.order || courseIndex + 1
