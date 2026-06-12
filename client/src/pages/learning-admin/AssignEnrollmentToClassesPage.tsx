@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, CheckCircle2, Download, Layers, RefreshCcw, School, Search, Users } from 'lucide-react';
+import { BookOpen, Download, RefreshCcw, School, Search, Users } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -197,7 +197,6 @@ export function AssignEnrollmentToClassesPage() {
     () => learners.filter((learner) => Boolean(getAssignmentForCourse(learner, selectedCourseCode))).length,
     [learners, selectedCourseCode]
   );
-  const unassignedForCourse = selectedCourseCode ? learners.length - assignedForCourse : 0;
 
   const availableLearners = useMemo(() => {
     if (!selectedCourseCode) {
@@ -290,15 +289,6 @@ export function AssignEnrollmentToClassesPage() {
       })
     );
   }, [courses, learners, selectedPath]);
-
-  const reportSummary = useMemo(() => {
-    const assigned = reportRows.filter((row) => row.assignmentStatus === 'Assigned').length;
-    return {
-      total: reportRows.length,
-      assigned,
-      notAssigned: reportRows.length - assigned
-    };
-  }, [reportRows]);
 
   const classReportGroups = useMemo<ClassReportGroup[]>(() => {
     const groups = new Map<string, ClassReportGroup>();
@@ -491,13 +481,13 @@ export function AssignEnrollmentToClassesPage() {
     }
   };
 
-  const downloadSelectedReportExcel = () => {
-    if (!selectedReportGroup) {
+  const downloadReportExcel = (reportGroup: ClassReportGroup | null) => {
+    if (!reportGroup) {
       showToast('Select a course class report before downloading Excel.', 'error');
       return;
     }
 
-    const rows = selectedReportGroup.learners
+    const rows = reportGroup.learners
       .map(
         (learner) => `
           <tr>
@@ -517,15 +507,15 @@ export function AssignEnrollmentToClassesPage() {
             <tbody>
               <tr>
                 <th>Learning Path</th>
-                <td>${escapeHtml(selectedReportGroup.learningPathTitle)}</td>
+                <td>${escapeHtml(reportGroup.learningPathTitle)}</td>
               </tr>
               <tr>
                 <th>Course</th>
-                <td>${escapeHtml(selectedReportGroup.courseCode)} - ${escapeHtml(selectedReportGroup.courseTitle)}</td>
+                <td>${escapeHtml(reportGroup.courseCode)} - ${escapeHtml(reportGroup.courseTitle)}</td>
               </tr>
               <tr>
                 <th>Class</th>
-                <td>${escapeHtml(selectedReportGroup.classCode)} - ${escapeHtml(selectedReportGroup.classTitle)}</td>
+                <td>${escapeHtml(reportGroup.classCode)} - ${escapeHtml(reportGroup.classTitle)}</td>
               </tr>
               <tr>
                 <td></td>
@@ -545,10 +535,10 @@ export function AssignEnrollmentToClassesPage() {
 
     downloadBlob(
       new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' }),
-      `${safeFilenamePart(selectedReportGroup.learningPathTitle, 'learning-path')}_${safeFilenamePart(
-        selectedReportGroup.courseCode,
+      `${safeFilenamePart(reportGroup.learningPathTitle, 'learning-path')}_${safeFilenamePart(
+        reportGroup.courseCode,
         'course'
-      )}_${safeFilenamePart(selectedReportGroup.classCode, 'class')}_learners.xls`
+      )}_${safeFilenamePart(reportGroup.classCode, 'class')}_learners.xls`
     );
     showToast('Excel report downloaded.', 'success');
   };
@@ -577,43 +567,27 @@ export function AssignEnrollmentToClassesPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <BookOpen className="h-5 w-5 text-primary-700" />
+      <div className="rounded-xl border border-secondary-200 bg-white px-4 py-3 shadow-soft">
+        <div className="grid grid-cols-1 divide-y divide-secondary-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          <div className="flex items-center gap-3 py-2 sm:pr-5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
+              <BookOpen className="h-5 w-5" />
+            </span>
             <div>
-              <p className="text-sm text-secondary-500">Courses</p>
-              <p className="text-xl font-bold text-secondary-900">{courses.length}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Courses</p>
+              <p className="text-2xl font-bold text-secondary-900">{courses.length}</p>
             </div>
           </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <Users className="h-5 w-5 text-primary-700" />
+          <div className="flex items-center gap-3 py-2 sm:pl-5">
+            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-50 text-success-700">
+              <Users className="h-5 w-5" />
+            </span>
             <div>
-              <p className="text-sm text-secondary-500">Enrolled Learners</p>
-              <p className="text-xl font-bold text-secondary-900">{learners.length}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Enrolled Learners</p>
+              <p className="text-2xl font-bold text-secondary-900">{learners.length}</p>
             </div>
           </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-5 w-5 text-success-600" />
-            <div>
-              <p className="text-sm text-secondary-500">Assigned for Course</p>
-              <p className="text-xl font-bold text-secondary-900">{assignedForCourse}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <Layers className="h-5 w-5 text-warning-600" />
-            <div>
-              <p className="text-sm text-secondary-500">Not Assigned</p>
-              <p className="text-xl font-bold text-secondary-900">{unassignedForCourse}</p>
-            </div>
-          </div>
-        </Card>
+        </div>
       </div>
 
       <Card title="Class Assignment Setup" description="Choose the learning path, course, and ERP class before selecting learners.">
@@ -826,32 +800,7 @@ export function AssignEnrollmentToClassesPage() {
       <Card
         title="Course/Class Learner Reports"
         description="Select a course class box to view learner details and download the Excel report."
-        action={
-          <Button
-            variant="outline"
-            onClick={downloadSelectedReportExcel}
-            disabled={!selectedReportGroup}
-          >
-            <Download className="h-4 w-4" />
-            Download Excel
-          </Button>
-        }
       >
-        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-secondary-200 bg-secondary-50 p-4">
-            <p className="text-sm text-secondary-500">Assignment Boxes</p>
-            <p className="mt-1 text-xl font-bold text-secondary-900">{classReportGroups.length}</p>
-          </div>
-          <div className="rounded-lg border border-success-200 bg-success-50 p-4">
-            <p className="text-sm text-success-700">Assigned Rows</p>
-            <p className="mt-1 text-xl font-bold text-success-800">{reportSummary.assigned}</p>
-          </div>
-          <div className="rounded-lg border border-warning-200 bg-warning-50 p-4">
-            <p className="text-sm text-warning-700">Not Assigned</p>
-            <p className="mt-1 text-xl font-bold text-warning-800">{reportSummary.notAssigned}</p>
-          </div>
-        </div>
-
         {reportRows.length === 0 ? (
           <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
             Select a learning path to generate the report.
@@ -866,11 +815,17 @@ export function AssignEnrollmentToClassesPage() {
               {classReportGroups.map((group) => {
                 const active = selectedReportGroup?.key === group.key;
                 return (
-                  <button
+                  <div
                     key={group.key}
-                    type="button"
                     onClick={() => setSelectedReportGroupKey(group.key)}
-                    className={`rounded-lg border p-4 text-left transition ${
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        setSelectedReportGroupKey(group.key);
+                      }
+                    }}
+                    className={`rounded-lg border p-4 text-left transition cursor-pointer ${
                       active
                         ? 'border-primary-500 bg-primary-50 shadow-sm'
                         : 'border-secondary-200 bg-white hover:border-primary-300 hover:bg-secondary-50'
@@ -890,7 +845,21 @@ export function AssignEnrollmentToClassesPage() {
                       </div>
                     </div>
                     <p className="mt-3 text-sm font-semibold text-primary-700">{group.learners.length} learner(s)</p>
-                  </button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-4"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedReportGroupKey(group.key);
+                        downloadReportExcel(group);
+                      }}
+                    >
+                      <Download className="h-4 w-4" />
+                      Download enrolled learners Excel
+                    </Button>
+                  </div>
                 );
               })}
             </div>
