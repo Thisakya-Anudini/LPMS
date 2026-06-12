@@ -89,15 +89,6 @@ const filterCoursesByQuery = (courses: CourseItem[], query: string) => {
   });
 };
 
-const formatDurationHours = (hours: number) => {
-  if (!Number.isFinite(hours) || hours <= 0) {
-    return '';
-  }
-  const rounded = Math.round(hours * 10) / 10;
-  const displayValue = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace(/\.0$/, '');
-  return `${displayValue} ${rounded === 1 ? 'hour' : 'hours'}`;
-};
-
 const initialPathForm = {
   title: '',
   description: '',
