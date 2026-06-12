@@ -143,9 +143,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<DuplicateExisting> }>(null);
   const [pathTitleError, setPathTitleError] = useState<string | null>(null);
   const [editTitleError, setEditTitleError] = useState<string | null>(null);
-  const [editDurationError, setEditDurationError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
   const [createCourseSearch, setCreateCourseSearch] = useState('');
+  const [editCourseSearch, setEditCourseSearch] = useState('');
 
   const [editPathId, setEditPathId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -350,34 +350,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     return { valid: true };
   };
 
-  const validateDurationValue = (value: string): { valid: true } | { valid: false; message: string } => {
-    const normalized = String(value || '').trim();
-    if (normalized === '') {
-      return { valid: true };
-    }
-    if (normalized.startsWith('-')) {
-      return { valid: false, message: 'Duration must not be negative.' };
-    }
-
-    const durationMatch = normalized.match(/^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i);
-    if (!durationMatch) {
-      return { valid: false, message: 'Duration format is invalid. Use years or months.' };
-    }
-
-    const numericValue = Number(durationMatch[1]);
-    const unit = durationMatch[2]?.toLowerCase() ?? 'years';
-
-    if (unit === 'month' || unit === 'months') {
-      return numericValue <= 24
-        ? { valid: true }
-        : { valid: false, message: 'Duration must be 2 years or less.' };
-    }
-
-    return numericValue <= 2
-      ? { valid: true }
-      : { valid: false, message: 'Duration must be 2 years or less.' };
-  };
-
   const handleCreatePath = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPathFormLoading(true);
@@ -446,6 +418,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         }));
 
       setEditPathId(path.id);
+      setEditCourseSearch('');
       setEditForm({
         title: path.title,
         description: path.description,
@@ -466,18 +439,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     }
     setEditLoading(true);
     setEditTitleError(null);
-    setEditDurationError(null);
     const titleValidation = validateTitleValue(editForm.title);
     if (!titleValidation.valid) {
       setEditTitleError(titleValidation.message);
       showToast(titleValidation.message, 'error');
-      setEditLoading(false);
-      return;
-    }
-    const durationValidation = validateDurationValue(editForm.totalDuration);
-    if (!durationValidation.valid) {
-      setEditDurationError(durationValidation.message);
-      showToast(durationValidation.message, 'error');
       setEditLoading(false);
       return;
     }
@@ -658,7 +623,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     });
   };
 
-  const renderCourseSelector = (stages: StageForm[], mode: 'create' | 'edit') => (
+  const renderCourseSelector = (stages: StageForm[], mode: 'create' | 'edit') => {
+    const visibleCourses = mode === 'edit' ? filterCoursesByQuery(courses, editCourseSearch) : courses;
+
+    return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {stages.map((stage, stageIndex) => (
         <div key={`${mode}-${stage.stageId}`} className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
@@ -676,9 +644,32 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Select Courses</p>
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <p className="text-sm font-medium text-slate-700">Select Courses</p>
+                {mode === 'edit' ? (
+                  <div className="w-full md:w-80">
+                    <Input
+                      id={`edit-course-search-${stage.stageId}`}
+                      label="Search Courses"
+                      placeholder="Search by course name or ID"
+                      value={editCourseSearch}
+                      onChange={(event) => setEditCourseSearch(event.target.value)}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              {mode === 'edit' ? (
+                <p className="mb-2 text-xs text-slate-500">
+                  Showing {visibleCourses.length} of {courses.length} courses
+                </p>
+              ) : null}
               <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-              {courses.map((course, courseIndex) => (
+              {visibleCourses.length === 0 ? (
+                <p className="p-3 text-sm text-slate-500">
+                  No courses match "{editCourseSearch.trim()}".
+                </p>
+              ) : (
+              visibleCourses.map((course, courseIndex) => (
                 <label
                   key={getCourseRenderKey(course, courseIndex, `${mode}-${stage.stageId}`)}
                   className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
@@ -703,7 +694,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       ) : null}
                     </span>
                   </label>
-                ))}
+                ))
+              )}
               </div>
             </div>
             <div>
@@ -752,7 +744,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         </Button>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderCreateStageBuilder = () => (
     <div className="space-y-4">
@@ -1268,7 +1261,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 <tr>
                   <th className="px-6 py-3">Path Name</th>
                   <th className="px-6 py-3">Category</th>
-                  <th className="px-6 py-3">Duration</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3">Actions</th>
                 </tr>
@@ -1276,13 +1268,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td className="px-6 py-4 text-slate-500" colSpan={5}>
+                    <td className="px-6 py-4 text-slate-500" colSpan={4}>
                       Loading learning paths...
                     </td>
                   </tr>
                 ) : filteredPaths.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-4 text-slate-500" colSpan={5}>
+                    <td className="px-6 py-4 text-slate-500" colSpan={4}>
                       No learning paths found.
                     </td>
                   </tr>
@@ -1304,7 +1296,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                           {path.category.replace('_', ' ')}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">{path.total_duration}</td>
                       <td className="px-6 py-4 text-slate-600">{path.status}</td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
@@ -1392,16 +1383,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       { value: 'PUBLIC', label: 'Public' },
                       { value: 'RESTRICTED', label: 'Restricted' }
                     ]}
-                  />
-                  <Input
-                    label="Total Duration"
-                    value={editForm.totalDuration}
-                    error={editDurationError ?? undefined}
-                    onChange={(event) => {
-                      setEditForm((prev) => ({ ...prev, totalDuration: event.target.value }));
-                      setEditDurationError(null);
-                    }}
-                    required
                   />
                   <Select
                     label="Status"
