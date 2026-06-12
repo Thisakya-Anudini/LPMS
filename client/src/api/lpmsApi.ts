@@ -425,6 +425,50 @@ export const learningApi = {
       body: payload
     });
   },
+  getClassDetailReport(
+    token: string,
+    params: { learningPathId: string; courseCode: string; classId: string }
+  ) {
+    const searchParams = new URLSearchParams({
+      learningPathId: params.learningPathId,
+      courseCode: params.courseCode,
+      classId: params.classId
+    });
+    return request<{
+      report: null | {
+        id: string;
+        learningPathId: string;
+        courseCode: string;
+        classId: string;
+        values: Record<string, string>;
+        updatedAt: string;
+      };
+    }>(`/class-detail-reports?${searchParams.toString()}`, { token });
+  },
+  saveClassDetailReport(
+    token: string,
+    payload: {
+      learningPathId: string;
+      courseCode: string;
+      classId: string;
+      values: Record<string, string>;
+    }
+  ) {
+    return request<{
+      report: {
+        id: string;
+        learningPathId: string;
+        courseCode: string;
+        classId: string;
+        values: Record<string, string>;
+        updatedAt: string;
+      };
+    }>('/class-detail-reports', {
+      method: 'PUT',
+      token,
+      body: payload
+    });
+  },
   getSummaryReport(token: string) {
     return request<{
       summary: {

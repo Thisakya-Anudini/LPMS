@@ -371,6 +371,111 @@ const normalizeErpClassRow = (row, index) => {
   };
 };
 
+const CLASS_DETAIL_REPORT_FIELDS = [
+  'courseCategory',
+  'courseName',
+  'offeringName',
+  'catalogYear',
+  'location',
+  'classTitle',
+  'trainingCenter',
+  'startDate',
+  'endDate',
+  'duration',
+  'enrollmentStartDate',
+  'enrollmentEndDate',
+  'startTime',
+  'endTime',
+  'perHeadCost',
+  'bond',
+  'bondValue',
+  'bondDuration'
+];
+
+const CLASS_DETAIL_REPORT_COLUMNS = {
+  courseCategory: 'course_category',
+  courseName: 'course_name',
+  offeringName: 'offering_name',
+  catalogYear: 'catalog_year',
+  location: 'location',
+  classTitle: 'class_title',
+  trainingCenter: 'training_center',
+  startDate: 'start_date',
+  endDate: 'end_date',
+  duration: 'duration',
+  enrollmentStartDate: 'enrollment_start_date',
+  enrollmentEndDate: 'enrollment_end_date',
+  startTime: 'start_time',
+  endTime: 'end_time',
+  perHeadCost: 'per_head_cost',
+  bond: 'bond',
+  bondValue: 'bond_value',
+  bondDuration: 'bond_duration'
+};
+
+const mapClassDetailReportRow = (row) => {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    learningPathId: row.learning_path_id,
+    courseCode: row.course_code,
+    classId: row.class_id,
+    values: CLASS_DETAIL_REPORT_FIELDS.reduce((values, field) => {
+      values[field] = row[CLASS_DETAIL_REPORT_COLUMNS[field]] || '';
+      return values;
+    }, {}),
+    updatedAt: row.updated_at
+  };
+};
+
+const normalizeClassDetailReportPayload = (payload = {}) =>
+  CLASS_DETAIL_REPORT_FIELDS.reduce((values, field) => {
+    values[field] = String(payload[field] ?? '').trim();
+    return values;
+  }, {});
+
+const ensureClassDetailReportsTable = async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS class_detail_reports (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      learning_path_id UUID NOT NULL REFERENCES learning_paths(id) ON DELETE CASCADE,
+      course_code TEXT NOT NULL,
+      class_id TEXT NOT NULL,
+      course_category TEXT NOT NULL DEFAULT '',
+      course_name TEXT NOT NULL DEFAULT '',
+      offering_name TEXT NOT NULL DEFAULT '',
+      catalog_year TEXT NOT NULL DEFAULT '',
+      location TEXT NOT NULL DEFAULT '',
+      class_title TEXT NOT NULL DEFAULT '',
+      training_center TEXT NOT NULL DEFAULT '',
+      start_date TEXT NOT NULL DEFAULT '',
+      end_date TEXT NOT NULL DEFAULT '',
+      duration TEXT NOT NULL DEFAULT '',
+      enrollment_start_date TEXT NOT NULL DEFAULT '',
+      enrollment_end_date TEXT NOT NULL DEFAULT '',
+      start_time TEXT NOT NULL DEFAULT '',
+      end_time TEXT NOT NULL DEFAULT '',
+      per_head_cost TEXT NOT NULL DEFAULT '',
+      bond TEXT NOT NULL DEFAULT '',
+      bond_value TEXT NOT NULL DEFAULT '',
+      bond_duration TEXT NOT NULL DEFAULT '',
+      created_by UUID REFERENCES auth_principals(id) ON DELETE SET NULL,
+      updated_by UUID REFERENCES auth_principals(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (learning_path_id, course_code, class_id)
+    )
+  `);
+
+  await query(`
+    CREATE INDEX IF NOT EXISTS idx_class_detail_reports_lookup
+      ON class_detail_reports (learning_path_id, course_code, class_id)
+  `);
+};
+
 const resolveCourseUuid = async (courseId, courseCatalogByCode = new Map()) => {
   const raw = String(courseId || '').trim();
   if (!raw) {
@@ -1881,6 +1986,140 @@ export const assignClassEnrollments = async (req, res) => {
   });
 
   return res.status(201).json({ assigned });
+};
+
+export const getClassDetailReport = async (req, res) => {
+  const learningPathId = String(req.query.learningPathId || '').trim();
+  const courseCode = String(req.query.courseCode || '').trim();
+  const classId = String(req.query.classId || '').trim();
+
+  if (!learningPathId || !courseCode || !classId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'learningPathId, courseCode, and classId are required.');
+  }
+
+  await ensureClassDetailReportsTable();
+
+  const result = await query(
+    `
+      SELECT *
+      FROM class_detail_reports
+      WHERE learning_path_id = $1
+        AND course_code = $2
+        AND class_id = $3
+      LIMIT 1
+    `,
+    [learningPathId, courseCode, classId]
+  );
+
+  return res.status(200).json({ report: mapClassDetailReportRow(result.rows[0]) });
+};
+
+export const upsertClassDetailReport = async (req, res) => {
+  const learningPathId = String(req.body.learningPathId || '').trim();
+  const courseCode = String(req.body.courseCode || '').trim();
+  const classId = String(req.body.classId || '').trim();
+  const values = normalizeClassDetailReportPayload(req.body.values);
+
+  if (!learningPathId || !courseCode || !classId) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'learningPathId, courseCode, and classId are required.');
+  }
+
+  await ensureClassDetailReportsTable();
+
+  const actorPrincipalId = await resolveActorPrincipalId(req.user);
+  const result = await query(
+    `
+      INSERT INTO class_detail_reports (
+        learning_path_id,
+        course_code,
+        class_id,
+        course_category,
+        course_name,
+        offering_name,
+        catalog_year,
+        location,
+        class_title,
+        training_center,
+        start_date,
+        end_date,
+        duration,
+        enrollment_start_date,
+        enrollment_end_date,
+        start_time,
+        end_time,
+        per_head_cost,
+        bond,
+        bond_value,
+        bond_duration,
+        created_by,
+        updated_by,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+        $21, $22, $22, NOW(), NOW()
+      )
+      ON CONFLICT (learning_path_id, course_code, class_id)
+      DO UPDATE SET
+        course_category = EXCLUDED.course_category,
+        course_name = EXCLUDED.course_name,
+        offering_name = EXCLUDED.offering_name,
+        catalog_year = EXCLUDED.catalog_year,
+        location = EXCLUDED.location,
+        class_title = EXCLUDED.class_title,
+        training_center = EXCLUDED.training_center,
+        start_date = EXCLUDED.start_date,
+        end_date = EXCLUDED.end_date,
+        duration = EXCLUDED.duration,
+        enrollment_start_date = EXCLUDED.enrollment_start_date,
+        enrollment_end_date = EXCLUDED.enrollment_end_date,
+        start_time = EXCLUDED.start_time,
+        end_time = EXCLUDED.end_time,
+        per_head_cost = EXCLUDED.per_head_cost,
+        bond = EXCLUDED.bond,
+        bond_value = EXCLUDED.bond_value,
+        bond_duration = EXCLUDED.bond_duration,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = NOW()
+      RETURNING *
+    `,
+    [
+      learningPathId,
+      courseCode,
+      classId,
+      values.courseCategory,
+      values.courseName,
+      values.offeringName,
+      values.catalogYear,
+      values.location,
+      values.classTitle,
+      values.trainingCenter,
+      values.startDate,
+      values.endDate,
+      values.duration,
+      values.enrollmentStartDate,
+      values.enrollmentEndDate,
+      values.startTime,
+      values.endTime,
+      values.perHeadCost,
+      values.bond,
+      values.bondValue,
+      values.bondDuration,
+      actorPrincipalId
+    ]
+  );
+
+  await logAudit({
+    actorPrincipalId,
+    action: 'UPSERT_CLASS_DETAIL_REPORT',
+    resourceType: 'CLASS_DETAIL_REPORT',
+    resourceId: result.rows[0]?.id,
+    metadata: { learningPathId, courseCode, classId }
+  });
+
+  return res.status(200).json({ report: mapClassDetailReportRow(result.rows[0]) });
 };
 
 export const getLearningSummaryReport = async (_req, res) => {

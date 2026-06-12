@@ -4,6 +4,7 @@ import { learningApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
+import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { Select } from '../../components/ui/Select';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
@@ -61,15 +62,67 @@ type EnrolledLearner = {
 
 type ClassReportGroup = {
   key: string;
+  learningPathId: string;
   learningPathTitle: string;
+  classId: string;
   courseCode: string;
   courseTitle: string;
   classCode: string;
   classTitle: string;
   startDate: string;
   endDate: string;
+  classPayload?: Record<string, unknown>;
   learners: Array<{ id: string; name: string }>;
 };
+
+type ClassDetailFieldKey =
+  | 'courseCategory'
+  | 'courseName'
+  | 'offeringName'
+  | 'catalogYear'
+  | 'location'
+  | 'classTitle'
+  | 'trainingCenter'
+  | 'startDate'
+  | 'endDate'
+  | 'duration'
+  | 'enrollmentStartDate'
+  | 'enrollmentEndDate'
+  | 'startTime'
+  | 'endTime'
+  | 'perHeadCost'
+  | 'bond'
+  | 'bondValue'
+  | 'bondDuration';
+
+type ClassDetailFormValues = Record<ClassDetailFieldKey, string>;
+
+const classDetailFields: Array<{ key: ClassDetailFieldKey; label: string }> = [
+  { key: 'courseCategory', label: 'CourseCategory' },
+  { key: 'courseName', label: 'CourseName' },
+  { key: 'offeringName', label: 'OfferingName' },
+  { key: 'catalogYear', label: 'CatalogYear' },
+  { key: 'location', label: 'Location' },
+  { key: 'classTitle', label: 'ClassTitle' },
+  { key: 'trainingCenter', label: 'TrainingCenter' },
+  { key: 'startDate', label: 'StartDate' },
+  { key: 'endDate', label: 'EndDate' },
+  { key: 'duration', label: 'Duration' },
+  { key: 'enrollmentStartDate', label: 'EnrollmentStartDate' },
+  { key: 'enrollmentEndDate', label: 'EnrollmentEndDate' },
+  { key: 'startTime', label: 'StartTime' },
+  { key: 'endTime', label: 'EndTime' },
+  { key: 'perHeadCost', label: 'Perheadcost' },
+  { key: 'bond', label: 'Bond' },
+  { key: 'bondValue', label: 'Bond Value' },
+  { key: 'bondDuration', label: 'Bond Duration' }
+];
+
+const createEmptyClassDetailForm = (): ClassDetailFormValues =>
+  classDetailFields.reduce((values, field) => {
+    values[field.key] = '';
+    return values;
+  }, {} as ClassDetailFormValues);
 
 const getAssignmentForCourse = (learner: EnrolledLearner, courseCode: string) =>
   learner.classAssignments.find((assignment) => assignment.courseCode === courseCode);
@@ -135,6 +188,85 @@ const getClassPayloadDate = (
   );
 };
 
+const getClassPayloadField = (
+  payload: Record<string, unknown> | undefined,
+  keys: string[],
+  tokenGroups: string[][] = []
+) => {
+  const rawPayload = payload?.raw && typeof payload.raw === 'object'
+    ? (payload.raw as Record<string, unknown>)
+    : undefined;
+
+  return (
+    getPayloadValue(payload, keys) ||
+    getPayloadValue(rawPayload, keys) ||
+    getPayloadValueByTokens(payload, tokenGroups) ||
+    getPayloadValueByTokens(rawPayload, tokenGroups)
+  );
+};
+
+const getYearFromDateValue = (value: string) => {
+  const dateMatch = String(value || '').match(/\b(19|20)\d{2}\b/);
+  return dateMatch?.[0] || '';
+};
+
+const buildDefaultClassDetailValues = (group: ClassReportGroup): ClassDetailFormValues => {
+  const payload = group.classPayload;
+  const startDate =
+    group.startDate ||
+    getClassPayloadDate(
+      payload,
+      ['startDate', 'classStartDate', 'courseStartDate', 'sessionStartDate', 'fromDate', 'dateFrom', 'startDt', 'fromDt'],
+      [['start', 'date'], ['from', 'date']]
+    );
+  const endDate =
+    group.endDate ||
+    getClassPayloadDate(
+      payload,
+      ['endDate', 'classEndDate', 'courseEndDate', 'sessionEndDate', 'toDate', 'dateTo', 'endDt', 'toDt'],
+      [['end', 'date'], ['to', 'date']]
+    );
+
+  return {
+    courseCategory: group.courseTitle,
+    courseName: group.courseTitle,
+    offeringName: group.classTitle || group.classCode,
+    catalogYear:
+      getClassPayloadField(payload, ['catalogYear', 'catalogueYear', 'year'], [['catalog', 'year']]) ||
+      getYearFromDateValue(startDate),
+    location: getClassPayloadField(payload, ['location', 'venue', 'classVenue', 'trainingLocation'], [['loc'], ['venue']]),
+    classTitle: group.classTitle || group.classCode,
+    trainingCenter: getClassPayloadField(
+      payload,
+      ['trainingCenter', 'trainingCentre', 'center', 'centre', 'trainingCenterName'],
+      [['training', 'center'], ['training', 'centre']]
+    ),
+    startDate,
+    endDate,
+    duration: getClassPayloadField(payload, ['duration', 'classDuration', 'courseDuration'], [['duration']]),
+    enrollmentStartDate: getClassPayloadField(
+      payload,
+      ['enrollmentStartDate', 'enrolmentStartDate', 'registrationStartDate', 'enrollStartDate'],
+      [['enrollment', 'start'], ['enrolment', 'start'], ['registration', 'start']]
+    ),
+    enrollmentEndDate: getClassPayloadField(
+      payload,
+      ['enrollmentEndDate', 'enrolmentEndDate', 'registrationEndDate', 'enrollEndDate'],
+      [['enrollment', 'end'], ['enrolment', 'end'], ['registration', 'end']]
+    ),
+    startTime: getClassPayloadField(payload, ['startTime', 'classStartTime', 'fromTime'], [['start', 'time'], ['from', 'time']]),
+    endTime: getClassPayloadField(payload, ['endTime', 'classEndTime', 'toTime'], [['end', 'time'], ['to', 'time']]),
+    perHeadCost: getClassPayloadField(
+      payload,
+      ['perHeadCost', 'perheadcost', 'perHead', 'costPerHead', 'cost', 'fee'],
+      [['per', 'head'], ['cost']]
+    ),
+    bond: getClassPayloadField(payload, ['bond', 'bondRequired'], [['bond']]),
+    bondValue: getClassPayloadField(payload, ['bondValue', 'bondAmount'], [['bond', 'value'], ['bond', 'amount']]),
+    bondDuration: getClassPayloadField(payload, ['bondDuration', 'bondPeriod'], [['bond', 'duration'], ['bond', 'period']])
+  };
+};
+
 const downloadBlob = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -179,6 +311,10 @@ export function AssignEnrollmentToClassesPage() {
   const [assigning, setAssigning] = useState(false);
   const [selectedReportGroupKey, setSelectedReportGroupKey] = useState('');
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'assign' | 'reports'>('assign');
+  const [classDetailGroup, setClassDetailGroup] = useState<ClassReportGroup | null>(null);
+  const [classDetailForm, setClassDetailForm] = useState<ClassDetailFormValues>(createEmptyClassDetailForm);
+  const [classDetailLoading, setClassDetailLoading] = useState(false);
+  const [classDetailSaving, setClassDetailSaving] = useState(false);
 
   const selectedPath = useMemo(
     () => learningPaths.find((path) => path.id === selectedPathId) || null,
@@ -233,6 +369,7 @@ export function AssignEnrollmentToClassesPage() {
       courses.map((course) => {
         const assignment = getAssignmentForCourse(learner, course.courseCode);
         return {
+          learningPathId: selectedPath.id,
           learningPath: selectedPath.title,
           employeeNumber: learner.employeeNumber || '',
           learnerName: learner.name,
@@ -241,8 +378,10 @@ export function AssignEnrollmentToClassesPage() {
           gradeName: learner.gradeName || '',
           courseCode: course.courseCode,
           courseTitle: course.title,
+          classId: assignment?.classId || '',
           classCode: assignment?.classCode || '',
           classTitle: assignment?.classTitle || '',
+          classPayload: assignment?.classPayload,
           startDate: getClassPayloadDate(
             assignment?.classPayload,
             [
@@ -311,12 +450,15 @@ export function AssignEnrollmentToClassesPage() {
         groups.set(key, {
           key,
           learningPathTitle: row.learningPath,
+          learningPathId: row.learningPathId,
+          classId: row.classId,
           courseCode: row.courseCode,
           courseTitle: row.courseTitle,
           classCode: row.classCode,
           classTitle: row.classTitle,
           startDate: row.startDate,
           endDate: row.endDate,
+          classPayload: row.classPayload,
           learners: [learner]
         });
       }
@@ -541,6 +683,106 @@ export function AssignEnrollmentToClassesPage() {
       )}_${safeFilenamePart(reportGroup.classCode, 'class')}_learners.xls`
     );
     showToast('Excel report downloaded.', 'success');
+  };
+
+  const openClassDetailModal = async (reportGroup: ClassReportGroup) => {
+    setClassDetailGroup(reportGroup);
+    setClassDetailForm(buildDefaultClassDetailValues(reportGroup));
+    setClassDetailLoading(true);
+
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const response = await learningApi.getClassDetailReport(token, {
+        learningPathId: reportGroup.learningPathId,
+        courseCode: reportGroup.courseCode,
+        classId: reportGroup.classId
+      });
+
+      if (response.report?.values) {
+        setClassDetailForm((currentValues) => ({
+          ...currentValues,
+          ...response.report?.values
+        }));
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to load class details.', 'error');
+    } finally {
+      setClassDetailLoading(false);
+    }
+  };
+
+  const closeClassDetailModal = () => {
+    setClassDetailGroup(null);
+    setClassDetailForm(createEmptyClassDetailForm());
+  };
+
+  const downloadClassDetailExcel = (values: ClassDetailFormValues) => {
+    const workbookHtml = `
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+        </head>
+        <body>
+          <table border="1">
+            <thead>
+              <tr>
+                ${classDetailFields.map((field) => `<th>${escapeHtml(field.label)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                ${classDetailFields.map((field) => `<td>${escapeHtml(values[field.key])}</td>`).join('')}
+              </tr>
+            </tbody>
+          </table>
+        </body>
+      </html>`;
+
+    downloadBlob(
+      new Blob([workbookHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' }),
+      `${safeFilenamePart(values.courseName || classDetailGroup?.courseTitle || '', 'course')}_${safeFilenamePart(
+        values.classTitle || classDetailGroup?.classCode || '',
+        'class'
+      )}_class_details.xls`
+    );
+  };
+
+  const saveAndDownloadClassDetails = async () => {
+    if (!classDetailGroup) {
+      return;
+    }
+
+    try {
+      setClassDetailSaving(true);
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const response = await learningApi.saveClassDetailReport(token, {
+        learningPathId: classDetailGroup.learningPathId,
+        courseCode: classDetailGroup.courseCode,
+        classId: classDetailGroup.classId,
+        values: classDetailForm
+      });
+      const savedValues = {
+        ...classDetailForm,
+        ...(response.report?.values || {})
+      };
+      setClassDetailForm(savedValues);
+      downloadClassDetailExcel(savedValues);
+      showToast('Class details saved and downloaded.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Failed to save class details.', 'error');
+    } finally {
+      setClassDetailSaving(false);
+    }
   };
 
   const pathOptions = [
@@ -845,20 +1087,36 @@ export function AssignEnrollmentToClassesPage() {
                       </div>
                     </div>
                     <p className="mt-3 text-sm font-semibold text-primary-700">{group.learners.length} learner(s)</p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-4"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setSelectedReportGroupKey(group.key);
-                        downloadReportExcel(group);
-                      }}
-                    >
-                      <Download className="h-4 w-4" />
-                      Download enrolled learners Excel
-                    </Button>
+                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-auto min-h-9 w-full whitespace-normal px-3 py-2"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedReportGroupKey(group.key);
+                          downloadReportExcel(group);
+                        }}
+                      >
+                        <Download className="h-4 w-4 shrink-0" />
+                        <span>Download enrolled learners Excel</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-auto min-h-9 w-full whitespace-normal px-3 py-2"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedReportGroupKey(group.key);
+                          openClassDetailModal(group);
+                        }}
+                      >
+                        <Download className="h-4 w-4 shrink-0" />
+                        <span>Download class details</span>
+                      </Button>
+                    </div>
                   </div>
                 );
               })}
@@ -905,6 +1163,60 @@ export function AssignEnrollmentToClassesPage() {
           </div>
         )}
       </Card>
+      ) : null}
+
+      {classDetailGroup ? (
+        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl bg-white shadow-xl">
+            <div className="border-b border-secondary-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-secondary-900">Class Details</h2>
+              <p className="mt-1 text-sm text-secondary-500">
+                {classDetailGroup.courseCode} - {classDetailGroup.classCode}
+              </p>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              {classDetailLoading ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {Array.from({ length: 8 }, (_, index) => (
+                    <Skeleton key={`class-detail-skeleton-${index}`} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {classDetailFields.map((field) => (
+                    <Input
+                      key={field.key}
+                      label={field.label}
+                      value={classDetailForm[field.key]}
+                      onChange={(event) =>
+                        setClassDetailForm((currentValues) => ({
+                          ...currentValues,
+                          [field.key]: event.target.value
+                        }))
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-secondary-200 bg-secondary-50 px-5 py-4">
+              <Button type="button" variant="outline" onClick={closeClassDetailModal}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={saveAndDownloadClassDetails}
+                isLoading={classDetailSaving}
+                disabled={classDetailLoading}
+              >
+                <Download className="h-4 w-4" />
+                Save & Download Excel
+              </Button>
+            </div>
+          </div>
+        </ModalOverlay>
       ) : null}
     </div>
   );
