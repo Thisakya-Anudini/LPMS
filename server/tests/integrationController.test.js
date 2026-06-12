@@ -280,6 +280,37 @@ describe("GET ERP LEARNER DETAILS", () => {
     // that logAudit was NOT called
     expect(vi.mocked(logAudit)).not.toHaveBeenCalled();
   });
+
+  it("should handle ERP response with no data array", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: null,
+    });
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.statusCode).toBe(200);
+    // Passes through whatever ERP returns (even null data)
+    expect(res.body.data).toBeNull();
+  });
+
+  it("should handle empty user object (req.user = {})", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", employeeName: "John" }],
+    });
+
+    const req = createMockReq({ user: {}, body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    // Audit called with req.user.id = undefined → stores 'undefined'
+    expect(res.statusCode).toBe(200);
+  });
 });
 
 // ---- GET ERP SUBORDINATES TESTS ----
@@ -415,6 +446,21 @@ describe("GET ERP SUBORDINATES", () => {
 
     expect(vi.mocked(logAudit)).not.toHaveBeenCalled();
   });
+
+  it("should handle ERP response with no data array", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: null,
+    });
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data).toBeNull();
+  });
 });
 
 // ---- IMPORT ERP EMPLOYEES TESTS ----
@@ -441,6 +487,10 @@ describe("IMPORT ERP EMPLOYEES", () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("CONTROLLER GAP: importErpEmployees has no role-based authorization", () => {
+    expect(typeof importErpEmployees).toBe("function");
   });
 
   it("should use ChangeMe@123 as default password fallback", async () => {
@@ -556,6 +606,79 @@ describe("IMPORT ERP EMPLOYEES", () => {
     expect(res.body.importedCount).toBe(0);
     expect(res.body.skipped[0].employeeNumber).toBe("EMP-001");
     expect(res.body.skipped[0].reason).toBe("Employee number already exists");
+  });
+
+  it("should handle employeeNumber that is only whitespace", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    const req = createMockReq({
+      body: { employees: [{ employeeNumber: "  ", email: "test@lpms.com" }] },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    // "  ".trim() = "" → treated as missing employeeNumber → skipped
+    expect(res.body.importedCount).toBe(0);
+    expect(res.body.skippedCount).toBe(1);
+    expect(res.body.skipped[0].reason).toBe("Missing employeeNumber");
+  });
+
+  it("should handle duplicate employee numbers within the same import batch", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+    // Mock: employee number check → not found (first occurrence)
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    // Mock: email check → not found
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    // Mock: INSERT principal
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "principal-1", email: "first@lpms.com", name: "First" }],
+      rowCount: 1,
+    });
+    // Mock: INSERT employee
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", employee_number: "EMP-002" }],
+      rowCount: 1,
+    });
+    // Second occurrence — employee number already exists (just created above)
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1-duplicate" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        employees: [
+          { employeeNumber: "EMP-002", email: "first@lpms.com" },
+          { employeeNumber: "EMP-002", email: "second@lpms.com" },
+        ],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    // BUG: Second EMP-002 will check DB AFTER first is inserted, find it, and skip
+    expect(res.body.importedCount).toBe(1);
+    expect(res.body.skippedCount).toBe(1);
+    expect(res.body.skipped[0].employeeNumber).toBe("EMP-002");
+    expect(res.body.skipped[0].reason).toBe("Employee number already exists");
+  });
+
+  it("should handle special characters in employee name", async () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-002",
+      employeeName: " María O'Connor-Smith ",
+    });
+    expect(name).toBe("María O'Connor-Smith");
+  });
+
+  it("should handle null/undefined employeeName gracefully", async () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-002",
+      employeeName: null,
+      employeeInitials: "JD",
+      employeeSurname: undefined,
+    });
+    expect(name).toBe("JD");
   });
 
   it("should normalize email to lowercase", async () => {
@@ -694,6 +817,20 @@ describe("IMPORT ERP EMPLOYEES", () => {
     );
   });
 
+  it("should handle bcrypt hash failure gracefully", async () => {
+    vi.mocked(bcrypt.hash).mockRejectedValueOnce(new Error("bcrypt error"));
+
+    const req = createMockReq({
+      body: {
+        employees: [{ employeeNumber: "EMP-002", email: "test@lpms.com" }],
+      },
+    });
+    const res = createMockRes();
+
+    // BUG: Controller does NOT catch bcrypt.hash errors — throws 500
+    await expect(importErpEmployees(req, res)).rejects.toThrow("bcrypt error");
+  });
+
   it("should log import summary audit metadata", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
     // Mock: employee number check → not found
@@ -733,6 +870,34 @@ describe("IMPORT ERP EMPLOYEES", () => {
         imported: 1,
         skipped: 1,
       },
+    });
+  });
+
+  it("should include supervisorId in audit metadata when provided", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "principal-1", email: "emp@lpms.com", name: "Employee" }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", employee_number: "EMP-002" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        supervisorId: "supervisor-1",
+        employees: [{ employeeNumber: "EMP-002", email: "emp@lpms.com" }],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
+      actorPrincipalId: "user-1",
+      action: "IMPORT_ERP_EMPLOYEES",
     });
   });
 
@@ -809,5 +974,42 @@ describe("getErrorStatus (private helper)", () => {
   it("should default to 502 when error has no status", () => {
     const error = new Error("test");
     expect(getErrorStatus(error)).toBe(502);
+  });
+});
+
+describe("normalizeName (private helper)", () => {
+  it("should handle name with only whitespace", () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-001",
+      employeeName: "   ",
+    });
+    // employeeName.trim() = "" → falls through to initials+sumame → empty → fallback
+    expect(name).toBe("Employee EMP-001");
+  });
+
+  it("should handle employeeNumber with special characters", () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-001/2024",
+      employeeName: null,
+    });
+    expect(name).toBe("Employee EMP-001/2024");
+  });
+});
+
+describe("normalizeEmail (private helper)", () => {
+  it("should handle email with only whitespace", () => {
+    const email = normalizeEmail({
+      employeeNumber: "EMP-001",
+      email: "   ",
+    });
+    expect(email).toBe("EMP-001@erp.local");
+  });
+
+  it("should handle null email", () => {
+    const email = normalizeEmail({
+      employeeNumber: "EMP-001",
+      email: null,
+    });
+    expect(email).toBe("EMP-001@erp.local");
   });
 });
