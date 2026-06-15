@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---- MOCK ALL EXTERNAL DEPENDENCIES BEFORE IMPORTING CONTROLLER ----
+// Mock all external dependencies
 
 vi.mock("../db.js", () => ({
   query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
@@ -37,7 +37,7 @@ vi.mock("bcryptjs", () => ({
   hash: vi.fn(),
 }));
 
-// ---- IMPORTS (after mocks) ----
+// Imports (after mocks)
 
 import { query } from "../db.js";
 import {
@@ -53,7 +53,7 @@ import {
   importErpEmployees,
 } from "../controllers/integrationController.js";
 
-// ---- TEST HELPERS ----
+// Test helpers
 
 const createMockRes = () => {
   const res = {
@@ -87,7 +87,6 @@ const createMockReq = (overrides = {}) => {
   };
 };
 
-// Inline helpers to test private module functions (same logic as controller)
 const getErrorStatus = (error) =>
   typeof error.status === "number" ? error.status : 502;
 
@@ -120,7 +119,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ---- EXPORTS TEST ----
+// Exports testing
 
 describe("INTEGRATION CONTROLLER EXPORTS", () => {
   it("should export getErpLearnerDetails as a function", () => {
@@ -134,7 +133,7 @@ describe("INTEGRATION CONTROLLER EXPORTS", () => {
   });
 });
 
-// ---- GET ERP LEARNER DETAILS TESTS ----
+// Get erp learner details testing
 
 describe("GET ERP LEARNER DETAILS", () => {
   const mockErpData = {
@@ -275,9 +274,6 @@ describe("GET ERP LEARNER DETAILS", () => {
     const res = createMockRes();
     await getErpLearnerDetails(req, res);
 
-    // Audit should not be called on error (controller returns early in catch)
-    // Note: With the sendError mock, the function doesn't throw, so check
-    // that logAudit was NOT called
     expect(vi.mocked(logAudit)).not.toHaveBeenCalled();
   });
 
@@ -293,7 +289,7 @@ describe("GET ERP LEARNER DETAILS", () => {
     await getErpLearnerDetails(req, res);
 
     expect(res.statusCode).toBe(200);
-    // Passes through whatever ERP returns (even null data)
+
     expect(res.body.data).toBeNull();
   });
 
@@ -308,12 +304,11 @@ describe("GET ERP LEARNER DETAILS", () => {
     const res = createMockRes();
     await getErpLearnerDetails(req, res);
 
-    // Audit called with req.user.id = undefined → stores 'undefined'
     expect(res.statusCode).toBe(200);
   });
 });
 
-// ---- GET ERP SUBORDINATES TESTS ----
+// Get erp subordinates testing
 
 describe("GET ERP SUBORDINATES", () => {
   const mockSubordinates = {
@@ -463,11 +458,10 @@ describe("GET ERP SUBORDINATES", () => {
   });
 });
 
-// ---- IMPORT ERP EMPLOYEES TESTS ----
+// Import erp employees testing
 
 describe("IMPORT ERP EMPLOYEES", () => {
   beforeEach(() => {
-    // Set env fallback for tests
     process.env.ERP_FALLBACK_EMAIL_DOMAIN = "erp.local";
   });
 
@@ -494,16 +488,13 @@ describe("IMPORT ERP EMPLOYEES", () => {
   });
 
   it("should use ChangeMe@123 as default password fallback", async () => {
-    // Temporarily delete env var to test fallback
     const original = process.env.ERP_IMPORTED_DEFAULT_PASSWORD;
     delete process.env.ERP_IMPORTED_DEFAULT_PASSWORD;
 
-    // The controller uses: process.env.ERP_IMPORTED_DEFAULT_PASSWORD || 'ChangeMe@123'
     const defaultPassword =
       process.env.ERP_IMPORTED_DEFAULT_PASSWORD || "ChangeMe@123";
     expect(defaultPassword).toBe("ChangeMe@123");
 
-    // Restore
     if (original !== undefined) {
       process.env.ERP_IMPORTED_DEFAULT_PASSWORD = original;
     }
@@ -511,11 +502,11 @@ describe("IMPORT ERP EMPLOYEES", () => {
 
   it("should hash the default password once for the batch", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-ChanageMe@123");
-    // Mock: check employee number existence → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: check email existence → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: INSERT principal
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -526,16 +517,16 @@ describe("IMPORT ERP EMPLOYEES", () => {
       ],
       rowCount: 1,
     });
-    // Mock: INSERT employee
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "employee-new-1", employee_number: "EMP-002" }],
       rowCount: 1,
     });
-    // Mock: check employee number existence for second employee
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: check email existence for second employee
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: INSERT principal for second
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -546,7 +537,7 @@ describe("IMPORT ERP EMPLOYEES", () => {
       ],
       rowCount: 1,
     });
-    // Mock: INSERT employee for second
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "employee-new-2", employee_number: "EMP-003" }],
       rowCount: 1,
@@ -589,7 +580,7 @@ describe("IMPORT ERP EMPLOYEES", () => {
 
   it("should skip existing employee numbers", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
-    // Mock: employee number already exists
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "existing-employee" }],
       rowCount: 1,
@@ -625,21 +616,21 @@ describe("IMPORT ERP EMPLOYEES", () => {
 
   it("should handle duplicate employee numbers within the same import batch", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
-    // Mock: employee number check → not found (first occurrence)
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: email check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: INSERT principal
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "principal-1", email: "first@lpms.com", name: "First" }],
       rowCount: 1,
     });
-    // Mock: INSERT employee
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "employee-1", employee_number: "EMP-002" }],
       rowCount: 1,
     });
-    // Second occurrence — employee number already exists (just created above)
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "employee-1-duplicate" }],
       rowCount: 1,
@@ -656,7 +647,6 @@ describe("IMPORT ERP EMPLOYEES", () => {
     const res = createMockRes();
     await importErpEmployees(req, res);
 
-    // BUG: Second EMP-002 will check DB AFTER first is inserted, find it, and skip
     expect(res.body.importedCount).toBe(1);
     expect(res.body.skippedCount).toBe(1);
     expect(res.body.skipped[0].employeeNumber).toBe("EMP-002");
@@ -705,9 +695,9 @@ describe("IMPORT ERP EMPLOYEES", () => {
 
   it("should skip existing auth principal email", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
-    // Mock: employee number check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: email check → found
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "existing-principal" }],
       rowCount: 1,
@@ -773,16 +763,16 @@ describe("IMPORT ERP EMPLOYEES", () => {
 
   it("should return success counts, imported, and skipped arrays", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
-    // Mock: employee number check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: email check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: INSERT principal
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "principal-1", email: "jane@lpms.com", name: "Jane Doe" }],
       rowCount: 1,
     });
-    // Mock: INSERT employee
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "employee-1", employee_number: "EMP-002" }],
       rowCount: 1,
@@ -827,24 +817,23 @@ describe("IMPORT ERP EMPLOYEES", () => {
     });
     const res = createMockRes();
 
-    // BUG: Controller does NOT catch bcrypt.hash errors — throws 500
     await expect(importErpEmployees(req, res)).rejects.toThrow("bcrypt error");
   });
 
   it("should log import summary audit metadata", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
-    // Mock: employee number check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: email check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: INSERT principal
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         { id: "principal-1", email: "emp002@erp.local", name: "Employee Two" },
       ],
       rowCount: 1,
     });
-    // Mock: INSERT employee
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "employee-1", employee_number: "EMP-002" }],
       rowCount: 1,
@@ -903,16 +892,16 @@ describe("IMPORT ERP EMPLOYEES", () => {
 
   it("should create principal with correct default fields (role=EMPLOYEE, must_change_password=TRUE)", async () => {
     vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
-    // Mock: employee number check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: email check → not found
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Mock: INSERT principal
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "principal-1", email: "john@lpms.com", name: "John Silva" }],
       rowCount: 1,
     });
-    // Mock: INSERT employee
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ id: "employee-1", employee_number: "EMP-010" }],
       rowCount: 1,
@@ -932,7 +921,6 @@ describe("IMPORT ERP EMPLOYEES", () => {
     const res = createMockRes();
     await importErpEmployees(req, res);
 
-    // Verify the INSERT principal SQL includes EMPLOYEE role and must_change_password = TRUE
     const principalInsertSql = vi.mocked(query).mock.calls[2][0];
     const principalInsertParams = vi.mocked(query).mock.calls[2][1];
     expect(principalInsertSql).toContain("role");
@@ -955,14 +943,13 @@ describe("IMPORT ERP EMPLOYEES", () => {
     const res = createMockRes();
     await importErpEmployees(req, res);
 
-    // Audit is still called even with 0 imported
     expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       metadata: { requested: 1, imported: 0, skipped: 1 },
     });
   });
 });
 
-// ---- PRIVATE HELPER TESTS (getErrorStatus) ----
+// Private helper testing (getErrorStatus)
 
 describe("getErrorStatus (private helper)", () => {
   it("should return error.status when present", () => {
@@ -983,7 +970,7 @@ describe("normalizeName (private helper)", () => {
       employeeNumber: "EMP-001",
       employeeName: "   ",
     });
-    // employeeName.trim() = "" → falls through to initials+sumame → empty → fallback
+
     expect(name).toBe("Employee EMP-001");
   });
 

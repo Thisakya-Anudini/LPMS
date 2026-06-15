@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---- MOCK ALL EXTERNAL DEPENDENCIES BEFORE IMPORTING CONTROLLER ----
+// Mock all external dependencies
 
 vi.mock("../db.js", () => ({
   query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
@@ -52,7 +52,7 @@ vi.mock("bcryptjs", () => ({
   hash: vi.fn(),
 }));
 
-// ---- IMPORTS (after mocks) ----
+// Imports (after mocks)
 
 import { query } from "../db.js";
 import { sendError } from "../utils/http.js";
@@ -69,7 +69,7 @@ import { sendCourseCompletedEmail } from "../utils/emailService.js";
 import bcrypt from "bcryptjs";
 import * as learnerController from "../controllers/learnerController.js";
 
-// ---- TEST HELPERS ----
+// Test helpers
 
 const createMockRes = () => {
   const res = {
@@ -103,7 +103,6 @@ const createMockReq = (overrides = {}) => {
   };
 };
 
-// Inline helpers to test private module functions (same logic as controller)
 const normalizeNameFromRow = (row, employeeNo) => {
   if (row?.employeeName && String(row.employeeName).trim()) {
     return String(row.employeeName).trim();
@@ -157,11 +156,10 @@ const normalizeDisplayValue = (value) => {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
-  // Reset mock queue to prevent leftover mockResolvedValueOnce from other tests
   vi.mocked(query).mockResolvedValue({ rows: [], rowCount: 0 });
 });
 
-// ---- EXPORTS TEST ----
+// Exports testing
 
 describe("LEARNER CONTROLLER EXPORTS", () => {
   const expectedExports = [
@@ -188,7 +186,7 @@ describe("LEARNER CONTROLLER EXPORTS", () => {
   }
 });
 
-// ---- GET LEARNER PROFILE TESTS ----
+// Get learner profile testing
 
 describe("GET LEARNER PROFILE", () => {
   it("should return 400 when employeeNo is missing", async () => {
@@ -328,12 +326,12 @@ describe("GET LEARNER PROFILE", () => {
     await learnerController.getLearnerProfile(req, res);
 
     expect(res.statusCode).toBe(200);
-    // EMPLOYEE role can still be a supervisor (based on subordinates data)
+
     expect(res.body.isSupervisor).toBe(false);
   });
 });
 
-// ---- GET LEARNER DASHBOARD TESTS ----
+// Get learner dashboard testing
 
 describe("GET LEARNER DASHBOARD", () => {
   it("should return 400 when employeeNo is missing", async () => {
@@ -347,7 +345,7 @@ describe("GET LEARNER DASHBOARD", () => {
 
   it("should return empty paths and mock notification when no principal (temporary auth)", async () => {
     vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(true);
-    // resolveDashboardPrincipalId calls query to find principal_id from employees
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     const req = createMockReq();
@@ -362,12 +360,11 @@ describe("GET LEARNER DASHBOARD", () => {
 
   it("should fetch enrollments with learning path details and calculate summary", async () => {
     vi.mocked(query)
-      // usesCourseReferenceTable → check hasTable and hasColumn
+
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
-      // fetchCourseEnrollmentDetails mock already returns empty
-      // pathsResult: enrollments for principal-1
+
       .mockResolvedValueOnce({
         rows: [
           {
@@ -387,7 +384,7 @@ describe("GET LEARNER DASHBOARD", () => {
         ],
         rowCount: 2,
       })
-      // notificationsResult
+
       .mockResolvedValueOnce({
         rows: [
           {
@@ -441,7 +438,6 @@ describe("GET LEARNER DASHBOARD", () => {
     const res = createMockRes();
     await learnerController.getLearnerDashboard(req, res);
 
-    // Verify the SQL has LIMIT
     const notifySql = vi.mocked(query).mock.calls[4][0];
     expect(notifySql).toContain("LIMIT");
     expect(notifySql).toContain("10");
@@ -449,13 +445,13 @@ describe("GET LEARNER DASHBOARD", () => {
 
   it("should return empty state when learner has no enrollments", async () => {
     vi.mocked(query)
-      // usesCourseReferenceTable × 3
+
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
-      // pathsResult: empty
+
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-      // notificationsResult: empty
+
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     const req = createMockReq();
@@ -472,7 +468,7 @@ describe("GET LEARNER DASHBOARD", () => {
   });
 });
 
-// ---- GET LEARNER TEAM TESTS ----
+// Get learner team testing
 
 describe("GET LEARNER TEAM", () => {
   it("should return 400 when employeeNo is missing", async () => {
@@ -531,7 +527,7 @@ describe("GET LEARNER TEAM", () => {
   });
 });
 
-// ---- ENROLL LEARNER TEAM TESTS ----
+// Enroll learner team testing
 
 describe("ENROLL LEARNER TEAM", () => {
   it("should return 400 when employeeNumbers is empty", async () => {
@@ -572,8 +568,6 @@ describe("ENROLL LEARNER TEAM", () => {
     const res = createMockRes();
     await learnerController.enrollLearnerTeam(req, res);
 
-    // After fetching subordinates, it checks if lner is supervisor (has subordinates)
-    // Then it queries paths, which returns empty → sends error about invalid paths
     expect(res.statusCode).toBe(400);
   });
 
@@ -660,7 +654,7 @@ describe("ENROLL LEARNER TEAM", () => {
   });
 });
 
-// ---- GET COURSES TESTS ----
+// Get courses testing
 
 describe("GET COURSES", () => {
   it("should fetch and normalize courses from ERP", async () => {
@@ -699,7 +693,7 @@ describe("GET COURSES", () => {
     await learnerController.getCourses(req, res);
 
     expect(res.statusCode).toBe(200);
-    // normalizeErpCourse fills fallback values, so all 3 items pass filter
+
     expect(res.body.courses).toHaveLength(3);
   });
 
@@ -715,7 +709,7 @@ describe("GET COURSES", () => {
   });
 });
 
-// ---- GET LEARNER OTHER COURSES TESTS ----
+// Get learner other courses testing
 
 describe("GET LEARNER OTHER COURSES", () => {
   it("should return all courses with alreadyEnrolled=false when no principal (temp auth)", async () => {
@@ -733,8 +727,6 @@ describe("GET LEARNER OTHER COURSES", () => {
       message: "Success",
       data: [],
     });
-    // resolvePrincipalForLearner returns null for temp auth → principalId = null
-    // This goes through the !principalId branch
 
     const req = createMockReq({ user: { id: null, employeeNo: "TEMP-001" } });
     const res = createMockRes();
@@ -778,7 +770,7 @@ describe("GET LEARNER OTHER COURSES", () => {
   });
 });
 
-// ---- GET LEARNING PATHS TESTS ----
+// Get learning paths testing
 
 describe("GET LEARNING PATHS", () => {
   it("should return all active non-deleted learning paths", async () => {
@@ -813,7 +805,7 @@ describe("GET LEARNING PATHS", () => {
   });
 });
 
-// ---- GET PUBLIC LEARNING PATHS TESTS ----
+// Get public learning paths testing
 
 describe("GET PUBLIC LEARNING PATHS", () => {
   it("should return only PUBLIC category paths with already_enrolled flag", async () => {
@@ -865,7 +857,7 @@ describe("GET PUBLIC LEARNING PATHS", () => {
   });
 });
 
-// ---- GET PUBLIC LEARNING PATH BY ID TESTS ----
+// Get public learning path by id testing
 
 describe("GET PUBLIC LEARNING PATH BY ID", () => {
   it("should return 404 if path not found", async () => {
@@ -940,11 +932,10 @@ describe("GET PUBLIC LEARNING PATH BY ID", () => {
   });
 });
 
-// ---- SELF ENROLL PUBLIC LEARNING PATH TESTS ----
+// Self enroll public learning path testing
 
 describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
   it("should validate learningPathId is provided and enroll in PUBLIC path", async () => {
-    // 1st: Path query
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -956,12 +947,12 @@ describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
       ],
       rowCount: 1,
     });
-    // 2nd: getOrCreateLearnerPrincipal → employee lookup
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ principal_id: "principal-1" }],
       rowCount: 1,
     });
-    // 3rd: INSERT enrollment
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -975,7 +966,7 @@ describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
       ],
       rowCount: 1,
     });
-    // 4th: INSERT notification
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const req = createMockReq({ body: { learningPathId: "lp-1" } });
@@ -988,7 +979,6 @@ describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
   });
 
   it("should reject enrollment if path is not PUBLIC", async () => {
-    // 1st: Path query returns RESTRICTED path
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1031,7 +1021,6 @@ describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
   });
 
   it("should reject if already enrolled (ON CONFLICT)", async () => {
-    // 1st: Path query
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1043,12 +1032,12 @@ describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
       ],
       rowCount: 1,
     });
-    // 2nd: getOrCreateLearnerPrincipal → employee lookup
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ principal_id: "principal-1" }],
       rowCount: 1,
     });
-    // 3rd: INSERT enrollment returns 0 rows (conflict)
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     const req = createMockReq({ body: { learningPathId: "lp-1" } });
@@ -1111,7 +1100,7 @@ describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
   });
 });
 
-// ---- GET LEARNER PATH COURSES TESTS ----
+// Get learner path courses testing
 
 describe("GET LEARNER PATH COURSES", () => {
   it("should return 400 when employeeNo is missing", async () => {
@@ -1127,7 +1116,6 @@ describe("GET LEARNER PATH COURSES", () => {
   });
 
   it("should retrieve enrollment by id and principal", async () => {
-    // usesCourseReferenceTable × 3
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ present: true }],
       rowCount: 1,
@@ -1140,7 +1128,7 @@ describe("GET LEARNER PATH COURSES", () => {
       rows: [{ present: true }],
       rowCount: 1,
     });
-    // Enrollment query
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1154,7 +1142,7 @@ describe("GET LEARNER PATH COURSES", () => {
       ],
       rowCount: 1,
     });
-    // listLearnerPathCourses → usesCourseReferenceTable × 3 again
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ present: true }],
       rowCount: 1,
@@ -1167,7 +1155,7 @@ describe("GET LEARNER PATH COURSES", () => {
       rows: [{ present: true }],
       rowCount: 1,
     });
-    // Course list query
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1193,7 +1181,6 @@ describe("GET LEARNER PATH COURSES", () => {
   });
 
   it("should return 404 if enrollment not found", async () => {
-    // usesCourseReferenceTable × 3
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ present: true }],
       rowCount: 1,
@@ -1206,20 +1193,19 @@ describe("GET LEARNER PATH COURSES", () => {
       rows: [{ present: true }],
       rowCount: 1,
     });
-    // enrollment result empty
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     const req = createMockReq({ params: { enrollmentId: "nonexistent" } });
     const res = createMockRes();
     await learnerController.getLearnerPathCourses(req, res);
 
-    // Controller returns 200 with empty data when enrollment not found
     expect(res.statusCode).toBe(200);
     expect(res.body.enrollment).toBeDefined();
   });
 });
 
-// ---- UPDATE LEARNER COURSE COMPLETION TESTS ----
+// Update learner course completion testing
 
 describe("UPDATE LEARNER COURSE COMPLETION", () => {
   it("should return 400 when employeeNo is missing", async () => {
@@ -1242,11 +1228,10 @@ describe("UPDATE LEARNER COURSE COMPLETION", () => {
 
   it("should retrieve enrollment for update", async () => {
     vi.mocked(query).mockImplementation(async (sql, params) => {
-      // Schema checks: usesCourseReferenceTable
       if (sql && sql.includes("information_schema")) {
         return { rows: [{ present: true }], rowCount: 1 };
       }
-      // Enrollment JOIN query
+
       if (sql && sql.includes("auth_principals") && sql.includes("employees")) {
         return {
           rows: [
@@ -1263,7 +1248,7 @@ describe("UPDATE LEARNER COURSE COMPLETION", () => {
           rowCount: 1,
         };
       }
-      // Course check: learning_path_stages JOIN courses
+
       if (
         sql &&
         sql.includes("learning_path_stages") &&
@@ -1281,7 +1266,7 @@ describe("UPDATE LEARNER COURSE COMPLETION", () => {
           rowCount: 1,
         };
       }
-      // Previous progress query
+
       if (
         sql &&
         sql.includes("enrollment_progress") &&
@@ -1289,18 +1274,18 @@ describe("UPDATE LEARNER COURSE COMPLETION", () => {
       ) {
         return { rows: [{ progress: 0 }], rowCount: 1 };
       }
-      // Progress INSERT/UPDATE
+
       if (sql && sql.includes("INSERT INTO enrollment_progress")) {
         return { rows: [], rowCount: 1 };
       }
-      // Aggregation query (scoped_activities)
+
       if (sql && sql.includes("scoped_activities")) {
         return {
           rows: [{ total_courses: 2, completed_courses: 1 }],
           rowCount: 1,
         };
       }
-      // Update enrollment with computed progress
+
       if (sql && sql.startsWith("UPDATE")) {
         return {
           rows: [
@@ -1315,7 +1300,7 @@ describe("UPDATE LEARNER COURSE COMPLETION", () => {
           rowCount: 1,
         };
       }
-      // Courses result query (fallback)
+
       return {
         rows: [
           {
@@ -1379,19 +1364,17 @@ describe("UPDATE LEARNER COURSE COMPLETION", () => {
 
   it("should return 404 when courseId is missing (controller validates later)", async () => {
     const req = createMockReq({
-      params: { enrollmentId: "en-1" }, // no courseId
+      params: { enrollmentId: "en-1" },
       body: { completed: true },
     });
     const res = createMockRes();
     await learnerController.updateLearnerCourseCompletion(req, res);
 
-    // Controller doesn't validate courseId upfront — proceeds to resolve
-    // principalId → temporary auth check → 404
     expect(res.statusCode).toBe(404);
   });
 });
 
-// ---- GET LEARNER CERTIFICATES TESTS ----
+// Get learner certificates testing
 
 describe("GET LEARNER CERTIFICATES", () => {
   it("should return empty array if principal does not exist", async () => {
@@ -1406,7 +1389,6 @@ describe("GET LEARNER CERTIFICATES", () => {
   });
 
   it("should return certificates for principal with path details", async () => {
-    // Only 1 query call in getLearnerCertificates for non-temp user
     vi.mocked(query).mockImplementation(async () => ({
       rows: [
         {
@@ -1471,15 +1453,14 @@ describe("GET LEARNER CERTIFICATES", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.certificates).toHaveLength(2);
-    // SQL orders by issued_at DESC, mock returns unordered, controller passes through
-    // Verify SQL contains ORDER BY
+
     const sql = vi.mocked(query).mock.calls[0][0];
     expect(sql).toContain("ORDER BY");
     expect(sql).toContain("DESC");
   });
 });
 
-// ---- DOWNLOAD LEARNER CERTIFICATE TESTS ----
+// Download learner certificate testing
 
 describe("DOWNLOAD LEARNER CERTIFICATE", () => {
   it("should return 400 when employeeNo is missing", async () => {
@@ -1496,17 +1477,17 @@ describe("DOWNLOAD LEARNER CERTIFICATE", () => {
 
   it("should retrieve certificate with path details", async () => {
     vi.mocked(query)
-      // usesCourseReferenceTable x 3 (inside resolvePrincipalForLearner)
+
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
-      // hasCertificateSignatureColumn
+
       .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
-      // usesCourseReferenceTable x 3
+
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
-      // main certificate query
+
       .mockResolvedValueOnce({
         rows: [
           {
@@ -1537,11 +1518,6 @@ describe("DOWNLOAD LEARNER CERTIFICATE", () => {
   });
 
   it("should return 404 if certificate not found or not owned by user", async () => {
-    // Don't set any mocks - use the beforeEach default
-    // Default mock returns { rows: [], rowCount: 0 } for ALL queries
-    // Schema checks → present = false (undefined?.present)
-    // Certificate query → empty rows → 404
-
     const req = createMockReq({ params: { certificateId: "nonexistent" } });
     const res = createMockRes();
     await learnerController.downloadLearnerCertificate(req, res);
@@ -1601,7 +1577,7 @@ describe("DOWNLOAD LEARNER CERTIFICATE", () => {
   });
 });
 
-// ---- PRIVATE HELPER TESTS ----
+// Private helper testing
 
 describe("normalizeNameFromRow (private helper)", () => {
   it("should normalize name from employeeName", () => {
@@ -1686,7 +1662,6 @@ describe("normalizeDisplayValue (private helper)", () => {
   });
 });
 
-// Add to normalizeNameFromRow describe block:
 describe("normalizeNameFromRow with edge cases", () => {
   it("should handle name with only whitespace", () => {
     const name = normalizeNameFromRow(
@@ -1705,35 +1680,25 @@ describe("normalizeNameFromRow with edge cases", () => {
   });
 });
 
-// Add to normalizeDisplayValue describe block:
 describe("normalizeDisplayValue with HR-specific values", () => {
   it("should return null for 'na' (lowercase)", () => {
     expect(normalizeDisplayValue("na")).toBeNull();
   });
 
   it("should return null for empty arrays", () => {
-    // String([]) = "" → empty → null
     expect(normalizeDisplayValue([])).toBeNull();
   });
 });
 
-// SECURITY GAP
+// Security gap testing
 describe("CONTROLLER GAPS — Missing authorization checks", () => {
   it("DOCUMENTED GAP: downloadLearnerCertificate does not verify certificate ownership via employeeNo", () => {
-    // The controller verifies principal_id matches, but employeeNo
-    // comes from req.user which is set by auth middleware.
-    // If middleware allows user B to set user A's employeeNo,
-    // user B could download user A's certificates.
-    // This should be enforced at the auth/middleware level.
     expect(typeof learnerController.downloadLearnerCertificate).toBe(
       "function",
     );
   });
 
   it("DOCUMENTED GAP: getLearnerPathCourses does not verify enrollment ownership vs employeeNo", () => {
-    // The controller checks enrollment.principal_id matches req.user.id,
-    // but does NOT cross-verify that the employeeNo on req.user matches
-    // the enrollment's actual owner. Mitigated by middleware trust.
     expect(typeof learnerController.getLearnerPathCourses).toBe("function");
   });
 });

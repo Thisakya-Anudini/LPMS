@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// ---- MOCK ALL EXTERNAL DEPENDENCIES BEFORE IMPORTING CONTROLLER ----
+// Mock all external dependencies
 
 vi.mock("../db.js", () => ({
   query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
@@ -18,7 +18,7 @@ vi.mock("../utils/http.js", () => ({
   }),
 }));
 
-// ---- IMPORTS (after mocks) ----
+// Imports (after mocks)
 
 import { query } from "../db.js";
 import { logAudit } from "../utils/audit.js";
@@ -33,7 +33,7 @@ import {
   selfEnrollPublicPath,
 } from "../controllers/employeeController.js";
 
-// ---- TEST HELPERS ----
+// Test helpers
 
 const createMockRes = () => {
   const res = {
@@ -63,7 +63,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// ---- EXPORTS TEST ----
+// Exports testing
 
 describe("EMPLOYEE CONTROLLER EXPORTS", () => {
   it("should export getMyPaths as a function", () => {
@@ -89,7 +89,7 @@ describe("EMPLOYEE CONTROLLER EXPORTS", () => {
   });
 });
 
-// ---- GET MY PATHS TESTS ----
+// Get my paths testing
 
 describe("GET MY PATHS", () => {
   const mockEnrollments = [
@@ -157,7 +157,7 @@ describe("GET MY PATHS", () => {
     await getMyPaths(req, res);
 
     expect(res.statusCode).toBe(200);
-    // Verify the query used req.user.id
+
     expect(vi.mocked(query).mock.calls[0][1][0]).toBe("user-1");
   });
 
@@ -172,7 +172,7 @@ describe("GET MY PATHS", () => {
     await getMyPaths(req, res);
 
     expect(res.statusCode).toBe(200);
-    // Verify the SQL includes is_deleted = FALSE
+
     const sql = vi.mocked(query).mock.calls[0][0];
     expect(sql).toContain("is_deleted");
     expect(sql).toContain("FALSE");
@@ -189,7 +189,7 @@ describe("GET MY PATHS", () => {
     await getMyPaths(req, res);
 
     expect(res.statusCode).toBe(200);
-    // Verify SQL has ORDER BY enrolled_at DESC
+
     const sql = vi.mocked(query).mock.calls[0][0];
     expect(sql).toContain("ORDER BY");
     expect(sql).toContain("DESC");
@@ -232,13 +232,12 @@ describe("GET MY PATHS", () => {
   it("should handle missing req.user gracefully", async () => {
     const req = createMockReq({ user: null });
     const res = createMockRes();
-    // Controller will try to access req.user.id and crash
-    // This test documents the current behavior
+
     await expect(getMyPaths(req, res)).rejects.toThrow();
   });
 });
 
-// ---- GET PUBLIC PATHS TESTS ----
+// Get public paths testing
 
 describe("GET PUBLIC PATHS", () => {
   const publicPaths = [
@@ -314,7 +313,6 @@ describe("GET PUBLIC PATHS", () => {
     const res = createMockRes();
     await getPublicPaths(req, res);
 
-    // Verify SQL has ORDER BY
     const sql = vi.mocked(query).mock.calls[0][0];
     expect(sql).toContain("ORDER BY");
     expect(sql).toContain("DESC");
@@ -341,7 +339,6 @@ describe("GET PUBLIC PATHS", () => {
     const res = createMockRes();
     await getPublicPaths(req, res);
 
-    // Verify the user ID is passed as parameter
     expect(vi.mocked(query).mock.calls[0][1][0]).toBe("user-2");
   });
 
@@ -374,13 +371,12 @@ describe("GET PUBLIC PATHS", () => {
   it("should handle missing req.user gracefully", async () => {
     const req = createMockReq({ user: null });
     const res = createMockRes();
-    // Controller will try to access req.user.id and crash
-    // This test documents the current behavior
+
     await expect(getMyPaths(req, res)).rejects.toThrow();
   });
 });
 
-// ---- GET MY PROGRESS TESTS ----
+// Get my progress testing
 
 describe("GET MY PROGRESS", () => {
   it("should calculate total_enrollments, completed_enrollments, average_progress", async () => {
@@ -443,7 +439,7 @@ describe("GET MY PROGRESS", () => {
     await getMyProgress(req, res);
 
     expect(res.statusCode).toBe(200);
-    // Verify format: 2 decimal places
+
     expect(res.body.progress.average_progress).toMatch(/^\d+\.\d{2}$/);
   });
 
@@ -490,13 +486,12 @@ describe("GET MY PROGRESS", () => {
   it("should handle missing req.user gracefully", async () => {
     const req = createMockReq({ user: null });
     const res = createMockRes();
-    // Controller will try to access req.user.id and crash
-    // This test documents the current behavior
+
     await expect(getMyPaths(req, res)).rejects.toThrow();
   });
 });
 
-// ---- GET NOTIFICATIONS TESTS ----
+// Get notifications testing
 
 describe("GET NOTIFICATIONS", () => {
   const mockNotifications = [
@@ -616,13 +611,12 @@ describe("GET NOTIFICATIONS", () => {
   it("should handle missing req.user gracefully", async () => {
     const req = createMockReq({ user: null });
     const res = createMockRes();
-    // Controller will try to access req.user.id and crash
-    // This test documents the current behavior
+
     await expect(getMyPaths(req, res)).rejects.toThrow();
   });
 });
 
-// ---- GET MY CERTIFICATES TESTS ----
+// Get my certificates testing
 
 describe("GET MY CERTIFICATES", () => {
   const mockCertificates = [
@@ -738,13 +732,12 @@ describe("GET MY CERTIFICATES", () => {
   it("should handle missing req.user gracefully", async () => {
     const req = createMockReq({ user: null });
     const res = createMockRes();
-    // Controller will try to access req.user.id and crash
-    // This test documents the current behavior
+
     await expect(getMyPaths(req, res)).rejects.toThrow();
   });
 });
 
-// ---- UPDATE MY ENROLLMENT PROGRESS TESTS ----
+// Update my enrollment progress testing
 
 describe("UPDATE MY ENROLLMENT PROGRESS", () => {
   it("should accept valid progress (45%)", async () => {
@@ -807,9 +800,9 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
       ],
       rowCount: 1,
     });
-    // Mock the certificate INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    // Mock the notification INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const req = createMockReq({
@@ -821,7 +814,7 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.enrollment.status).toBe("COMPLETED");
-    // Should have created certificate and notification
+
     expect(vi.mocked(query).mock.calls.length).toBe(3);
   });
 
@@ -893,7 +886,6 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
     const res = createMockRes();
     await updateMyEnrollmentProgress(req, res);
 
-    // Verify the query includes both id AND principal_id
     const sql = vi.mocked(query).mock.calls[0][0];
     const params = vi.mocked(query).mock.calls[0][1];
     expect(sql).toContain("principal_id");
@@ -926,9 +918,9 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
       ],
       rowCount: 1,
     });
-    // Certificate INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    // Notification INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const req = createMockReq({
@@ -938,7 +930,6 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
     const res = createMockRes();
     await updateMyEnrollmentProgress(req, res);
 
-    // Second query should be INSERT into certificates
     expect(vi.mocked(query).mock.calls[1][0]).toContain(
       "INSERT INTO certificates",
     );
@@ -956,9 +947,9 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
       ],
       rowCount: 1,
     });
-    // Certificate INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    // Notification INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const req = createMockReq({
@@ -968,7 +959,6 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
     const res = createMockRes();
     await updateMyEnrollmentProgress(req, res);
 
-    // Third query should be INSERT into notifications
     expect(vi.mocked(query).mock.calls[2][0]).toContain(
       "INSERT INTO notifications",
     );
@@ -1025,9 +1015,6 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
     });
     const res = createMockRes();
 
-    // BUG: Controller awaits logAudit, so enrollment throws despite DB update succeeding
-    // Expected: should return 200 even if audit logging fails
-    // Current: throws 500
     await expect(updateMyEnrollmentProgress(req, res)).rejects.toThrow(
       "Audit DB connection lost",
     );
@@ -1045,9 +1032,9 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
       ],
       rowCount: 1,
     });
-    // Certificate INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    // Notification INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const req = createMockReq({
@@ -1057,7 +1044,6 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
     const res = createMockRes();
     await updateMyEnrollmentProgress(req, res);
 
-    // Verify CASE WHEN in SQL
     const sql = vi.mocked(query).mock.calls[0][0];
     expect(sql).toContain("CASE WHEN");
     expect(res.body.enrollment.completed_at).toBeTruthy();
@@ -1083,7 +1069,6 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
     const res = createMockRes();
     await updateMyEnrollmentProgress(req, res);
 
-    // Verify SQL sets completed_at = NULL for < 100
     const sql = vi.mocked(query).mock.calls[0][0];
     expect(sql).toContain("ELSE NULL");
     expect(res.body.enrollment.completed_at).toBeNull();
@@ -1162,9 +1147,9 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
       ],
       rowCount: 1,
     });
-    // Certificate INSERT returns rowCount 0 (conflict)
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
-    // Notification INSERT
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const req = createMockReq({
@@ -1181,17 +1166,15 @@ describe("UPDATE MY ENROLLMENT PROGRESS", () => {
   it("should handle missing req.user gracefully", async () => {
     const req = createMockReq({ user: null });
     const res = createMockRes();
-    // Controller will try to access req.user.id and crash
-    // This test documents the current behavior
+
     await expect(getMyPaths(req, res)).rejects.toThrow();
   });
 });
 
-// ---- SELF ENROLL PUBLIC PATH TESTS ----
+// Self enroll public path testing
 
 describe("SELF ENROLL PUBLIC PATH", () => {
   it("should enroll in valid PUBLIC, ACTIVE, non-deleted path", async () => {
-    // Mock: find learning path
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1203,7 +1186,7 @@ describe("SELF ENROLL PUBLIC PATH", () => {
       ],
       rowCount: 1,
     });
-    // Mock: INSERT enrollment
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1217,7 +1200,7 @@ describe("SELF ENROLL PUBLIC PATH", () => {
       ],
       rowCount: 1,
     });
-    // Mock: INSERT notification
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     const req = createMockReq({
@@ -1350,7 +1333,6 @@ describe("SELF ENROLL PUBLIC PATH", () => {
   });
 
   it("should reject if already enrolled (ON CONFLICT DO NOTHING)", async () => {
-    // Mock: find learning path
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1362,7 +1344,7 @@ describe("SELF ENROLL PUBLIC PATH", () => {
       ],
       rowCount: 1,
     });
-    // Mock: INSERT returns 0 rows (conflict)
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [],
       rowCount: 0,
@@ -1479,7 +1461,6 @@ describe("SELF ENROLL PUBLIC PATH", () => {
     const res = createMockRes();
     await selfEnrollPublicPath(req, res);
 
-    // Verify INSERT includes 'SELF' as enrollment_source
     const insertSql = vi.mocked(query).mock.calls[1][0];
     expect(insertSql).toContain("SELF");
   });
@@ -1515,7 +1496,6 @@ describe("SELF ENROLL PUBLIC PATH", () => {
     const res = createMockRes();
     await selfEnrollPublicPath(req, res);
 
-    // Third query should be INSERT into notifications
     expect(vi.mocked(query).mock.calls[2][0]).toContain(
       "INSERT INTO notifications",
     );
@@ -1673,8 +1653,7 @@ describe("SELF ENROLL PUBLIC PATH", () => {
   it("should handle missing req.user gracefully", async () => {
     const req = createMockReq({ user: null });
     const res = createMockRes();
-    // Controller will try to access req.user.id and crash
-    // This test documents the current behavior
+
     await expect(getMyPaths(req, res)).rejects.toThrow();
   });
 });

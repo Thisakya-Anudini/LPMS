@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcryptjs";
 
-// ---- MOCK ALL EXTERNAL DEPENDENCIES BEFORE IMPORTING CONTROLLER ----
+// Mock all external dependencies
 
 vi.mock("../db.js", () => ({
   query: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock("../utils/erpClient.js", () => ({
     .mockRejectedValue(new Error("No ERP mock set for this test")),
   fetchEmployeeSubordinates: vi
     .fn()
-    .mockResolvedValue({ success: true, message: "", data: [] }), // ← this is the fallback
+    .mockResolvedValue({ success: true, message: "", data: [] }),
 }));
 
 vi.mock("../utils/auth.js", () => ({
@@ -41,7 +41,7 @@ vi.mock("bcryptjs", () => ({
   hash: vi.fn(),
 }));
 
-// ---- IMPORTS (after mocks) ----
+// Imports (after mocks)
 
 import { query } from "../db.js";
 import {
@@ -70,7 +70,7 @@ import {
 } from "../controllers/authController.js";
 import { ROLES } from "../constants/roles.js";
 
-// ---- TEST HELPERS ----
+// Test helpers
 
 const createMockRes = () => {
   const res = {
@@ -107,7 +107,7 @@ const createMockReq = (overrides = {}) => ({
 
 // Resets all mocks before each test
 beforeEach(() => {
-  vi.resetAllMocks(); // ← replaces vi.clearAllMocks()
+  vi.resetAllMocks();
   vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
   vi.mocked(query).mockResolvedValue({ rows: [], rowCount: 0 });
   vi.mocked(fetchEmployeeSubordinates).mockResolvedValue({
@@ -125,7 +125,7 @@ beforeEach(() => {
   vi.mocked(getRefreshTokenTtlDays).mockReturnValue(7);
 });
 
-// ---- EXPORTS TEST ----
+// Exports testing
 
 describe("AUTH CONTROLLER EXPORTS", () => {
   it("should export login as a function", () => {
@@ -145,7 +145,7 @@ describe("AUTH CONTROLLER EXPORTS", () => {
   });
 });
 
-// ---- LOGIN TESTS ----
+// Login testing
 
 describe("LOGIN", () => {
   const validPasswordHash =
@@ -230,14 +230,11 @@ describe("LOGIN", () => {
     const res = createMockRes();
     await login(req, res);
 
-    // The query should receive the lowercased email
     expect(vi.mocked(query).mock.calls[0][1][0]).toBe("admin@lpms.com");
     expect(res.statusCode).toBe(200);
   });
 
   it("should return 401 for deactivated user (is_active = FALSE)", async () => {
-    // The real getPrincipalByEmail queries with AND is_active = TRUE
-    // So deactivated user returns no rows
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
     vi.mocked(buildTemporaryErpLearner).mockReturnValueOnce(null);
 
@@ -256,17 +253,17 @@ describe("LOGIN", () => {
       ...mockPrincipal,
       role: ROLES.SUPERVISOR,
     };
-    // Mock: find principal by email
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [supervisorPrincipal],
       rowCount: 1,
     });
-    // Mock: resolveEmployeeContext → find employee number
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ employee_number: "12345" }],
       rowCount: 1,
     });
-    // Mock: resolveEmployeeContextByNumber → check learning admin
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ employee_number: "12345" }],
       rowCount: 1,
@@ -333,17 +330,17 @@ describe("LOGIN", () => {
       email: "employee@lpms.com",
       role: ROLES.EMPLOYEE,
     };
-    // Mock: find principal by email
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [employeePrincipal],
       rowCount: 1,
     });
-    // Mock: find employee number by principal_id
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ employee_number: "12345" }],
       rowCount: 1,
     });
-    // Mock: check learning admin assignment
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ employee_number: "12345" }],
       rowCount: 1,
@@ -406,7 +403,7 @@ describe("LOGIN", () => {
       employeeNo: "99999",
     });
     vi.mocked(isValidTemporaryErpLearnerPassword).mockReturnValueOnce(true);
-    // ERP fetch throws
+
     vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
       new Error("ERP offline"),
     );
@@ -425,7 +422,7 @@ describe("LOGIN", () => {
     await login(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body.user.name).toBe("99999"); // fallback to employeeNo
+    expect(res.body.user.name).toBe("99999");
   });
 
   it("should reject invalid ERP credentials", async () => {
@@ -448,7 +445,7 @@ describe("LOGIN", () => {
   });
 });
 
-// ---- REFRESH TOKEN TESTS ----
+// Refresh token testing
 
 describe("REFRESH TOKEN", () => {
   it("should return 400 when refreshToken is missing", async () => {
@@ -626,7 +623,7 @@ describe("REFRESH TOKEN", () => {
       sub: "user-2",
     });
     vi.mocked(hashToken).mockReturnValue("hashed-token-2");
-    // First query: join tokens + principals
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -643,12 +640,12 @@ describe("REFRESH TOKEN", () => {
       ],
       rowCount: 1,
     });
-    // Second query: resolve employee number
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ employee_number: "12345" }],
       rowCount: 1,
     });
-    // Third query: check learning admin assignment
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ employee_number: "12345" }],
       rowCount: 1,
@@ -669,13 +666,6 @@ describe("REFRESH TOKEN", () => {
   });
 
   it("VULNERABILITY: should reject refresh if user is deactivated (BUG: controller does not check is_active)", async () => {
-    // This test documents the known vulnerability:
-    // The refresh() controller queries refresh_tokens JOIN auth_principals
-    // but does NOT filter by ap.is_active = TRUE.
-    // Therefore a deactivated user's refresh token still works.
-    //
-    // Once the controller is fixed to add is_active check, change
-    // the expectation from 200 to 401.
     vi.mocked(verifyToken).mockReturnValueOnce({
       tokenId: "token-deactivated",
       sub: "user-deactivated",
@@ -697,7 +687,7 @@ describe("REFRESH TOKEN", () => {
       ],
       rowCount: 1,
     });
-    // Employee context queries
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
     vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({ data: [] });
 
@@ -707,13 +697,11 @@ describe("REFRESH TOKEN", () => {
     const res = createMockRes();
     await refresh(req, res);
 
-    // Currently returns 200 — this is the bug.
-    // When fixed, change to: expect(res.statusCode).toBe(401);
     expect(res.statusCode).toBe(200);
   });
 });
 
-// ---- LOGOUT TESTS ----
+// Logout testing
 
 describe("LOGOUT", () => {
   it("should return 400 when refreshToken is missing", async () => {
@@ -741,7 +729,7 @@ describe("LOGOUT", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
-    // Verify the UPDATE query was called to revoke the token
+
     expect(vi.mocked(query).mock.calls[0][0]).toContain(
       "UPDATE refresh_tokens",
     );
@@ -764,7 +752,6 @@ describe("LOGOUT", () => {
   });
 
   it("should return success for multiple logout attempts", async () => {
-    // First logout: valid token
     vi.mocked(verifyToken).mockReturnValueOnce({
       tokenId: "token-1",
       sub: "user-1",
@@ -779,7 +766,6 @@ describe("LOGOUT", () => {
     await logout(req1, res1);
     expect(res1.statusCode).toBe(200);
 
-    // Second logout: token already revoked (token invalid after revoke)
     vi.mocked(verifyToken).mockImplementationOnce(() => {
       throw new Error("jwt expired");
     });
@@ -808,12 +794,12 @@ describe("LOGOUT", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
-    // Should NOT call DB for ERP learner
+
     expect(vi.mocked(query)).not.toHaveBeenCalled();
   });
 });
 
-// ---- ME ENDPOINT TESTS ----
+// Me endpoint testing
 
 describe("ME", () => {
   it("should return current user profile for SUPER_ADMIN", async () => {
@@ -887,7 +873,6 @@ describe("ME", () => {
       });
 
     vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
-      // ← NOT mockImplementationOnce
       success: true,
       message: "",
       data: [{ employeeNo: "12346" }],
@@ -926,12 +911,12 @@ describe("ME", () => {
     expect(res.body.user.authSource).toBe("ERP_LEARNER");
     expect(res.body.user.mustChangePassword).toBe(false);
     expect(res.body.user.employeeNo).toBe("12345");
-    // Should NOT query DB for ERP learner
+
     expect(vi.mocked(query)).not.toHaveBeenCalled();
   });
 });
 
-// ---- CHANGE PASSWORD TESTS ----
+// Change password testing
 
 describe("CHANGE PASSWORD", () => {
   it("should return 400 when current password is missing", async () => {
@@ -1017,7 +1002,7 @@ describe("CHANGE PASSWORD", () => {
 
   it("should update password hash and revoke refresh tokens", async () => {
     vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
-    // Mock: find principal
+
     vi.mocked(query).mockResolvedValueOnce({
       rows: [
         {
@@ -1034,9 +1019,9 @@ describe("CHANGE PASSWORD", () => {
     });
     vi.mocked(bcrypt.compare).mockResolvedValueOnce(true);
     vi.mocked(bcrypt.hash).mockResolvedValueOnce("$2a$10$newhash");
-    // Mock: UPDATE password
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    // Mock: REVOKE refresh tokens
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 2 });
 
     const req = createMockReq({
@@ -1049,7 +1034,6 @@ describe("CHANGE PASSWORD", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.user.mustChangePassword).toBe(false);
 
-    // Verify both UPDATE queries were executed
     const updateCalls = vi
       .mocked(query)
       .mock.calls.filter(([sql]) => sql.includes("UPDATE"));
@@ -1072,7 +1056,7 @@ describe("CHANGE PASSWORD", () => {
 
   it("should return 404 if user is removed during password change", async () => {
     vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
-    // User not found in DB (account removed)
+
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     const req = createMockReq({
@@ -1087,7 +1071,7 @@ describe("CHANGE PASSWORD", () => {
   });
 });
 
-// ---- EDGE CASES AND SECURITY TESTS ----
+// Edge cases and security checks
 
 describe("EDGE CASES AND SECURITY", () => {
   it("should normalize email to lowercase for lookup", () => {
@@ -1129,19 +1113,16 @@ describe("EDGE CASES AND SECURITY", () => {
   it("should correctly fallback ERP name resolution", () => {
     const fallbackName = "12345";
 
-    // Scenario 1: Full name present
     let details = { data: [{ employeeName: " Julia Silva " }] };
     let mapped = details.data[0].employeeName.trim();
     expect(mapped).toBe("Julia Silva");
 
-    // Scenario 2: No full name, but has initials and surname
     details = {
       data: [{ employeeInitials: " J ", employeeSurname: " Silva " }],
     };
     mapped = `${details.data[0].employeeInitials.trim()} ${details.data[0].employeeSurname.trim()}`;
     expect(mapped).toBe("J Silva");
 
-    // Scenario 3: Nothing present, use fallback
     details = { data: [{}] };
     mapped = fallbackName;
     expect(mapped).toBe("12345");
