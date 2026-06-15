@@ -1,18 +1,104 @@
-// Set up test environment
-process.env.SECRET_KEY =
-  process.env.SECRET_KEY || "test-secret-key-for-testing";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import test from "node:test";
-import assert from "assert/strict";
+// Mock all external dependencies
+
+vi.mock("../db.js", () => ({
+  query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+}));
+
+vi.mock("../utils/http.js", () => ({
+  sendError: vi.fn((res, status, code, message, details) => {
+    res.statusCode = status;
+    res.body = { error: { code, message } };
+    if (details) {
+      res.body.error.details = details;
+    }
+    return res;
+  }),
+}));
+
+vi.mock("../utils/audit.js", () => ({
+  logAudit: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("bcryptjs", () => ({
+  default: { hash: vi.fn() },
+  hash: vi.fn(),
+}));
+
+vi.mock("../utils/erpClient.js", () => ({
+  fetchAllCourses: vi
+    .fn()
+    .mockResolvedValue({ success: true, message: "Success", data: [] }),
+  fetchClassesByCourseCode: vi.fn().mockRejectedValue(new Error("No ERP mock")),
+  fetchAllDesignations: vi.fn().mockRejectedValue(new Error("No ERP mock")),
+  fetchAllSalaryGrades: vi.fn().mockRejectedValue(new Error("No ERP mock")),
+  fetchEmployeesByFilters: vi.fn().mockRejectedValue(new Error("No ERP mock")),
+  fetchEmployeeDetailsForServiceNo: vi
+    .fn()
+    .mockRejectedValue(new Error("No ERP mock")),
+  fetchEmployeesByPartialName: vi
+    .fn()
+    .mockRejectedValue(new Error("No ERP mock")),
+  fetchOrganizationList: vi.fn().mockRejectedValue(new Error("No ERP mock")),
+}));
+
+vi.mock("../utils/certificatePdf.js", () => ({
+  renderCertificatePdf: vi.fn(),
+}));
+
+vi.mock("../utils/assignmentReports.js", () => ({
+  ASSIGNMENT_REPORT_SOURCE: {
+    LEARNING_ADMIN: "LEARNING_ADMIN",
+    SUPERVISOR: "SUPERVISOR",
+  },
+  ASSIGNMENT_REPORT_STATUS: {
+    ASSIGNED_IN_LPMS: "ASSIGNED_IN_LPMS",
+    ENROLLED_IN_ERP: "ENROLLED_IN_ERP",
+  },
+  createAssignmentReport: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../utils/emailService.js", () => ({
+  sendClassAssignedEmail: vi.fn().mockResolvedValue(undefined),
+  sendLearningPathAssignedEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Imports (after mocks)
+
+import { query } from "../db.js";
+import { sendError } from "../utils/http.js";
+import { logAudit } from "../utils/audit.js";
+import bcrypt from "bcryptjs";
+import {
+  fetchAllCourses,
+  fetchClassesByCourseCode,
+  fetchAllDesignations,
+  fetchAllSalaryGrades,
+  fetchEmployeesByFilters,
+  fetchEmployeeDetailsForServiceNo,
+  fetchEmployeesByPartialName,
+  fetchOrganizationList,
+} from "../utils/erpClient.js";
+import { renderCertificatePdf } from "../utils/certificatePdf.js";
+import {
+  ASSIGNMENT_REPORT_SOURCE,
+  ASSIGNMENT_REPORT_STATUS,
+  createAssignmentReport,
+} from "../utils/assignmentReports.js";
+import {
+  sendClassAssignedEmail,
+  sendLearningPathAssignedEmail,
+} from "../utils/emailService.js";
 import * as learningAdminController from "../controllers/learningAdminController.js";
 
-// MOCK UTILITIES
+// Test helpers
 
 const createMockRes = () => {
   const res = {
     statusCode: 200,
     body: null,
-    headers: {},
+    _headers: {},
     status(code) {
       this.statusCode = code;
       return this;
@@ -21,23 +107,14 @@ const createMockRes = () => {
       this.body = data;
       return this;
     },
-    header(key, value) {
-      this.headers[key] = value;
-      return this;
-    },
   };
   return res;
 };
 
 const createMockReq = (overrides = {}) => {
-  const headers = {};
   const baseReq = {
     body: {},
     params: {},
-    headers,
-    header(name) {
-      return this.headers[name];
-    },
     user: {
       id: "11111111-1111-4111-8111-111111111111",
       name: "Learning Admin",
@@ -45,7 +122,6 @@ const createMockReq = (overrides = {}) => {
       employeeNo: "EMP-ADMIN",
     },
   };
-
   return {
     ...baseReq,
     ...overrides,
@@ -55,212 +131,7 @@ const createMockReq = (overrides = {}) => {
   };
 };
 
-const sendMockError = (res, status, code, message, details) => {
-  const payload = { error: { code, message } };
-  if (details) {
-    payload.error.details = details;
-  }
-  return res.status(status).json(payload);
-};
-
-// MOCK DATABASE
-
-let mockDatabase = {};
-
-const setupMockDatabase = () => {
-  mockDatabase = {
-    learning_paths: [
-      {
-        id: "lp-1",
-        title: "Python Basics",
-        description: "Learn Python",
-        category: "PUBLIC",
-        total_duration: 20,
-        status: "ACTIVE",
-        is_deleted: false,
-        created_at: new Date("2026-06-05T10:00:00Z"),
-        updated_at: new Date("2026-06-05T10:00:00Z"),
-        created_by: "admin-1",
-        certificate_signer_name: "Learning Manager",
-        certificate_signer_title: "LPMS",
-        certificate_signature_png: "data:image/png;base64,AAAA",
-      },
-      {
-        id: "lp-2",
-        title: "Leadership",
-        description: "Leadership course",
-        category: "RESTRICTED",
-        total_duration: 40,
-        status: "ACTIVE",
-        is_deleted: false,
-        created_at: new Date("2026-06-04T10:00:00Z"),
-        updated_at: new Date("2026-06-04T10:00:00Z"),
-        created_by: "admin-1",
-        certificate_signer_name: "Training Lead",
-        certificate_signer_title: "Academy",
-        certificate_signature_png: null,
-      },
-      {
-        id: "lp-3",
-        title: "Deleted Path",
-        description: "Deleted",
-        category: "PUBLIC",
-        total_duration: 10,
-        status: "ACTIVE",
-        is_deleted: true,
-        created_at: new Date("2026-06-03T10:00:00Z"),
-      },
-    ],
-    learning_path_stages: [
-      {
-        id: "stage-1",
-        learning_path_id: "lp-1",
-        title: "Stage 1",
-        stage_order: 1,
-      },
-      {
-        id: "stage-2",
-        learning_path_id: "lp-1",
-        title: "Stage 2",
-        stage_order: 2,
-      },
-    ],
-    stage_courses: [
-      {
-        id: "sc-1",
-        stage_id: "stage-1",
-        course_code: "COURSE-001",
-        course_title: "Python Intro",
-        course_duration: "2h",
-        delivery_mode: "ONLINE",
-        course_order: 1,
-      },
-      {
-        id: "sc-2",
-        stage_id: "stage-2",
-        course_code: "COURSE-002",
-        course_title: "Python Advanced",
-        course_duration: "3h",
-        delivery_mode: "ONLINE",
-        course_order: 1,
-      },
-    ],
-    principals: [
-      {
-        id: "principal-1",
-        email: "john@example.com",
-        name: "John Doe",
-        role: "EMPLOYEE",
-      },
-      {
-        id: "principal-2",
-        email: "jane@example.com",
-        name: "Jane Doe",
-        role: "EMPLOYEE",
-      },
-    ],
-    employees: [
-      {
-        id: "emp-1",
-        principal_id: "principal-1",
-        employee_number: "EMP-001",
-        designation: "Developer",
-        grade_name: "G5",
-      },
-      {
-        id: "emp-2",
-        principal_id: "principal-2",
-        employee_number: "EMP-002",
-        designation: "Analyst",
-        grade_name: "G4",
-      },
-      {
-        id: "emp-admin",
-        principal_id: "11111111-1111-4111-8111-111111111111",
-        employee_number: "EMP-ADMIN",
-        designation: "Learning Admin",
-        grade_name: "G7",
-      },
-    ],
-    enrollments: [
-      {
-        id: "en-1",
-        principal_id: "principal-1",
-        learning_path_id: "lp-1",
-        status: "IN_PROGRESS",
-        progress: 50,
-        enrolled_at: new Date("2026-06-05T10:00:00Z"),
-        learner_name: "John Doe",
-        learner_email: "john@example.com",
-      },
-      {
-        id: "en-2",
-        principal_id: "principal-2",
-        learning_path_id: "lp-1",
-        status: "COMPLETED",
-        progress: 100,
-        enrolled_at: new Date("2026-06-04T10:00:00Z"),
-        learner_name: "Jane Doe",
-        learner_email: "jane@example.com",
-      },
-    ],
-    notifications: [],
-    certificates: [
-      {
-        id: "cert-1",
-        principal_id: "principal-2",
-        learning_path_id: "lp-1",
-      },
-    ],
-    assignment_reports: [
-      {
-        id: "report-1",
-        learning_path_id: "lp-1",
-        learning_path_title: "Python Basics",
-        assigned_by_name: "Learning Admin",
-        assigned_by_role: "LEARNING_ADMIN",
-        assignment_source: "LEARNING_ADMIN",
-        report_status: "ASSIGNED_IN_LPMS",
-        assigned_at: new Date("2026-06-05T10:00:00Z"),
-        created_at: new Date("2026-06-05T10:00:00Z"),
-      },
-    ],
-    assignment_report_learners: [
-      {
-        id: "arl-1",
-        report_id: "report-1",
-        principal_id: "principal-1",
-        employee_number: "EMP-001",
-        learner_name: "John Doe",
-        learner_email: "john@example.com",
-        designation: "Developer",
-        grade_name: "G5",
-      },
-    ],
-    learning_admin_assignments: [{ employee_number: "EMP-002" }],
-    class_enrollments: [
-      {
-        id: "ce-1",
-        enrollment_id: "en-1",
-        learning_path_id: "lp-1",
-        course_code: "COURSE-001",
-        class_id: "CLASS-001",
-        class_code: "C001",
-        class_title: "Python Morning",
-        class_payload: { id: "CLASS-001" },
-        assigned_at: new Date("2026-06-06T10:00:00Z"),
-      },
-    ],
-  };
-};
-
-let auditLogs = [];
-let assignmentReports = [];
-let sentEmails = [];
-
-// MOCK HELPERS
-
-const ASSIGNMENT_REPORT_STATUS = {
+const ASSIGNMENT_REPORT_STATUS_VALUES = {
   ASSIGNED_IN_LPMS: "ASSIGNED_IN_LPMS",
   ENROLLED_IN_ERP: "ENROLLED_IN_ERP",
 };
@@ -274,7 +145,6 @@ const normalizeEmployeeDisplayName = (row, employeeNo) => {
   if (row?.employeeName && String(row.employeeName).trim()) {
     return String(row.employeeName).trim();
   }
-
   const initials = row?.employeeInitials
     ? String(row.employeeInitials).trim()
     : "";
@@ -282,7 +152,6 @@ const normalizeEmployeeDisplayName = (row, employeeNo) => {
     ? String(row.employeeSurname).trim()
     : "";
   const merged = `${initials} ${surname}`.trim();
-
   return merged || `Learner ${employeeNo}`;
 };
 
@@ -323,24 +192,11 @@ const normalizeSignaturePngDataUrl = (value) => {
   if (value === null || value === undefined || value === "") {
     return null;
   }
-
   const normalized = String(value).trim();
   const prefix = "data:image/png;base64,";
-
   if (!normalized.startsWith(prefix)) {
     return { error: "Signature must be a PNG image." };
   }
-
-  const binary = Buffer.from(normalized.slice(prefix.length), "base64");
-
-  if (binary.length === 0) {
-    return { error: "Signature image is empty." };
-  }
-
-  if (binary.length > 2 * 1024 * 1024) {
-    return { error: "Signature image must be 2 MB or smaller." };
-  }
-
   return { value: normalized };
 };
 
@@ -349,14 +205,13 @@ const safeCertificateTitle = (title) =>
     .replace(/[^a-z0-9]+/gi, "_")
     .toLowerCase();
 
-const mapLearningAdminAssignments = (employees = []) => {
-  const assigned = new Set(
-    mockDatabase.learning_admin_assignments.map((row) => row.employee_number),
-  );
-
+const mapLearningAdminAssignments = (
+  employees = [],
+  assignedEmployeeNumbers = new Set(),
+) => {
   return employees.map((employee) => ({
     ...employee,
-    isLearningAdmin: assigned.has(employee.employeeNumber),
+    isLearningAdmin: assignedEmployeeNumbers.has(employee.employeeNumber),
   }));
 };
 
@@ -369,7 +224,6 @@ const normalizeErpClassRow = (row, index = 0) => {
   const title = String(
     row?.className || row?.title || `Class ${index + 1}`,
   ).trim();
-
   return {
     id,
     code,
@@ -386,28 +240,15 @@ const normalizeErpClassRow = (row, index = 0) => {
 const getSearchErrorStatus = (error) =>
   typeof error?.status === "number" ? error.status : 502;
 
-const mockLogAudit = async (audit) => {
-  auditLogs.push(audit);
-};
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(query).mockReset();
+  vi.mocked(query).mockResolvedValue({ rows: [], rowCount: 0 });
+});
 
-const mockCreateAssignmentReport = async (report) => {
-  assignmentReports.push(report);
-};
+// Exports testing
 
-const mockSendLearningPathAssignedEmail = (payload) => {
-  sentEmails.push({ type: "learning-path", ...payload });
-  return Promise.resolve();
-};
-
-const mockSendClassAssignedEmail = (payload) => {
-  sentEmails.push({ type: "class", ...payload });
-  return Promise.resolve();
-};
-
-// TEST SUITES
-
-// functions exports testing
-test("LEARNING ADMIN CONTROLLER EXPORTS TESTS", async (t) => {
+describe("LEARNING ADMIN CONTROLLER EXPORTS", () => {
   const expectedExports = [
     "createLearningPath",
     "getLearningPaths",
@@ -429,33 +270,49 @@ test("LEARNING ADMIN CONTROLLER EXPORTS TESTS", async (t) => {
   ];
 
   for (const exportName of expectedExports) {
-    await t.test(`should export ${exportName}`, async () => {
-      assert.equal(typeof learningAdminController[exportName], "function");
+    it(`should export ${exportName}`, () => {
+      expect(typeof learningAdminController[exportName]).toBe("function");
     });
   }
 });
 
-// createLearningPath testing
-test("CREATE LEARNING PATH TESTS", async (t) => {
-  await t.test("should reject invalid category", async () => {
+// Create learning path testing
+
+describe("CREATE LEARNING PATH", () => {
+  it("should return 400 for invalid category", async () => {
+    const req = createMockReq({
+      body: { title: "Test", category: "PRIVATE", description: "Test" },
+    });
     const res = createMockRes();
-    const category = parseCategory("PRIVATE");
+    await learningAdminController.createLearningPath(req, res);
 
-    if (!category) {
-      sendMockError(res, 400, "VALIDATION_ERROR", "Invalid category.");
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.error.code, "VALIDATION_ERROR");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should allow PUBLIC and RESTRICTED categories", async () => {
-    assert.equal(parseCategory("PUBLIC"), "PUBLIC");
-    assert.equal(parseCategory("RESTRICTED"), "RESTRICTED");
+  it("should allow PUBLIC and RESTRICTED categories", () => {
+    expect(parseCategory("PUBLIC")).toBe("PUBLIC");
+    expect(parseCategory("RESTRICTED")).toBe("RESTRICTED");
+    expect(parseCategory("PRIVATE")).toBeNull();
   });
 
-  await t.test("should create active learning path payload", async () => {
-    setupMockDatabase();
+  it("should create active learning path with certificate signer fields", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-new",
+          title: "React Basics",
+          description: "Learn React",
+          category: "PUBLIC",
+          total_duration: 12,
+          status: "ACTIVE",
+          created_at: new Date(),
+          certificate_signer_name: "Manager",
+          certificate_signer_title: "LPMS",
+        },
+      ],
+      rowCount: 1,
+    });
 
     const req = createMockReq({
       body: {
@@ -467,35 +324,26 @@ test("CREATE LEARNING PATH TESTS", async (t) => {
         certificateSignerTitle: "LPMS",
       },
     });
+    const res = createMockRes();
+    await learningAdminController.createLearningPath(req, res);
 
-    const created = {
-      id: "lp-new",
-      title: req.body.title,
-      description: req.body.description,
-      category: parseCategory(req.body.category),
-      total_duration: req.body.totalDuration,
-      status: "ACTIVE",
-      certificate_signer_name: req.body.certificateSignerName,
-      certificate_signer_title: req.body.certificateSignerTitle,
-    };
-
-    assert.equal(created.status, "ACTIVE");
-    assert.equal(created.category, "PUBLIC");
-    assert.equal(created.certificate_signer_name, "Manager");
+    expect(res.statusCode).toBe(201);
+    expect(res.body.learningPath.status).toBe("ACTIVE");
+    expect(res.body.learningPath.category).toBe("PUBLIC");
+    expect(res.body.learningPath.certificate_signer_name).toBe("Manager");
   });
 
-  await t.test("should insert unstructured stages in order", async () => {
+  it("should insert unstructured stages in order", () => {
     const stages = [
       { title: "Intro", order: 1 },
       { title: "Advanced", order: 2 },
     ];
-
-    assert.equal(stages.length, 2);
-    assert.equal(stages[0].order, 1);
-    assert.equal(stages[1].title, "Advanced");
+    expect(stages).toHaveLength(2);
+    expect(stages[0].order).toBe(1);
+    expect(stages[1].title).toBe("Advanced");
   });
 
-  await t.test("should insert structured stage courses", async () => {
+  it("should insert structured stage courses", () => {
     const stages = [
       {
         title: "Stage 1",
@@ -503,380 +351,608 @@ test("CREATE LEARNING PATH TESTS", async (t) => {
         courses: [{ courseId: "COURSE-001", order: 1 }],
       },
     ];
-
-    assert.equal(Array.isArray(stages[0].courses), true);
-    assert.equal(stages[0].courses[0].courseId, "COURSE-001");
+    expect(Array.isArray(stages[0].courses)).toBe(true);
+    expect(stages[0].courses[0].courseId).toBe("COURSE-001");
   });
 
-  await t.test("should log create learning path audit", async () => {
-    auditLogs = [];
-
-    await mockLogAudit({
-      actorPrincipalId: "admin-1",
-      action: "CREATE_LEARNING_PATH",
-      resourceType: "LEARNING_PATH",
-      resourceId: "lp-new",
+  it("should log create learning path audit on success", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ principal_id: "11111111-1111-4111-8111-111111111111" }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-new",
+          title: "Test",
+          description: "Test",
+          category: "PUBLIC",
+          total_duration: 10,
+          status: "ACTIVE",
+          created_at: new Date(),
+          certificate_signer_name: null,
+          certificate_signer_title: null,
+        },
+      ],
+      rowCount: 1,
     });
 
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "CREATE_LEARNING_PATH");
+    const req = createMockReq({
+      body: { title: "Test", description: "Test", category: "PUBLIC" },
+    });
+    const res = createMockRes();
+    await learningAdminController.createLearningPath(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
+      actorPrincipalId: "11111111-1111-4111-8111-111111111111",
+      action: "CREATE_LEARNING_PATH",
+      resourceType: "LEARNING_PATH",
+    });
   });
 });
 
-// getLearningPath testing
-test("GET LEARNING PATHS TESTS", async (t) => {
-  await t.test("should return non-deleted paths only", async () => {
-    setupMockDatabase();
+// Get learning paths testing
 
-    const paths = mockDatabase.learning_paths.filter(
-      (path) => !path.is_deleted,
+describe("GET LEARNING PATHS", () => {
+  it("should return non-deleted paths only", async () => {
+    vi.mocked(query).mockImplementation(() => ({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Python Basics",
+          description: "Learn Python",
+          category: "PUBLIC",
+          total_duration: 20,
+          status: "ACTIVE",
+          created_at: new Date(),
+          certificate_signer_name: "Manager",
+          certificate_signer_title: "LPMS",
+        },
+        {
+          id: "lp-2",
+          title: "Leadership",
+          description: "Leadership course",
+          category: "RESTRICTED",
+          total_duration: 40,
+          status: "ACTIVE",
+          created_at: new Date(),
+          certificate_signer_name: "Lead",
+          certificate_signer_title: "Academy",
+        },
+      ],
+      rowCount: 2,
+    }));
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getLearningPaths(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPaths).toHaveLength(2);
+  });
+
+  it("should order paths by created_at DESC (SQL handles ordering)", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "lp-1" }, { id: "lp-2" }],
+      rowCount: 2,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getLearningPaths(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("ORDER BY");
+    expect(sql).toContain("DESC");
+  });
+
+  it("should include certificate signer fields", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Python Basics",
+          description: "Learn Python",
+          category: "PUBLIC",
+          total_duration: 20,
+          status: "ACTIVE",
+          created_at: new Date(),
+          certificate_signer_name: "Learning Manager",
+          certificate_signer_title: "LPMS",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getLearningPaths(req, res);
+
+    expect(res.body.learningPaths[0].certificate_signer_name).toBe(
+      "Learning Manager",
     );
-
-    assert.equal(paths.length, 2);
-    assert.ok(paths.every((path) => path.is_deleted === false));
-  });
-
-  await t.test("should order paths by created_at DESC", async () => {
-    setupMockDatabase();
-
-    const paths = mockDatabase.learning_paths
-      .filter((path) => !path.is_deleted)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-    assert.equal(paths[0].id, "lp-1");
-    assert.equal(paths[1].id, "lp-2");
-  });
-
-  await t.test("should include certificate signer fields", async () => {
-    setupMockDatabase();
-
-    const path = mockDatabase.learning_paths[0];
-
-    assert.ok(path.certificate_signer_name);
-    assert.ok(path.certificate_signer_title);
+    expect(res.body.learningPaths[0].certificate_signer_title).toBe("LPMS");
   });
 });
 
-// getLearningPathById testing
-test("GET LEARNING PATH BY ID TESTS", async (t) => {
-  await t.test(
-    "should return 404 when learning path is not found",
-    async () => {
-      setupMockDatabase();
+// Get learning path by id testing
 
-      const res = createMockRes();
-      const path = mockDatabase.learning_paths.find(
-        (item) => item.id === "missing" && !item.is_deleted,
-      );
-
-      if (!path) {
-        sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
+describe("GET LEARNING PATH BY ID", () => {
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("FROM learning_paths WHERE id = $1")) {
+        return { rows: [], rowCount: 0 };
       }
 
-      assert.equal(res.statusCode, 404);
-      assert.equal(res.body.error.message, "Learning path not found.");
-    },
-  );
+      return { rows: [], rowCount: 0 };
+    });
 
-  await t.test("should return learning path with stages", async () => {
-    setupMockDatabase();
+    const req = createMockReq({ params: { id: "missing" } });
+    const res = createMockRes();
+    await learningAdminController.getLearningPathById(req, res);
 
-    const path = mockDatabase.learning_paths.find((item) => item.id === "lp-1");
-    const stages = mockDatabase.learning_path_stages.filter(
-      (stage) => stage.learning_path_id === path.id,
-    );
-
-    assert.ok(path);
-    assert.equal(stages.length, 2);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should attach courses to each stage", async () => {
-    setupMockDatabase();
+  it("should return learning path with stages", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+            status: "ACTIVE",
+            created_at: new Date(),
+            certificate_signer_name: "Manager",
+            certificate_signer_title: "LPMS",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: "stage-1", title: "Stage 1", stage_order: 1 },
+          { id: "stage-2", title: "Stage 2", stage_order: 2 },
+        ],
+        rowCount: 2,
+      })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            stage_id: "stage-1",
+            course_id: "COURSE-001",
+            course_title: "Python Intro",
+            course_order: 1,
+            delivery_mode: "ONLINE",
+          },
+          {
+            stage_id: "stage-2",
+            course_id: "COURSE-002",
+            course_title: "Python Advanced",
+            course_order: 1,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 2,
+      });
 
-    const stages = mockDatabase.learning_path_stages
-      .filter((stage) => stage.learning_path_id === "lp-1")
-      .map((stage) => ({
-        ...stage,
-        courses: mockDatabase.stage_courses.filter(
-          (course) => course.stage_id === stage.id,
-        ),
-      }));
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learningAdminController.getLearningPathById(req, res);
 
-    assert.equal(stages[0].courses.length, 1);
-    assert.equal(stages[0].courses[0].course_code, "COURSE-001");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.stages).toHaveLength(2);
+    expect(res.body.learningPath.stages[0].courses).toHaveLength(1);
+    expect(res.body.learningPath.stages[0].courses[0].course_id).toBe(
+      "COURSE-001",
+    );
   });
 });
 
-// updateLearningPath testing
-test("UPDATE LEARNING PATH TESTS", async (t) => {
-  await t.test("should return 404 when learning path is missing", async () => {
-    setupMockDatabase();
+// Update learning path testing
 
+describe("UPDATE LEARNING PATH", () => {
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({
+      params: { id: "missing" },
+      body: { title: "Updated" },
+    });
     const res = createMockRes();
-    const path = mockDatabase.learning_paths.find(
-      (item) => item.id === "missing" && !item.is_deleted,
-    );
+    await learningAdminController.updateLearningPath(req, res);
 
-    if (!path) {
-      sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should update only provided fields", async () => {
-    setupMockDatabase();
+  it("should update only provided fields", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Updated Python",
+          description: "Learn Python",
+          category: "PUBLIC",
+          total_duration: 20,
+          status: "ACTIVE",
+          updated_at: new Date(),
+          certificate_signer_name: null,
+          certificate_signer_title: null,
+        },
+      ],
+      rowCount: 1,
+    });
 
-    const path = { ...mockDatabase.learning_paths[0] };
-    const update = { title: "Updated Python", status: "ACTIVE" };
+    const req = createMockReq({
+      params: { id: "lp-1" },
+      body: { title: "Updated Python", status: "ACTIVE" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPath(req, res);
 
-    const updated = {
-      ...path,
-      title: update.title ?? path.title,
-      description: update.description ?? path.description,
-      category: update.category ?? path.category,
-      total_duration: update.totalDuration ?? path.total_duration,
-      status: update.status ?? path.status,
-    };
-
-    assert.equal(updated.title, "Updated Python");
-    assert.equal(updated.description, "Learn Python");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.title).toBe("Updated Python");
   });
 
-  await t.test(
-    "should replace stages when stages array is provided",
-    async () => {
-      setupMockDatabase();
+  it("should replace stages when stages array is provided", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Test",
+          description: "Test",
+          category: "PUBLIC",
+          total_duration: 10,
+          status: "ACTIVE",
+          updated_at: new Date(),
+          certificate_signer_name: null,
+          certificate_signer_title: null,
+        },
+      ],
+      rowCount: 1,
+    });
 
-      const newStages = [{ title: "New Stage", order: 1 }];
-      mockDatabase.learning_path_stages =
-        mockDatabase.learning_path_stages.filter(
-          (stage) => stage.learning_path_id !== "lp-1",
-        );
-      mockDatabase.learning_path_stages.push({
-        id: "stage-new",
-        learning_path_id: "lp-1",
-        title: newStages[0].title,
-        stage_order: newStages[0].order,
-      });
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
-      const stages = mockDatabase.learning_path_stages.filter(
-        (stage) => stage.learning_path_id === "lp-1",
-      );
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: false }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: false }],
+      rowCount: 1,
+    });
 
-      assert.equal(stages.length, 1);
-      assert.equal(stages[0].title, "New Stage");
-    },
-  );
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
-  await t.test("should log update learning path audit", async () => {
-    auditLogs = [];
+    const req = createMockReq({
+      params: { id: "lp-1" },
+      body: { stages: [{ title: "New Stage", order: 1 }] },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPath(req, res);
 
-    await mockLogAudit({
-      actorPrincipalId: "admin-1",
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should log update learning path audit", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Updated",
+          description: "Test",
+          category: "PUBLIC",
+          total_duration: 10,
+          status: "ACTIVE",
+          updated_at: new Date(),
+          certificate_signer_name: null,
+          certificate_signer_title: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      params: { id: "lp-1" },
+      body: { title: "Updated" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPath(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       action: "UPDATE_LEARNING_PATH",
       resourceType: "LEARNING_PATH",
       resourceId: "lp-1",
     });
-
-    assert.equal(auditLogs[0].action, "UPDATE_LEARNING_PATH");
   });
 });
 
-// getCertificateCustomizationPaths testing
-test("GET CERTIFICATE CUSTOMIZATION PATHS TESTS", async (t) => {
-  await t.test(
-    "should export getCertificateCustomizationPaths function",
-    async () => {
-      assert.equal(
-        typeof learningAdminController.getCertificateCustomizationPaths,
-        "function",
-      );
-    },
-  );
+// Get certificate customization paths testing
 
-  await t.test("should return non-deleted learning paths only", async () => {
-    setupMockDatabase();
+describe("GET CERTIFICATE CUSTOMIZATION PATHS", () => {
+  it("should export getCertificateCustomizationPaths function", () => {
+    expect(
+      typeof learningAdminController.getCertificateCustomizationPaths,
+    ).toBe("function");
+  });
 
-    const paths = mockDatabase.learning_paths.filter(
-      (path) => !path.is_deleted,
+  it("should return non-deleted learning paths with certificate fields", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: false }], rowCount: 1 };
+      }
+
+      return {
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            certificate_signer_name: "Manager",
+            certificate_signer_title: "LPMS",
+            certificate_signature_png: null,
+            updated_at: new Date(),
+          },
+          {
+            id: "lp-2",
+            title: "Leadership",
+            certificate_signer_name: "Lead",
+            certificate_signer_title: "Academy",
+            certificate_signature_png: null,
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 2,
+      };
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getCertificateCustomizationPaths(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPaths).toHaveLength(2);
+    expect(res.body.learningPaths[0].certificate_signer_name).toBe("Manager");
+  });
+
+  it("should list paths alphabetically by title (SQL handles ordering)", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-2",
+            title: "Leadership",
+            certificate_signer_name: null,
+            certificate_signer_title: null,
+            certificate_signature_png: null,
+            updated_at: new Date(),
+          },
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            certificate_signer_name: null,
+            certificate_signer_title: null,
+            certificate_signature_png: null,
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 2,
+      });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getCertificateCustomizationPaths(req, res);
+
+    const sql = vi.mocked(query).mock.calls[1][0];
+    expect(sql).toContain("ORDER BY");
+    expect(sql).toContain("title ASC");
+  });
+
+  it("should include signature PNG field when column exists", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+      return {
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            certificate_signer_name: "Manager",
+            certificate_signer_title: "LPMS",
+            certificate_signature_png: "data:image/png;base64,AAAA",
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      };
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getCertificateCustomizationPaths(req, res);
+
+    expect(res.body.learningPaths[0].certificate_signature_png).toBe(
+      "data:image/png;base64,AAAA",
     );
-
-    assert.equal(paths.length, 2);
-    assert.ok(paths.every((path) => path.is_deleted === false));
   });
-
-  await t.test("should list paths alphabetically by title", async () => {
-    setupMockDatabase();
-
-    const paths = mockDatabase.learning_paths
-      .filter((path) => !path.is_deleted)
-      .sort((a, b) => a.title.localeCompare(b.title));
-
-    assert.equal(paths[0].title, "Leadership");
-    assert.equal(paths[1].title, "Python Basics");
-  });
-
-  await t.test("should include certificate customization fields", async () => {
-    setupMockDatabase();
-
-    const path = mockDatabase.learning_paths[0];
-
-    assert.ok(path.id);
-    assert.ok(path.title);
-    assert.ok(path.certificate_signer_name);
-    assert.ok(path.certificate_signer_title);
-    assert.ok(path.updated_at);
-  });
-
-  await t.test(
-    "should include signature PNG field when available",
-    async () => {
-      setupMockDatabase();
-
-      const path = mockDatabase.learning_paths.find(
-        (item) => item.id === "lp-1",
-      );
-
-      assert.equal(
-        path.certificate_signature_png,
-        "data:image/png;base64,AAAA",
-      );
-    },
-  );
 });
 
-// updateLearningPathCertificateSignature testing
-test("UPDATE LEARNING PATH CERTIFICATE SIGNATURE TESTS", async (t) => {
-  await t.test(
-    "should export updateLearningPathCertificateSignature function",
-    async () => {
-      assert.equal(
-        typeof learningAdminController.updateLearningPathCertificateSignature,
-        "function",
-      );
-    },
-  );
+// Update learning path certificate signature testing
 
-  await t.test("should require signerName", async () => {
+describe("UPDATE LEARNING PATH CERTIFICATE SIGNATURE", () => {
+  it("should require signerName", async () => {
     const req = createMockReq({
+      params: { id: "lp-1" },
       body: { signerName: "", signerTitle: "LPMS" },
     });
     const res = createMockRes();
+    await learningAdminController.updateLearningPathCertificateSignature(
+      req,
+      res,
+    );
 
-    const signerName = String(req.body.signerName || "").trim();
-    const signerTitle = String(req.body.signerTitle || "").trim();
-
-    if (!signerName || !signerTitle) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "signerName and signerTitle are required.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.error.code, "VALIDATION_ERROR");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should require signerTitle", async () => {
+  it("should require signerTitle", async () => {
     const req = createMockReq({
-      body: { signerName: "Learning Manager", signerTitle: "" },
+      params: { id: "lp-1" },
+      body: { signerName: "Manager", signerTitle: "" },
     });
     const res = createMockRes();
+    await learningAdminController.updateLearningPathCertificateSignature(
+      req,
+      res,
+    );
 
-    const signerName = String(req.body.signerName || "").trim();
-    const signerTitle = String(req.body.signerTitle || "").trim();
-
-    if (!signerName || !signerTitle) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "signerName and signerTitle are required.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
+    expect(res.statusCode).toBe(400);
   });
 
-  await t.test("should reject non-PNG signature data URL", async () => {
+  it("should reject non-PNG signature data URL", () => {
     const signature = normalizeSignaturePngDataUrl(
       "data:image/jpeg;base64,AAAA",
     );
-
-    assert.equal(signature.error, "Signature must be a PNG image.");
+    expect(signature.error).toBe("Signature must be a PNG image.");
   });
 
-  await t.test("should accept valid PNG signature data URL", async () => {
+  it("should accept valid PNG signature data URL", () => {
     const signature = normalizeSignaturePngDataUrl(
       "data:image/png;base64,AAAA",
     );
-
-    assert.equal(signature.value, "data:image/png;base64,AAAA");
+    expect(signature.value).toBe("data:image/png;base64,AAAA");
   });
 
-  await t.test(
-    "should require migration when PNG signature column is missing",
-    async () => {
-      const res = createMockRes();
-      const includeSignatureColumn = false;
-      const signature = normalizeSignaturePngDataUrl(
-        "data:image/png;base64,AAAA",
-      );
-
-      if (signature?.value && !includeSignatureColumn) {
-        sendMockError(
-          res,
-          500,
-          "MIGRATION_REQUIRED",
-          "PNG signature storage is not ready. Run the latest database migration and try again.",
-        );
-      }
-
-      assert.equal(res.statusCode, 500);
-      assert.equal(res.body.error.code, "MIGRATION_REQUIRED");
-    },
-  );
-
-  await t.test(
-    "should return 404 when learning path is not found",
-    async () => {
-      setupMockDatabase();
-
-      const res = createMockRes();
-      const path = mockDatabase.learning_paths.find(
-        (item) => item.id === "missing" && !item.is_deleted,
-      );
-
-      if (!path) {
-        sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
-      }
-
-      assert.equal(res.statusCode, 404);
-      assert.equal(res.body.error.message, "Learning path not found.");
-    },
-  );
-
-  await t.test("should update signer and signature fields", async () => {
-    setupMockDatabase();
-
-    const path = mockDatabase.learning_paths.find((item) => item.id === "lp-1");
-    path.certificate_signer_name = "New Signer";
-    path.certificate_signer_title = "New Title";
-    path.certificate_signature_png = "data:image/png;base64,BBBB";
-
-    assert.equal(path.certificate_signer_name, "New Signer");
-    assert.equal(path.certificate_signer_title, "New Title");
-    assert.equal(path.certificate_signature_png, "data:image/png;base64,BBBB");
+  it("should return null for empty/null signature", () => {
+    expect(normalizeSignaturePngDataUrl(null)).toBeNull();
+    expect(normalizeSignaturePngDataUrl("")).toBeNull();
+    expect(normalizeSignaturePngDataUrl(undefined)).toBeNull();
   });
 
-  await t.test("should log update certificate signature audit", async () => {
-    auditLogs = [];
+  it("should require migration when PNG signature column is missing", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: false }],
+      rowCount: 1,
+    });
 
-    await mockLogAudit({
-      actorPrincipalId: "admin-1",
+    const req = createMockReq({
+      params: { id: "lp-1" },
+      body: {
+        signerName: "Manager",
+        signerTitle: "LPMS",
+        signaturePngDataUrl: "data:image/png;base64,AAAA",
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPathCertificateSignature(
+      req,
+      res,
+    );
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error.code).toBe("MIGRATION_REQUIRED");
+  });
+
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({
+      params: { id: "missing" },
+      body: { signerName: "Manager", signerTitle: "LPMS" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPathCertificateSignature(
+      req,
+      res,
+    );
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("should update signer and signature fields", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            certificate_signer_name: "New Signer",
+            certificate_signer_title: "New Title",
+            certificate_signature_png: "data:image/png;base64,BBBB",
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      params: { id: "lp-1" },
+      body: {
+        signerName: "New Signer",
+        signerTitle: "New Title",
+        signaturePngDataUrl: "data:image/png;base64,BBBB",
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPathCertificateSignature(
+      req,
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.certificate_signer_name).toBe("New Signer");
+    expect(res.body.learningPath.certificate_signature_png).toBe(
+      "data:image/png;base64,BBBB",
+    );
+  });
+
+  it("should log update certificate signature audit", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            certificate_signer_name: "New Signer",
+            certificate_signer_title: "New Title",
+            certificate_signature_png: "data:image/png;base64,AAAA",
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      params: { id: "lp-1" },
+      body: {
+        signerName: "New Signer",
+        signerTitle: "New Title",
+        signaturePngDataUrl: "data:image/png;base64,AAAA",
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPathCertificateSignature(
+      req,
+      res,
+    );
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       action: "UPDATE_CERTIFICATE_SIGNATURE",
       resourceType: "LEARNING_PATH",
       resourceId: "lp-1",
@@ -886,49 +962,48 @@ test("UPDATE LEARNING PATH CERTIFICATE SIGNATURE TESTS", async (t) => {
         hasSignaturePng: true,
       },
     });
-
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "UPDATE_CERTIFICATE_SIGNATURE");
-    assert.equal(auditLogs[0].metadata.hasSignaturePng, true);
   });
 });
 
-// previewLearningPathCertificate testing
-test("PREVIEW LEARNING PATH CERTIFICATE TESTS", async (t) => {
-  await t.test("should reject invalid preview signature", async () => {
+// Preview learning path certificate testing
+
+describe("PREVIEW LEARNING PATH CERTIFICATE", () => {
+  it("should reject invalid preview signature", () => {
     const signature = normalizeSignaturePngDataUrl("invalid-signature");
-
-    assert.equal(signature.error, "Signature must be a PNG image.");
+    expect(signature.error).toBe("Signature must be a PNG image.");
   });
 
-  await t.test("should return 404 when preview path is missing", async () => {
-    setupMockDatabase();
+  it("should return 404 when preview path is missing", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: false }], rowCount: 1 };
+      }
 
+      if (sql && sql.includes("EXISTS")) {
+        return { rows: [{ present: false }], rowCount: 1 };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq({ params: { id: "missing" } });
     const res = createMockRes();
-    const path = mockDatabase.learning_paths.find(
-      (item) => item.id === "missing" && !item.is_deleted,
-    );
+    await learningAdminController.previewLearningPathCertificate(req, res);
 
-    if (!path) {
-      sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test(
-    "should generate safe certificate preview filename",
-    async () => {
-      const filename = `certificate_preview_${safeCertificateTitle("Python Basics!")}.pdf`;
+  it("should generate safe certificate preview filename", () => {
+    const filename = `certificate_preview_${safeCertificateTitle("Python Basics!")}.pdf`;
+    expect(filename).toBe("certificate_preview_python_basics_.pdf");
+  });
 
-      assert.equal(filename, "certificate_preview_python_basics_.pdf");
-    },
-  );
-
-  await t.test("should use signer override values", async () => {
-    setupMockDatabase();
-
-    const learningPath = mockDatabase.learning_paths[0];
+  it("should use signer override values", () => {
+    const learningPath = {
+      certificate_signer_name: "Original Name",
+      certificate_signer_title: "Original Title",
+    };
     const signerNameOverride = "Override Name";
     const signerTitleOverride = "Override Title";
 
@@ -939,114 +1014,92 @@ test("PREVIEW LEARNING PATH CERTIFICATE TESTS", async (t) => {
     const signerTitle =
       signerTitleOverride || learningPath.certificate_signer_title || "LPMS";
 
-    assert.equal(signerName, "Override Name");
-    assert.equal(signerTitle, "Override Title");
-  });
-
-  await t.test("should map courses for certificate preview", async () => {
-    setupMockDatabase();
-
-    const courses = mockDatabase.stage_courses.map((row) => ({
-      title: String(row.course_title || "").trim(),
-      duration: String(row.course_duration || "").trim() || "-",
-    }));
-
-    assert.equal(courses.length, 2);
-    assert.equal(courses[0].title, "Python Intro");
+    expect(signerName).toBe("Override Name");
+    expect(signerTitle).toBe("Override Title");
   });
 });
 
-// deleteLearningPath testing
-test("DELETE LEARNING PATH TESTS", async (t) => {
-  await t.test("should return 404 when delete target is missing", async () => {
-    setupMockDatabase();
+// Delete learning path testing
 
+describe("DELETE LEARNING PATH", () => {
+  it("should return 404 when delete target is missing", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { id: "missing" } });
     const res = createMockRes();
-    const index = mockDatabase.learning_paths.findIndex(
-      (path) => path.id === "missing",
-    );
+    await learningAdminController.deleteLearningPath(req, res);
 
-    if (index === -1) {
-      sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should delete learning path", async () => {
-    setupMockDatabase();
+  it("should soft delete learning path (DELETE query)", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "lp-1" }],
+      rowCount: 1,
+    });
 
-    mockDatabase.learning_paths = mockDatabase.learning_paths.filter(
-      (path) => path.id !== "lp-1",
-    );
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learningAdminController.deleteLearningPath(req, res);
 
-    const deleted = !mockDatabase.learning_paths.some(
-      (path) => path.id === "lp-1",
-    );
-
-    assert.equal(deleted, true);
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql.trim().startsWith("DELETE")).toBe(true);
+    expect(res.statusCode).toBe(200);
   });
 
-  await t.test("should log delete audit", async () => {
-    auditLogs = [];
+  it("should log delete audit", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
-    await mockLogAudit({
-      actorPrincipalId: "admin-1",
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learningAdminController.deleteLearningPath(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       action: "DELETE_LEARNING_PATH",
       resourceType: "LEARNING_PATH",
       resourceId: "lp-1",
     });
-
-    assert.equal(auditLogs[0].action, "DELETE_LEARNING_PATH");
   });
 });
 
-// createEnrollments testing
-test("CREATE ENROLLMENTS TESTS", async (t) => {
-  await t.test("should require selectedLearners non-empty array", async () => {
+// Create enrollments testing
+
+describe("CREATE ENROLLMENTS", () => {
+  it("should require selectedLearners non-empty array", async () => {
     const req = createMockReq({
       body: { learningPathId: "lp-1", selectedLearners: [] },
     });
     const res = createMockRes();
+    await learningAdminController.createEnrollments(req, res);
 
-    if (
-      !Array.isArray(req.body.selectedLearners) ||
-      req.body.selectedLearners.length === 0
-    ) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "selectedLearners must be a non-empty array.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should return 404 if learning path is missing", async () => {
-    setupMockDatabase();
+  it("should return 404 if learning path is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
+    const req = createMockReq({
+      body: {
+        learningPathId: "missing",
+        selectedLearners: [{ employeeNumber: "EMP-001" }],
+      },
+    });
     const res = createMockRes();
-    const path = mockDatabase.learning_paths.find(
-      (item) => item.id === "missing" && !item.is_deleted,
-    );
+    await learningAdminController.createEnrollments(req, res);
 
-    if (!path) {
-      sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should normalize learner name and email", async () => {
+  it("should normalize learner name and email", () => {
     const learner = {
       employeeNumber: "EMP-003",
       employeeInitials: "A",
       employeeSurname: "Perera",
       email: " USER@EXAMPLE.COM ",
     };
-
     const normalized = {
       learnerName: normalizeEmployeeDisplayName(
         learner,
@@ -1054,944 +1107,698 @@ test("CREATE ENROLLMENTS TESTS", async (t) => {
       ),
       learnerEmail: learner.email.trim().toLowerCase(),
     };
-
-    assert.equal(normalized.learnerName, "A Perera");
-    assert.equal(normalized.learnerEmail, "user@example.com");
+    expect(normalized.learnerName).toBe("A Perera");
+    expect(normalized.learnerEmail).toBe("user@example.com");
   });
 
-  await t.test("should skip learner without employee number", async () => {
-    const learner = { employeeName: "No Number" };
-    const employeeNumber = String(learner.employeeNumber || "").trim();
-
-    assert.equal(employeeNumber, "");
-  });
-
-  await t.test("should create enrollment with NOT_STARTED status", async () => {
+  it("should create enrollment with NOT_STARTED status and LEARNING_ADMIN source", () => {
     const enrollment = {
       status: "NOT_STARTED",
       progress: 0,
       enrollment_source: "LEARNING_ADMIN",
     };
-
-    assert.equal(enrollment.status, "NOT_STARTED");
-    assert.equal(enrollment.progress, 0);
-    assert.equal(enrollment.enrollment_source, "LEARNING_ADMIN");
-  });
-
-  await t.test(
-    "should create notification for inserted enrollment",
-    async () => {
-      setupMockDatabase();
-
-      mockDatabase.notifications.push({
-        principal_id: "principal-1",
-        title: "Enrollment Assigned",
-        message: 'You were enrolled in "Python Basics".',
-        type: "INFO",
-        is_read: false,
-      });
-
-      assert.equal(mockDatabase.notifications.length, 1);
-      assert.equal(mockDatabase.notifications[0].title, "Enrollment Assigned");
-    },
-  );
-
-  await t.test(
-    "should create assignment report when learners inserted",
-    async () => {
-      assignmentReports = [];
-
-      await mockCreateAssignmentReport({
-        learningPathId: "lp-1",
-        learningPathTitle: "Python Basics",
-        assignedByPrincipalId: "admin-1",
-        assignedByName: "Learning Admin",
-        assignedByRole: "LEARNING_ADMIN",
-        assignmentSource: "LEARNING_ADMIN",
-        learners: [{ employeeNumber: "EMP-001" }],
-      });
-
-      assert.equal(assignmentReports.length, 1);
-      assert.equal(assignmentReports[0].learners.length, 1);
-    },
-  );
-
-  await t.test("should queue learning path assignment email", async () => {
-    sentEmails = [];
-
-    await mockSendLearningPathAssignedEmail({
-      employeeNumber: "EMP-001",
-      to: "john@example.com",
-      learnerName: "John Doe",
-      learningPathTitle: "Python Basics",
-    });
-
-    assert.equal(sentEmails.length, 1);
-    assert.equal(sentEmails[0].type, "learning-path");
+    expect(enrollment.status).toBe("NOT_STARTED");
+    expect(enrollment.progress).toBe(0);
+    expect(enrollment.enrollment_source).toBe("LEARNING_ADMIN");
   });
 });
 
-// getAssignmentReports testing
-test("GET ASSIGNMENT REPORTS TESTS", async (t) => {
-  await t.test("should export getAssignmentReports function", async () => {
-    assert.equal(
-      typeof learningAdminController.getAssignmentReports,
+// Get assignment reports testing
+
+describe("GET ASSIGNMENT REPORTS", () => {
+  it("should export getAssignmentReports function", () => {
+    expect(typeof learningAdminController.getAssignmentReports).toBe(
       "function",
     );
   });
 
-  await t.test("should return assignment reports", async () => {
-    setupMockDatabase();
-
-    const reports = mockDatabase.assignment_reports;
-
-    assert.equal(reports.length, 1);
-    assert.equal(reports[0].id, "report-1");
-  });
-
-  await t.test("should include report fields", async () => {
-    setupMockDatabase();
-
-    const report = mockDatabase.assignment_reports[0];
-
-    assert.ok(report.id);
-    assert.ok(report.learning_path_id);
-    assert.ok(report.learning_path_title);
-    assert.ok(report.assigned_by_name);
-    assert.ok(report.assigned_by_role);
-    assert.ok(report.assignment_source);
-    assert.ok(report.report_status);
-    assert.ok(report.assigned_at);
-  });
-
-  await t.test("should attach learners to reports", async () => {
-    setupMockDatabase();
-
-    const reports = mockDatabase.assignment_reports.map((report) => ({
-      ...report,
-      learners: mockDatabase.assignment_report_learners.filter(
-        (learner) => learner.report_id === report.id,
-      ),
-    }));
-
-    assert.equal(reports[0].learners.length, 1);
-    assert.equal(reports[0].learners[0].employee_number, "EMP-001");
-  });
-
-  await t.test("should order reports by assigned_at DESC", async () => {
-    setupMockDatabase();
-
-    mockDatabase.assignment_reports.push({
-      id: "report-2",
-      learning_path_id: "lp-2",
-      learning_path_title: "Leadership",
-      assigned_by_name: "Learning Admin",
-      assigned_by_role: "LEARNING_ADMIN",
-      assignment_source: "LEARNING_ADMIN",
-      report_status: "ASSIGNED_IN_LPMS",
-      assigned_at: new Date("2026-06-06T10:00:00Z"),
-      created_at: new Date("2026-06-06T10:00:00Z"),
+  it("should return assignment reports with learners attached", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "report-1",
+          learning_path_id: "lp-1",
+          learning_path_title: "Python Basics",
+          assigned_by_name: "Learning Admin",
+          assigned_by_role: "LEARNING_ADMIN",
+          assignment_source: "LEARNING_ADMIN",
+          report_status: "ASSIGNED_IN_LPMS",
+          assigned_at: new Date(),
+          created_at: new Date(),
+          learners: [
+            {
+              id: "arl-1",
+              principalId: "principal-1",
+              employeeNumber: "EMP-001",
+              learnerName: "John Doe",
+              learnerEmail: "john@example.com",
+              designation: "Developer",
+              gradeName: "G5",
+            },
+          ],
+        },
+      ],
+      rowCount: 1,
     });
 
-    const reports = mockDatabase.assignment_reports.sort(
-      (a, b) => new Date(b.assigned_at) - new Date(a.assigned_at),
-    );
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getAssignmentReports(req, res);
 
-    assert.equal(reports[0].id, "report-2");
-    assert.equal(reports[1].id, "report-1");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.reports).toHaveLength(1);
+    expect(res.body.reports[0].learners).toHaveLength(1);
+    expect(res.body.reports[0].learners[0].employeeNumber).toBe("EMP-001");
+  });
+
+  it("should include complete report fields", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "report-1",
+          learning_path_id: "lp-1",
+          learning_path_title: "Python Basics",
+          assigned_by_name: "Learning Admin",
+          assigned_by_role: "LEARNING_ADMIN",
+          assignment_source: "LEARNING_ADMIN",
+          report_status: "ASSIGNED_IN_LPMS",
+          assigned_at: new Date(),
+          created_at: new Date(),
+          learners: [],
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getAssignmentReports(req, res);
+
+    const report = res.body.reports[0];
+    expect(report.learning_path_id).toBe("lp-1");
+    expect(report.learning_path_title).toBe("Python Basics");
+    expect(report.assigned_by_name).toBe("Learning Admin");
+    expect(report.assigned_by_role).toBe("LEARNING_ADMIN");
+    expect(report.assignment_source).toBe("LEARNING_ADMIN");
+    expect(report.report_status).toBe("ASSIGNED_IN_LPMS");
   });
 });
 
-// updateAssignmentReportStatus testing
-test("UPDATE ASSIGNMENT REPORT STATUS TESTS", async (t) => {
-  await t.test(
-    "should export updateAssignmentReportStatus function",
-    async () => {
-      assert.equal(
-        typeof learningAdminController.updateAssignmentReportStatus,
-        "function",
-      );
-    },
-  );
+// Update assignment report status
 
-  await t.test("should reject invalid assignment report status", async () => {
+describe("UPDATE ASSIGNMENT REPORT STATUS", () => {
+  it("should reject invalid assignment report status", async () => {
+    const req = createMockReq({
+      params: { id: "report-1" },
+      body: { status: "INVALID_STATUS" },
+    });
     const res = createMockRes();
-    const status = "INVALID_STATUS";
+    await learningAdminController.updateAssignmentReportStatus(req, res);
 
-    if (
-      ![
-        ASSIGNMENT_REPORT_STATUS.ASSIGNED_IN_LPMS,
-        ASSIGNMENT_REPORT_STATUS.ENROLLED_IN_ERP,
-      ].includes(status)
-    ) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "Invalid assignment report status.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.error.code, "VALIDATION_ERROR");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should accept ASSIGNED_IN_LPMS status", async () => {
+  it("should accept ASSIGNED_IN_LPMS status", () => {
     const status = ASSIGNMENT_REPORT_STATUS.ASSIGNED_IN_LPMS;
     const isValid = [
       ASSIGNMENT_REPORT_STATUS.ASSIGNED_IN_LPMS,
       ASSIGNMENT_REPORT_STATUS.ENROLLED_IN_ERP,
     ].includes(status);
-
-    assert.equal(isValid, true);
+    expect(isValid).toBe(true);
   });
 
-  await t.test("should accept ENROLLED_IN_ERP status", async () => {
+  it("should accept ENROLLED_IN_ERP status", () => {
     const status = ASSIGNMENT_REPORT_STATUS.ENROLLED_IN_ERP;
     const isValid = [
       ASSIGNMENT_REPORT_STATUS.ASSIGNED_IN_LPMS,
       ASSIGNMENT_REPORT_STATUS.ENROLLED_IN_ERP,
     ].includes(status);
-
-    assert.equal(isValid, true);
+    expect(isValid).toBe(true);
   });
 
-  await t.test("should update assignment report status", async () => {
-    setupMockDatabase();
-
-    const report = mockDatabase.assignment_reports.find(
-      (item) => item.id === "report-1",
-    );
-    report.report_status = ASSIGNMENT_REPORT_STATUS.ENROLLED_IN_ERP;
-
-    assert.equal(report.report_status, "ENROLLED_IN_ERP");
-  });
-
-  await t.test("should return updated report id and status", async () => {
-    const report = {
-      id: "report-1",
-      report_status: ASSIGNMENT_REPORT_STATUS.ENROLLED_IN_ERP,
-    };
-
-    assert.deepEqual(report, {
-      id: "report-1",
-      report_status: "ENROLLED_IN_ERP",
+  it("should update assignment report status", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "report-1", report_status: "ENROLLED_IN_ERP" }],
+      rowCount: 1,
     });
+
+    const req = createMockReq({
+      params: { id: "report-1" },
+      body: { status: "ENROLLED_IN_ERP" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateAssignmentReportStatus(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.report.id).toBe("report-1");
+    expect(res.body.report.report_status).toBe("ENROLLED_IN_ERP");
   });
 
-  await t.test(
-    "should return 404 when assignment report is not found",
-    async () => {
-      setupMockDatabase();
+  it("should return 404 when assignment report is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-      const res = createMockRes();
-      const report = mockDatabase.assignment_reports.find(
-        (item) => item.id === "missing",
-      );
+    const req = createMockReq({
+      params: { id: "missing" },
+      body: { status: "ENROLLED_IN_ERP" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateAssignmentReportStatus(req, res);
 
-      if (!report) {
-        sendMockError(res, 404, "NOT_FOUND", "Assignment report not found.");
-      }
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
 
-      assert.equal(res.statusCode, 404);
-      assert.equal(res.body.error.message, "Assignment report not found.");
-    },
-  );
+  it("should log assignment report status audit", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "report-1", report_status: "ENROLLED_IN_ERP" }],
+      rowCount: 1,
+    });
 
-  await t.test("should log assignment report status audit", async () => {
-    auditLogs = [];
+    const req = createMockReq({
+      params: { id: "report-1" },
+      body: { status: "ENROLLED_IN_ERP" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateAssignmentReportStatus(req, res);
 
-    await mockLogAudit({
-      actorPrincipalId: "admin-1",
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       action: "UPDATE_ASSIGNMENT_REPORT_STATUS",
       resourceType: "ASSIGNMENT_REPORT",
       resourceId: "report-1",
       metadata: { status: "ENROLLED_IN_ERP" },
     });
-
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "UPDATE_ASSIGNMENT_REPORT_STATUS");
-    assert.equal(auditLogs[0].resourceType, "ASSIGNMENT_REPORT");
   });
 });
 
-// getAssignableEmployeeSearchOptions testing
-test("GET ASSIGNABLE EMPLOYEE SEARCH OPTIONS TESTS", async (t) => {
-  await t.test("should normalize and sort designations", async () => {
+// Get assignable employee search options testing
+
+describe("GET ASSIGNABLE EMPLOYEE SEARCH OPTIONS", () => {
+  it("should normalize and sort designations", () => {
     const rows = [
       { designation: "Manager" },
       { designation: "Analyst" },
       { designation: "Manager" },
     ];
-
     const options = normalizeOptionList(rows, "designation");
-
-    assert.deepEqual(options, ["Analyst", "Manager"]);
+    expect(options).toEqual(["Analyst", "Manager"]);
   });
 
-  await t.test("should normalize and sort grades", async () => {
+  it("should normalize and sort grades", () => {
     const rows = [{ salaryGrade: "G5" }, { salaryGrade: "G4" }];
-
     const grades = normalizeOptionList(rows, "salaryGrade");
-
-    assert.deepEqual(grades, ["G4", "G5"]);
+    expect(grades).toEqual(["G4", "G5"]);
   });
 
-  await t.test("should filter invalid organizations", async () => {
-    const organizations = [
-      { organizationId: "ORG-1", organizationName: "IT" },
-      { organizationId: "", organizationName: "Invalid" },
-    ]
-      .map((row) => ({
-        organizationId: String(row.organizationId || "").trim(),
-        organizationName: String(row.organizationName || "").trim(),
-      }))
-      .filter((row) => row.organizationId && row.organizationName);
-
-    assert.equal(organizations.length, 1);
-  });
-
-  await t.test("should include payroll options", async () => {
+  it("should include payroll options", () => {
     const payrolls = [
       { value: "EXECUTIVE", label: "Executive" },
       { value: "NON_EXECUTIVE", label: "Non Executive" },
     ];
-
-    assert.equal(payrolls.length, 2);
-    assert.equal(payrolls[0].value, "EXECUTIVE");
+    expect(payrolls).toHaveLength(2);
+    expect(payrolls[0].value).toBe("EXECUTIVE");
   });
-
-  await t.test(
-    "should map ERP option errors to ERP_REQUEST_FAILED",
-    async () => {
-      const res = createMockRes();
-      const error = new Error("ERP failed");
-      error.status = 503;
-
-      sendMockError(
-        res,
-        getSearchErrorStatus(error),
-        "ERP_REQUEST_FAILED",
-        "Failed to load ERP filter options.",
-        error.message,
-      );
-
-      assert.equal(res.statusCode, 503);
-      assert.equal(res.body.error.code, "ERP_REQUEST_FAILED");
-    },
-  );
 });
 
-// searchAssignableEmployees testing
-test("SEARCH ASSIGNABLE EMPLOYEES TESTS", async (t) => {
-  await t.test(
-    "should require at least one search or filter value",
-    async () => {
-      const req = createMockReq({ body: {} });
-      const res = createMockRes();
+// Search assignable employees testing
 
-      const employeeNo = String(req.body.employeeNo || "").trim();
-      const surname = String(req.body.surname || "").trim();
-      const designation = String(req.body.designation || "").trim();
-      const grade = String(req.body.grade || "").trim();
-      const organizationName = String(
-        req.body.organizationName || req.body.organizationId || "",
-      ).trim();
-      const payrollType = String(req.body.payrollType || "")
-        .trim()
-        .toUpperCase();
+describe("SEARCH ASSIGNABLE EMPLOYEES", () => {
+  it("should require at least one search or filter value", async () => {
+    const req = createMockReq({ body: {} });
+    const res = createMockRes();
+    await learningAdminController.searchAssignableEmployees(req, res);
 
-      if (
-        !employeeNo &&
-        !surname &&
-        !designation &&
-        !grade &&
-        !organizationName &&
-        !payrollType
-      ) {
-        sendMockError(
-          res,
-          400,
-          "VALIDATION_ERROR",
-          "At least one search or filter value is required.",
-        );
-      }
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
 
-      assert.equal(res.statusCode, 400);
-    },
-  );
-
-  await t.test("should normalize employee rows", async () => {
+  it("should normalize employee rows", () => {
     const row = {
       employeeNumber: " EMP-001 ",
       employeeName: " John Doe ",
       email: " JOHN@EXAMPLE.COM ",
       orgName: " IT ",
     };
-
     const normalized = normalizeEmployeeRow(row);
-
-    assert.equal(normalized.employeeNumber, "EMP-001");
-    assert.equal(normalized.employeeName, "John Doe");
-    assert.equal(normalized.email, "john@example.com");
-    assert.equal(normalized.organizationName, "IT");
+    expect(normalized.employeeNumber).toBe("EMP-001");
+    expect(normalized.employeeName).toBe("John Doe");
+    expect(normalized.email).toBe("john@example.com");
+    expect(normalized.organizationName).toBe("IT");
   });
 
-  await t.test(
-    "should intersect employees from multiple search calls",
-    async () => {
-      const byNumber = new Map([
-        ["EMP-001", { employeeNumber: "EMP-001", employeeName: "John Doe" }],
-        ["EMP-002", { employeeNumber: "EMP-002", employeeName: "Jane Doe" }],
-      ]);
-      const byFilter = new Map([
-        ["EMP-001", { employeeNumber: "EMP-001", designation: "Developer" }],
-      ]);
-
-      const intersection = [];
-      for (const [employeeNumber, employee] of byNumber.entries()) {
-        const filtered = byFilter.get(employeeNumber);
-        if (filtered) {
-          intersection.push({ ...employee, ...filtered });
-        }
-      }
-
-      assert.equal(intersection.length, 1);
-      assert.equal(intersection[0].employeeNumber, "EMP-001");
-    },
-  );
-
-  await t.test("should mark learning admin assignments", async () => {
-    setupMockDatabase();
-
+  it("should mark learning admin assignments", () => {
     const employees = [
       { employeeNumber: "EMP-001", employeeName: "John Doe" },
       { employeeNumber: "EMP-002", employeeName: "Jane Doe" },
     ];
-
-    const mapped = mapLearningAdminAssignments(employees);
-
-    assert.equal(mapped[0].isLearningAdmin, false);
-    assert.equal(mapped[1].isLearningAdmin, true);
+    const assignedSet = new Set(["EMP-002"]);
+    const mapped = mapLearningAdminAssignments(employees, assignedSet);
+    expect(mapped[0].isLearningAdmin).toBe(false);
+    expect(mapped[1].isLearningAdmin).toBe(true);
   });
 
-  await t.test("should sort matched employees by employeeName", async () => {
+  it("should sort matched employees by employeeName", () => {
     const employees = [
       { employeeNumber: "EMP-002", employeeName: "Jane Doe" },
       { employeeNumber: "EMP-001", employeeName: "Adam Doe" },
     ].sort((a, b) => a.employeeName.localeCompare(b.employeeName));
 
-    assert.equal(employees[0].employeeName, "Adam Doe");
+    expect(employees[0].employeeName).toBe("Adam Doe");
   });
+});
 
-  await t.test("should map search errors to ERP_REQUEST_FAILED", async () => {
+// Get class assignment options testing
+
+describe("GET CLASS ASSIGNMENT OPTIONS", () => {
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { id: "missing" } });
     const res = createMockRes();
-    const error = new Error("ERP failed");
+    await learningAdminController.getClassAssignmentOptions(req, res);
 
-    sendMockError(
-      res,
-      getSearchErrorStatus(error),
-      "ERP_REQUEST_FAILED",
-      "Failed to search ERP employees.",
-      error.message,
-    );
-
-    assert.equal(res.statusCode, 502);
-    assert.equal(res.body.error.code, "ERP_REQUEST_FAILED");
-  });
-});
-
-// getClassAssignmentOptions testing
-test("GET CLASS ASSIGNMENT OPTIONS TESTS", async (t) => {
-  await t.test("should export getClassAssignmentOptions function", async () => {
-    assert.equal(
-      typeof learningAdminController.getClassAssignmentOptions,
-      "function",
-    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test(
-    "should return 404 when learning path is not found",
-    async () => {
-      setupMockDatabase();
-
-      const res = createMockRes();
-      const path = mockDatabase.learning_paths.find(
-        (item) => item.id === "missing" && !item.is_deleted,
-      );
-
-      if (!path) {
-        sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
-      }
-
-      assert.equal(res.statusCode, 404);
-    },
-  );
-
-  await t.test("should return learning path details", async () => {
-    setupMockDatabase();
-
-    const learningPath = mockDatabase.learning_paths.find(
-      (path) => path.id === "lp-1" && !path.is_deleted,
-    );
-
-    assert.equal(learningPath.id, "lp-1");
-    assert.equal(learningPath.title, "Python Basics");
-    assert.equal(learningPath.status, "ACTIVE");
-  });
-
-  await t.test("should build class assignment course options", async () => {
-    setupMockDatabase();
-
-    const courses = mockDatabase.stage_courses.map((row) => ({
-      courseId: row.course_code,
-      courseCode: row.course_code,
-      title: row.course_title || row.course_code,
-      stageTitle:
-        mockDatabase.learning_path_stages.find(
-          (stage) => stage.id === row.stage_id,
-        )?.title || "",
-      order: row.course_order,
-    }));
-
-    assert.equal(courses.length, 2);
-    assert.equal(courses[0].courseCode, "COURSE-001");
-    assert.equal(courses[0].stageTitle, "Stage 1");
-  });
-
-  await t.test(
-    "should build learner options for path enrollments",
-    async () => {
-      setupMockDatabase();
-
-      const learners = mockDatabase.enrollments
-        .filter((enrollment) => enrollment.learning_path_id === "lp-1")
-        .map((enrollment) => {
-          const principal = mockDatabase.principals.find(
-            (item) => item.id === enrollment.principal_id,
-          );
-          const employee = mockDatabase.employees.find(
-            (item) => item.principal_id === principal.id,
-          );
-
-          return {
-            enrollmentId: enrollment.id,
-            principalId: principal.id,
-            employeeNumber: employee.employee_number,
-            name: principal.name,
-            email: principal.email,
-            designation: employee.designation,
-            gradeName: employee.grade_name,
-            status: enrollment.status,
-            progress: Number(enrollment.progress || 0),
-            enrolledAt: enrollment.enrolled_at,
-            classAssignments: mockDatabase.class_enrollments.filter(
-              (item) => item.enrollment_id === enrollment.id,
-            ),
-          };
-        });
-
-      assert.equal(learners.length, 2);
-      assert.equal(learners[0].enrollmentId, "en-1");
-      assert.equal(learners[0].progress, 50);
-    },
-  );
-
-  await t.test(
-    "should include existing class assignments for learners",
-    async () => {
-      setupMockDatabase();
-
-      const assignments = mockDatabase.class_enrollments.filter(
-        (item) => item.enrollment_id === "en-1",
-      );
-
-      assert.equal(assignments.length, 1);
-      assert.equal(assignments[0].class_id, "CLASS-001");
-    },
-  );
-});
-
-// getClassesByCourseCode testing
-test("GET CLASSES BY COURSE CODE TESTS", async (t) => {
-  await t.test("should export getClassesByCourseCode function", async () => {
-    assert.equal(
-      typeof learningAdminController.getClassesByCourseCode,
-      "function",
-    );
-  });
-
-  await t.test("should require course code", async () => {
-    const courseCode = String("").trim();
-    const res = createMockRes();
-
-    if (!courseCode) {
-      sendMockError(res, 400, "VALIDATION_ERROR", "Course code is required.");
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.error.message, "Course code is required.");
-  });
-
-  await t.test("should trim course code", async () => {
-    const courseCode = String(" COURSE-001 ").trim();
-
-    assert.equal(courseCode, "COURSE-001");
-  });
-
-  await t.test(
-    "should normalize ERP class row using classId and classCode",
-    async () => {
-      const erpClass = normalizeErpClassRow(
-        {
-          classId: "CLASS-001",
-          classCode: "C001",
-          className: "Python Morning",
-          startDate: "2026-06-10",
-          endDate: "2026-06-12",
-          venue: "Room 1",
-          instructor: "Trainer A",
-          capacity: "25",
-        },
-        0,
-      );
-
-      assert.equal(erpClass.id, "CLASS-001");
-      assert.equal(erpClass.code, "C001");
-      assert.equal(erpClass.title, "Python Morning");
-      assert.equal(erpClass.venue, "Room 1");
-    },
-  );
-
-  await t.test(
-    "should generate fallback class id when ERP id is missing",
-    async () => {
-      const erpClass = normalizeErpClassRow({ className: "Fallback Class" }, 0);
-
-      assert.equal(erpClass.id, "CLASS-1");
-      assert.equal(erpClass.title, "Fallback Class");
-    },
-  );
-
-  await t.test("should return classes response shape", async () => {
-    const courseCode = "COURSE-001";
-    const classes = [
-      normalizeErpClassRow({ classId: "CLASS-001", className: "Morning" }, 0),
-      normalizeErpClassRow({ classId: "CLASS-002", className: "Evening" }, 1),
-    ];
-
-    const response = { courseCode, classes };
-
-    assert.equal(response.courseCode, "COURSE-001");
-    assert.equal(response.classes.length, 2);
-  });
-
-  await t.test(
-    "should map ERP class errors to ERP_REQUEST_FAILED",
-    async () => {
-      const res = createMockRes();
-      const error = new Error("ERP unavailable");
-      error.status = 503;
-
-      sendMockError(
-        res,
-        getSearchErrorStatus(error),
-        "ERP_REQUEST_FAILED",
-        "Failed to load ERP classes for this course.",
-        error.message,
-      );
-
-      assert.equal(res.statusCode, 503);
-      assert.equal(res.body.error.code, "ERP_REQUEST_FAILED");
-    },
-  );
-});
-
-// assignClassEnrollments testing
-test("ASSIGN CLASS ENROLLMENTS TESTS", async (t) => {
-  await t.test("should export assignClassEnrollments function", async () => {
-    assert.equal(
-      typeof learningAdminController.assignClassEnrollments,
-      "function",
-    );
-  });
-
-  await t.test(
-    "should require learningPathId, courseCode, class, and enrollmentIds",
-    async () => {
-      const req = createMockReq({
-        body: {
-          learningPathId: "",
-          courseCode: "COURSE-001",
-          class: { id: "CLASS-001" },
-          enrollmentIds: ["en-1"],
-        },
-      });
-      const res = createMockRes();
-
-      const learningPathId = String(req.body.learningPathId || "").trim();
-      const courseCode = String(req.body.courseCode || "").trim();
-      const selectedClass = req.body.class || {};
-      const classId = String(
-        selectedClass.id || selectedClass.classId || "",
-      ).trim();
-      const enrollmentIds = Array.isArray(req.body.enrollmentIds)
-        ? req.body.enrollmentIds
-            .map((id) => String(id || "").trim())
-            .filter(Boolean)
-        : [];
-
+  it("should build class assignment course and learner options", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
       if (
-        !learningPathId ||
-        !courseCode ||
-        !classId ||
-        enrollmentIds.length === 0
+        sql &&
+        sql.includes("FROM learning_paths") &&
+        sql.includes("is_deleted")
       ) {
-        sendMockError(
-          res,
-          400,
-          "VALIDATION_ERROR",
-          "learningPathId, courseCode, class, and enrollmentIds are required.",
-        );
+        return {
+          rows: [
+            {
+              id: "lp-1",
+              title: "Python Basics",
+              description: "Learn Python",
+              category: "PUBLIC",
+              total_duration: 20,
+              status: "ACTIVE",
+            },
+          ],
+          rowCount: 1,
+        };
       }
 
-      assert.equal(res.statusCode, 400);
-      assert.equal(res.body.error.code, "VALIDATION_ERROR");
-    },
-  );
+      if (sql && sql.includes("learning_path_stages")) {
+        return {
+          rows: [
+            { id: "stage-1", title: "Stage 1", stage_order: 1 },
+            { id: "stage-2", title: "Stage 2", stage_order: 2 },
+          ],
+          rowCount: 2,
+        };
+      }
 
-  await t.test("should trim and filter enrollmentIds", async () => {
+      if (sql && sql.includes("EXISTS")) {
+        return { rows: [{ present: false }], rowCount: 1 };
+      }
+
+      if (sql && sql.includes("stage_courses")) {
+        return {
+          rows: [
+            {
+              stage_id: "stage-1",
+              course_id: "COURSE-001",
+              course_title: "Python Intro",
+              course_order: 1,
+              delivery_mode: "ONLINE",
+            },
+            {
+              stage_id: "stage-2",
+              course_id: "COURSE-002",
+              course_title: "Python Advanced",
+              course_order: 1,
+              delivery_mode: "ONLINE",
+            },
+          ],
+          rowCount: 2,
+        };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learningAdminController.getClassAssignmentOptions(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.title).toBe("Python Basics");
+  });
+});
+
+// Get classes by course code testing
+
+describe("GET CLASSES BY COURSE CODE", () => {
+  it("should require course code", async () => {
+    const req = createMockReq({ params: { courseCode: "" } });
+    const res = createMockRes();
+    await learningAdminController.getClassesByCourseCode(req, res);
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("should trim course code", () => {
+    const courseCode = String(" COURSE-001 ").trim();
+    expect(courseCode).toBe("COURSE-001");
+  });
+
+  it("should normalize ERP class row using classId and classCode", () => {
+    const erpClass = normalizeErpClassRow(
+      {
+        classId: "CLASS-001",
+        classCode: "C001",
+        className: "Python Morning",
+        startDate: "2026-06-10",
+        endDate: "2026-06-12",
+        venue: "Room 1",
+        instructor: "Trainer A",
+        capacity: "25",
+      },
+      0,
+    );
+    expect(erpClass.id).toBe("CLASS-001");
+    expect(erpClass.code).toBe("C001");
+    expect(erpClass.title).toBe("Python Morning");
+    expect(erpClass.venue).toBe("Room 1");
+  });
+
+  it("should generate fallback class id when ERP id is missing", () => {
+    const erpClass = normalizeErpClassRow({ className: "Fallback Class" }, 0);
+    expect(erpClass.id).toBe("CLASS-1");
+    expect(erpClass.title).toBe("Fallback Class");
+  });
+
+  it("should handle ERP errors gracefully", async () => {
+    vi.mocked(fetchClassesByCourseCode).mockRejectedValueOnce({
+      status: 503,
+      message: "ERP unavailable",
+    });
+
+    const req = createMockReq({ params: { courseCode: "COURSE-001" } });
+    const res = createMockRes();
+    await learningAdminController.getClassesByCourseCode(req, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+  });
+});
+
+// Assign class enrollments testing
+
+describe("ASSIGN CLASS ENROLLMENTS", () => {
+  it("should require learningPathId, courseCode, class, and enrollmentIds", async () => {
+    const req = createMockReq({
+      body: {
+        learningPathId: "",
+        courseCode: "COURSE-001",
+        class: { id: "CLASS-001" },
+        enrollmentIds: ["en-1"],
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.assignClassEnrollments(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should trim and filter enrollmentIds", () => {
     const selectedEnrollmentIds = [" en-1 ", "", " en-2 "]
       .map((id) => String(id || "").trim())
       .filter(Boolean);
-
-    assert.deepEqual(selectedEnrollmentIds, ["en-1", "en-2"]);
+    expect(selectedEnrollmentIds).toEqual(["en-1", "en-2"]);
   });
 
-  await t.test(
-    "should normalize selected class id, code, and title",
-    async () => {
-      const selectedClass = {
-        classId: " CLASS-001 ",
-        classCode: " C001 ",
-        classTitle: " Python Morning ",
-      };
+  it("should normalize selected class id, code, and title", () => {
+    const selectedClass = {
+      classId: " CLASS-001 ",
+      classCode: " C001 ",
+      classTitle: " Python Morning ",
+    };
+    const classId = String(
+      selectedClass.id || selectedClass.classId || "",
+    ).trim();
+    const classCode = String(
+      selectedClass.code || selectedClass.classCode || classId,
+    ).trim();
+    const classTitle = String(
+      selectedClass.title || selectedClass.classTitle || classCode || classId,
+    ).trim();
+    expect(classId).toBe("CLASS-001");
+    expect(classCode).toBe("C001");
+    expect(classTitle).toBe("Python Morning");
+  });
 
-      const classId = String(
-        selectedClass.id || selectedClass.classId || "",
-      ).trim();
-      const classCode = String(
-        selectedClass.code || selectedClass.classCode || classId,
-      ).trim();
-      const classTitle = String(
-        selectedClass.title || selectedClass.classTitle || classCode || classId,
-      ).trim();
-
-      assert.equal(classId, "CLASS-001");
-      assert.equal(classCode, "C001");
-      assert.equal(classTitle, "Python Morning");
-    },
-  );
-
-  await t.test(
-    "should return 404 when learning path is not found",
-    async () => {
-      setupMockDatabase();
-
-      const res = createMockRes();
-      const path = mockDatabase.learning_paths.find(
-        (item) => item.id === "missing" && !item.is_deleted,
-      );
-
-      if (!path) {
-        sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: false }], rowCount: 1 };
       }
 
-      assert.equal(res.statusCode, 404);
-    },
-  );
-
-  await t.test(
-    "should reject when selected learners do not belong to path",
-    async () => {
-      setupMockDatabase();
-
-      const selectedEnrollmentIds = ["missing-enrollment"];
-      const validEnrollments = mockDatabase.enrollments.filter(
-        (enrollment) =>
-          enrollment.learning_path_id === "lp-1" &&
-          selectedEnrollmentIds.includes(enrollment.id),
-      );
-
-      assert.equal(validEnrollments.length, 0);
-    },
-  );
-
-  await t.test("should create class enrollment assignment", async () => {
-    setupMockDatabase();
-
-    const selectedClass = {
-      id: "CLASS-002",
-      code: "C002",
-      title: "Python Evening",
-    };
-
-    const assigned = {
-      id: "ce-new",
-      enrollment_id: "en-1",
-      learning_path_id: "lp-1",
-      course_code: "COURSE-001",
-      class_id: selectedClass.id,
-      class_code: selectedClass.code,
-      class_title: selectedClass.title,
-    };
-
-    assert.equal(assigned.enrollment_id, "en-1");
-    assert.equal(assigned.class_id, "CLASS-002");
-    assert.equal(assigned.course_code, "COURSE-001");
-  });
-
-  await t.test(
-    "should update existing class assignment for same enrollment and course",
-    async () => {
-      setupMockDatabase();
-
-      const existing = mockDatabase.class_enrollments.find(
-        (item) =>
-          item.enrollment_id === "en-1" && item.course_code === "COURSE-001",
-      );
-
-      existing.class_id = "CLASS-002";
-      existing.class_code = "C002";
-      existing.class_title = "Python Evening";
-
-      assert.equal(existing.class_id, "CLASS-002");
-      assert.equal(existing.class_title, "Python Evening");
-    },
-  );
-
-  await t.test("should queue class assignment email", async () => {
-    sentEmails = [];
-
-    await mockSendClassAssignedEmail({
-      employeeNumber: "EMP-001",
-      to: "john@example.com",
-      learnerName: "John Doe",
-      learningPathTitle: "Python Basics",
-      courseCode: "COURSE-001",
-      classTitle: "Python Morning",
-      classCode: "C001",
+      return { rows: [], rowCount: 0 };
     });
 
-    assert.equal(sentEmails.length, 1);
-    assert.equal(sentEmails[0].type, "class");
-  });
-
-  await t.test("should log class assignment audit", async () => {
-    auditLogs = [];
-
-    await mockLogAudit({
-      actorPrincipalId: "admin-1",
-      action: "ASSIGN_CLASS_ENROLLMENTS",
-      resourceType: "CLASS_ENROLLMENT",
-      metadata: {
-        learningPathId: "lp-1",
+    const req = createMockReq({
+      body: {
+        learningPathId: "missing",
         courseCode: "COURSE-001",
-        classId: "CLASS-001",
-        assigned: 1,
-        requested: 1,
+        class: { id: "CLASS-001" },
+        enrollmentIds: ["en-1"],
       },
     });
+    const res = createMockRes();
+    await learningAdminController.assignClassEnrollments(req, res);
 
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "ASSIGN_CLASS_ENROLLMENTS");
-    assert.equal(auditLogs[0].metadata.assigned, 1);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("should create class enrollment assignment (returns 201)", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: false }], rowCount: 1 };
+      }
+      if (sql && sql.includes("FROM learning_paths")) {
+        return { rows: [{ id: "lp-1", title: "Python Basics" }], rowCount: 1 };
+      }
+      // Enrollments validation query (contains auth_principals + JOIN)
+      if (sql && sql.includes("auth_principals") && sql.includes("employees")) {
+        return {
+          rows: [
+            {
+              id: "en-1",
+              name: "John Doe",
+              email: "john@test.com",
+              employee_number: "EMP-001",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql && sql.includes("INSERT")) {
+        return { rows: [{ id: "ce-new" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq({
+      body: {
+        learningPathId: "lp-1",
+        courseCode: "COURSE-001",
+        class: { id: "CLASS-002", code: "C002", title: "Python Evening" },
+        enrollmentIds: ["en-1"],
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.assignClassEnrollments(req, res);
+
+    expect(res.statusCode).toBe(201);
   });
 });
 
-// getLearningSummaryReport testing
-test("GET LEARNING SUMMARY REPORT TESTS", async (t) => {
-  await t.test("should count total and active paths", async () => {
-    setupMockDatabase();
+// Get learning summary report testing
 
-    const totalPaths = mockDatabase.learning_paths.filter(
-      (path) => !path.is_deleted,
-    ).length;
-    const activePaths = mockDatabase.learning_paths.filter(
-      (path) => !path.is_deleted && path.status === "ACTIVE",
-    ).length;
+describe("GET LEARNING SUMMARY REPORT", () => {
+  it("should return summary with path, enrollment, and certificate counts", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("total_paths")) {
+        return { rows: [{ total_paths: "2", active_paths: "2" }], rowCount: 1 };
+      }
+      if (sql && sql.includes("total_enrollments")) {
+        return {
+          rows: [{ total_enrollments: "2", completed_enrollments: "1" }],
+          rowCount: 1,
+        };
+      }
+      if (sql && sql.includes("total_certificates")) {
+        return { rows: [{ total_certificates: "1" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
 
-    assert.equal(totalPaths, 2);
-    assert.equal(activePaths, 2);
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getLearningSummaryReport(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.summary.totalPaths).toBe(2);
+    expect(res.body.summary.totalEnrollments).toBe(2);
+    expect(res.body.summary.totalCertificates).toBe(1);
   });
 
-  await t.test("should count total and completed enrollments", async () => {
-    setupMockDatabase();
-
-    const totalEnrollments = mockDatabase.enrollments.length;
-    const completedEnrollments = mockDatabase.enrollments.filter(
-      (enrollment) => enrollment.status === "COMPLETED",
-    ).length;
-
-    assert.equal(totalEnrollments, 2);
-    assert.equal(completedEnrollments, 1);
-  });
-
-  await t.test("should compute completion rate", async () => {
+  it("should compute completion rate correctly", () => {
     const totalEnrollments = 4;
     const completedEnrollments = 3;
     const completionRate =
       totalEnrollments === 0
         ? 0
         : Math.round((completedEnrollments / totalEnrollments) * 100);
-
-    assert.equal(completionRate, 75);
+    expect(completionRate).toBe(75);
   });
 
-  await t.test(
-    "should return zero completion rate when no enrollments",
-    async () => {
-      const totalEnrollments = 0;
-      const completedEnrollments = 0;
-      const completionRate =
-        totalEnrollments === 0
-          ? 0
-          : Math.round((completedEnrollments / totalEnrollments) * 100);
-
-      assert.equal(completionRate, 0);
-    },
-  );
-
-  await t.test("should count total certificates", async () => {
-    setupMockDatabase();
-
-    const totalCertificates = mockDatabase.certificates.length;
-
-    assert.equal(totalCertificates, 1);
+  it("should return zero completion rate when no enrollments", () => {
+    const totalEnrollments = 0;
+    const completedEnrollments = 0;
+    const completionRate =
+      totalEnrollments === 0
+        ? 0
+        : Math.round((completedEnrollments / totalEnrollments) * 100);
+    expect(completionRate).toBe(0);
   });
 
-  await t.test("should build summary response shape", async () => {
-    setupMockDatabase();
-
+  it("should build summary response shape", async () => {
     const summary = {
-      totalPaths: mockDatabase.learning_paths.filter((path) => !path.is_deleted)
-        .length,
-      activePaths: mockDatabase.learning_paths.filter(
-        (path) => !path.is_deleted && path.status === "ACTIVE",
-      ).length,
-      totalEnrollments: mockDatabase.enrollments.length,
-      completedEnrollments: mockDatabase.enrollments.filter(
-        (enrollment) => enrollment.status === "COMPLETED",
-      ).length,
+      totalPaths: 2,
+      activePaths: 2,
+      totalEnrollments: 2,
+      completedEnrollments: 1,
       completionRate: 50,
-      totalCertificates: mockDatabase.certificates.length,
+      totalCertificates: 1,
     };
+    expect(summary.totalPaths).toBe(2);
+    expect(summary.activePaths).toBe(2);
+    expect(summary.totalEnrollments).toBe(2);
+    expect(summary.completedEnrollments).toBe(1);
+    expect(summary.completionRate).toBe(50);
+    expect(summary.totalCertificates).toBe(1);
+  });
+});
 
-    assert.equal(summary.totalPaths, 2);
-    assert.equal(summary.activePaths, 2);
-    assert.equal(summary.totalEnrollments, 2);
-    assert.equal(summary.completedEnrollments, 1);
-    assert.equal(summary.completionRate, 50);
-    assert.equal(summary.totalCertificates, 1);
+// Private helper testing
+
+describe("parseCategory (private helper)", () => {
+  it("should return null for invalid categories", () => {
+    expect(parseCategory("INVALID")).toBeNull();
+    expect(parseCategory("PRIVATE")).toBeNull();
+    expect(parseCategory("")).toBeNull();
+  });
+
+  it("should return valid categories", () => {
+    expect(parseCategory("PUBLIC")).toBe("PUBLIC");
+    expect(parseCategory("RESTRICTED")).toBe("RESTRICTED");
+  });
+});
+
+describe("normalizeEmployeeDisplayName (private helper)", () => {
+  it("should normalize name from employeeName", () => {
+    expect(
+      normalizeEmployeeDisplayName({ employeeName: " John Doe " }, "EMP-001"),
+    ).toBe("John Doe");
+  });
+
+  it("should fall back to initials and surname", () => {
+    expect(
+      normalizeEmployeeDisplayName(
+        { employeeInitials: " J ", employeeSurname: " Doe " },
+        "EMP-001",
+      ),
+    ).toBe("J Doe");
+  });
+
+  it("should fall back to Learner plus employeeNumber", () => {
+    expect(normalizeEmployeeDisplayName({}, "EMP-001")).toBe("Learner EMP-001");
+  });
+
+  it("should handle null employeeName", () => {
+    expect(
+      normalizeEmployeeDisplayName({ employeeName: null }, "EMP-001"),
+    ).toBe("Learner EMP-001");
+  });
+});
+
+describe("normalizeSignaturePngDataUrl (private helper)", () => {
+  it("should return null for empty/null/undefined", () => {
+    expect(normalizeSignaturePngDataUrl(null)).toBeNull();
+    expect(normalizeSignaturePngDataUrl("")).toBeNull();
+    expect(normalizeSignaturePngDataUrl(undefined)).toBeNull();
+  });
+
+  it("should reject non-PNG data URLs", () => {
+    expect(
+      normalizeSignaturePngDataUrl("data:image/jpeg;base64,AAAA").error,
+    ).toBe("Signature must be a PNG image.");
+  });
+
+  it("should accept valid PNG data URLs", () => {
+    expect(
+      normalizeSignaturePngDataUrl("data:image/png;base64,AAAA").value,
+    ).toBe("data:image/png;base64,AAAA");
+  });
+});
+
+describe("safeCertificateTitle (private helper)", () => {
+  it("should sanitize title for filename", () => {
+    expect(safeCertificateTitle("Python Basics!")).toBe("python_basics_");
+    expect(safeCertificateTitle("Leadership 101")).toBe("leadership_101");
+  });
+
+  it("should use default for empty title", () => {
+    expect(safeCertificateTitle("")).toBe("learning_path");
+    expect(safeCertificateTitle(null)).toBe("learning_path");
+  });
+});
+
+describe("normalizeErpClassRow (private helper)", () => {
+  it("should use classId as primary id", () => {
+    const result = normalizeErpClassRow({
+      classId: "C-001",
+      className: "Test",
+    });
+    expect(result.id).toBe("C-001");
+  });
+
+  it("should generate fallback id", () => {
+    const result = normalizeErpClassRow({}, 3);
+    expect(result.id).toBe("CLASS-4");
+  });
+
+  it("should normalize all fields", () => {
+    const result = normalizeErpClassRow({
+      classId: "C-001",
+      classCode: "C001",
+      className: "Morning",
+      startDate: "2026-06-10",
+      venue: "Room 1",
+      capacity: "25",
+    });
+    expect(result.code).toBe("C001");
+    expect(result.title).toBe("Morning");
+    expect(result.startDate).toBe("2026-06-10");
+    expect(result.venue).toBe("Room 1");
+  });
+});
+
+describe("getSearchErrorStatus (private helper)", () => {
+  it("should return error.status when present", () => {
+    expect(getSearchErrorStatus({ status: 503 })).toBe(503);
+  });
+
+  it("should default to 502", () => {
+    expect(getSearchErrorStatus(new Error("test"))).toBe(502);
   });
 });
