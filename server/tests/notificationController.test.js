@@ -292,6 +292,61 @@ describe("GET MY NOTIFICATIONS", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.notifications).toEqual([]);
   });
+
+  it("should return empty notifications when ERP learner has no employeeNo", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(true);
+
+    const req = createMockReq({
+      user: {
+        id: "temp-user",
+        authSource: "ERP_LEARNER",
+      },
+    });
+    const res = createMockRes();
+
+    await notificationController.getMyNotifications(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.notifications).toEqual([]);
+  });
+
+  it("should trim whitespace from employeeNo during principal resolution", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(true);
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ principal_id: "erp-user-1" }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "notif-1",
+          title: "Trimmed",
+          message: "Test",
+          type: "INFO",
+          is_read: false,
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      user: {
+        id: "temp-user",
+        authSource: "ERP_LEARNER",
+        employeeNo: "  EMP-001  ",
+      },
+    });
+    const res = createMockRes();
+
+    await notificationController.getMyNotifications(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("employee_number = $1");
+    expect(vi.mocked(query).mock.calls[0][1]).toEqual(["EMP-001"]);
+  });
 });
 
 // markNotificationAsRead testing
@@ -422,6 +477,46 @@ describe("MARK NOTIFICATION AS READ", () => {
     expect(res.statusCode).toBe(404);
     expect(res.body.error.code).toBe("NOT_FOUND");
   });
+
+  it("should verify principal_id is passed to query for ownership check", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "notif-1", is_read: true }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      params: { id: "notif-1" },
+      user: { id: "user-1" },
+    });
+    const res = createMockRes();
+
+    await notificationController.markNotificationAsRead(req, res);
+
+    const params = vi.mocked(query).mock.calls[0][1];
+    expect(params).toEqual(["notif-1", "user-1"]);
+  });
+
+  it("should return success with is_read true after marking", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "notif-2", is_read: true }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      params: { id: "notif-2" },
+      user: { id: "user-1" },
+    });
+    const res = createMockRes();
+
+    await notificationController.markNotificationAsRead(req, res);
+
+    expect(res.body.notification).toBeDefined();
+    expect(res.body.notification.is_read).toBe(true);
+  });
 });
 
 // markAllNotificationsAsRead testing
@@ -540,6 +635,39 @@ describe("MARK ALL NOTIFICATIONS AS READ", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.updatedCount).toBe(0);
   });
+
+  it("should be idempotent — calling twice does not error", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 2 });
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res1 = createMockRes();
+    const res2 = createMockRes();
+
+    await notificationController.markAllNotificationsAsRead(req, res1);
+    await notificationController.markAllNotificationsAsRead(req, res2);
+
+    expect(res1.body.success).toBe(true);
+    expect(res1.body.updatedCount).toBe(2);
+    expect(res2.body.success).toBe(true);
+    expect(res2.body.updatedCount).toBe(0);
+  });
+
+  it("should verify principal_id parameter is passed correctly", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res = createMockRes();
+
+    await notificationController.markAllNotificationsAsRead(req, res);
+
+    const params = vi.mocked(query).mock.calls[0][1];
+    expect(params).toEqual(["user-1"]);
+  });
 });
 
 // clearAllNotifications testing
@@ -637,5 +765,168 @@ describe("CLEAR ALL NOTIFICATIONS", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.deletedCount).toBe(0);
+  });
+
+  it("should be idempotent — calling twice does not error", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 3 });
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res1 = createMockRes();
+    const res2 = createMockRes();
+
+    await notificationController.clearAllNotifications(req, res1);
+    await notificationController.clearAllNotifications(req, res2);
+
+    expect(res1.body.success).toBe(true);
+    expect(res1.body.deletedCount).toBe(3);
+    expect(res2.body.success).toBe(true);
+    expect(res2.body.deletedCount).toBe(0);
+  });
+
+  it("should verify DELETE targets correct principal_id only", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res = createMockRes();
+
+    await notificationController.clearAllNotifications(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+    const params = vi.mocked(query).mock.calls[0][1];
+    expect(sql).toContain("DELETE FROM notifications");
+    expect(sql).toContain("WHERE principal_id = $1");
+    expect(params).toEqual(["user-1"]);
+  });
+
+  it("should not include any other user in delete scope", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res = createMockRes();
+
+    await notificationController.clearAllNotifications(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+
+    expect(sql).not.toContain("OR principal_id");
+    expect(sql).not.toContain("IN (");
+  });
+});
+
+// Notification Types and Response Shape
+
+describe("NOTIFICATION TYPE VARIETY", () => {
+  it("should handle all notification types (SUCCESS, WARNING, INFO, ERROR)", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "n1",
+          title: "Cert",
+          message: "Issued",
+          type: "SUCCESS",
+          is_read: false,
+          created_at: new Date(),
+        },
+        {
+          id: "n2",
+          title: "Reminder",
+          message: "Due",
+          type: "WARNING",
+          is_read: false,
+          created_at: new Date(),
+        },
+        {
+          id: "n3",
+          title: "Enrolled",
+          message: "Done",
+          type: "INFO",
+          is_read: false,
+          created_at: new Date(),
+        },
+        {
+          id: "n4",
+          title: "Failed",
+          message: "Error",
+          type: "ERROR",
+          is_read: false,
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 4,
+    });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res = createMockRes();
+
+    await notificationController.getMyNotifications(req, res);
+
+    const types = res.body.notifications.map((n) => n.type);
+    expect(types).toEqual(["SUCCESS", "WARNING", "INFO", "ERROR"]);
+  });
+});
+
+describe("NOTIFICATION RESPONSE SHAPE", () => {
+  it("should not leak internal fields in notification response", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "notif-1",
+          title: "Test",
+          message: "Msg",
+          type: "INFO",
+          is_read: false,
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res = createMockRes();
+
+    await notificationController.getMyNotifications(req, res);
+
+    const notification = res.body.notifications[0];
+
+    const allowedKeys = [
+      "id",
+      "title",
+      "message",
+      "type",
+      "is_read",
+      "created_at",
+    ];
+    const actualKeys = Object.keys(notification);
+    expect(actualKeys.every((k) => allowedKeys.includes(k))).toBe(true);
+  });
+
+  it("should return success field in mark-all and clear-all responses", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ user: { id: "user-1" } });
+    const res1 = createMockRes();
+    const res2 = createMockRes();
+
+    await notificationController.markAllNotificationsAsRead(req, res1);
+    await notificationController.clearAllNotifications(req, res2);
+
+    expect(res1.body).toHaveProperty("success", true);
+    expect(res1.body).toHaveProperty("updatedCount");
+    expect(res2.body).toHaveProperty("success", true);
+    expect(res2.body).toHaveProperty("deletedCount");
   });
 });
