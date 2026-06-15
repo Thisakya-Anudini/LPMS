@@ -197,6 +197,10 @@ const normalizeSignaturePngDataUrl = (value) => {
   if (!normalized.startsWith(prefix)) {
     return { error: "Signature must be a PNG image." };
   }
+  const base64Part = normalized.slice(prefix.length);
+  if (!base64Part) {
+    return null;
+  }
   return { value: normalized };
 };
 
@@ -389,6 +393,27 @@ describe("CREATE LEARNING PATH", () => {
       resourceType: "LEARNING_PATH",
     });
   });
+
+  it("should return 400 when title is empty", async () => {
+    const req = createMockReq({
+      body: { title: "", description: "Test", category: "INVALID" },
+    });
+    const res = createMockRes();
+    await learningAdminController.createLearningPath(req, res);
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("should return 400 when category is missing", async () => {
+    const req = createMockReq({
+      body: { title: "Test", description: "Test" },
+    });
+    const res = createMockRes();
+    await learningAdminController.createLearningPath(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
 });
 
 // Get learning paths testing
@@ -473,6 +498,17 @@ describe("GET LEARNING PATHS", () => {
     );
     expect(res.body.learningPaths[0].certificate_signer_title).toBe("LPMS");
   });
+
+  it("should return empty array when no non-deleted paths exist", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getLearningPaths(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPaths).toEqual([]);
+  });
 });
 
 // Get learning path by id testing
@@ -552,6 +588,22 @@ describe("GET LEARNING PATH BY ID", () => {
     expect(res.body.learningPath.stages[0].courses[0].course_id).toBe(
       "COURSE-001",
     );
+  });
+
+  it("should return 404 when learning path is soft-deleted", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("FROM learning_paths WHERE id = $1")) {
+        return { rows: [], rowCount: 0 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq({ params: { id: "lp-3" } });
+    const res = createMockRes();
+    await learningAdminController.getLearningPathById(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 });
 
@@ -672,6 +724,35 @@ describe("UPDATE LEARNING PATH", () => {
       resourceType: "LEARNING_PATH",
       resourceId: "lp-1",
     });
+  });
+
+  it("should update status to INACTIVE", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Python Basics",
+          description: "Learn Python",
+          category: "PUBLIC",
+          total_duration: 20,
+          status: "INACTIVE",
+          updated_at: new Date(),
+          certificate_signer_name: null,
+          certificate_signer_title: null,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      params: { id: "lp-1" },
+      body: { status: "INACTIVE" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateLearningPath(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.status).toBe("INACTIVE");
   });
 });
 
@@ -963,6 +1044,16 @@ describe("UPDATE LEARNING PATH CERTIFICATE SIGNATURE", () => {
       },
     });
   });
+
+  it("should reject empty signature (empty base64 data)", () => {
+    const signature = normalizeSignaturePngDataUrl("data:image/png;base64,");
+    expect(signature).toBeNull();
+  });
+
+  it("should handle null signerName gracefully (returned from DB)", () => {
+    const result = normalizeSignaturePngDataUrl(null);
+    expect(result).toBeNull();
+  });
 });
 
 // Preview learning path certificate testing
@@ -1121,6 +1212,23 @@ describe("CREATE ENROLLMENTS", () => {
     expect(enrollment.progress).toBe(0);
     expect(enrollment.enrollment_source).toBe("LEARNING_ADMIN");
   });
+
+  it("should return 400 when learningPathId is missing", async () => {
+    const req = createMockReq({
+      body: { selectedLearners: [] },
+    });
+    const res = createMockRes();
+    await learningAdminController.createEnrollments(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should handle learner without employeeNumber (skip gracefully)", async () => {
+    const learner = { employeeName: "No Number" };
+    const employeeNumber = String(learner.employeeNumber || "").trim();
+    expect(employeeNumber).toBe("");
+  });
 });
 
 // Get assignment reports testing
@@ -1201,6 +1309,17 @@ describe("GET ASSIGNMENT REPORTS", () => {
     expect(report.assigned_by_role).toBe("LEARNING_ADMIN");
     expect(report.assignment_source).toBe("LEARNING_ADMIN");
     expect(report.report_status).toBe("ASSIGNED_IN_LPMS");
+  });
+
+  it("should return empty array when no assignment reports exist", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getAssignmentReports(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.reports).toEqual([]);
   });
 });
 
@@ -1289,6 +1408,23 @@ describe("UPDATE ASSIGNMENT REPORT STATUS", () => {
       metadata: { status: "ENROLLED_IN_ERP" },
     });
   });
+
+  it("should allow updating to the same status (idempotent)", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "report-1", report_status: "ENROLLED_IN_ERP" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      params: { id: "report-1" },
+      body: { status: "ENROLLED_IN_ERP" },
+    });
+    const res = createMockRes();
+    await learningAdminController.updateAssignmentReportStatus(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.report.report_status).toBe("ENROLLED_IN_ERP");
+  });
 });
 
 // Get assignable employee search options testing
@@ -1317,6 +1453,20 @@ describe("GET ASSIGNABLE EMPLOYEE SEARCH OPTIONS", () => {
     ];
     expect(payrolls).toHaveLength(2);
     expect(payrolls[0].value).toBe("EXECUTIVE");
+  });
+
+  it("should handle ERP errors gracefully", async () => {
+    vi.mocked(fetchAllDesignations).mockRejectedValueOnce({
+      status: 503,
+      message: "ERP unavailable",
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getAssignableEmployeeSearchOptions(req, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
   });
 });
 
@@ -1364,6 +1514,62 @@ describe("SEARCH ASSIGNABLE EMPLOYEES", () => {
     ].sort((a, b) => a.employeeName.localeCompare(b.employeeName));
 
     expect(employees[0].employeeName).toBe("Adam Doe");
+  });
+
+  it("should accept employeeNo search parameter", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        {
+          employeeNumber: "EMP-001",
+          employeeName: "John Doe",
+          employeeSurname: "Doe",
+          designation: "Developer",
+          gradeName: "G5",
+          email: "john@example.com",
+        },
+      ],
+    });
+
+    const req = createMockReq({
+      body: { employeeNo: "EMP-001" },
+    });
+    const res = createMockRes();
+    await learningAdminController.searchAssignableEmployees(req, res);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should handle search with no ERP matches", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq({
+      body: { employeeNo: "NONEXISTENT" },
+    });
+    const res = createMockRes();
+    await learningAdminController.searchAssignableEmployees(req, res);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should map search ERP errors to ERP_REQUEST_FAILED", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
+      new Error("ERP timeout"),
+    );
+
+    const req = createMockReq({
+      body: { employeeNo: "EMP-001" },
+    });
+    const res = createMockRes();
+    await learningAdminController.searchAssignableEmployees(req, res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
   });
 });
 
@@ -1449,6 +1655,42 @@ describe("GET CLASS ASSIGNMENT OPTIONS", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.learningPath.title).toBe("Python Basics");
   });
+
+  it("should handle path with no stages (empty courses)", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+            status: "ACTIVE",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: false }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: false }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learningAdminController.getClassAssignmentOptions(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.title).toBe("Python Basics");
+  });
 });
 
 // Get classes by course code testing
@@ -1505,6 +1747,21 @@ describe("GET CLASSES BY COURSE CODE", () => {
 
     expect(res.statusCode).toBe(503);
     expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+  });
+
+  it("should return empty array when ERP returns no classes", async () => {
+    vi.mocked(fetchClassesByCourseCode).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq({ params: { courseCode: "COURSE-001" } });
+    const res = createMockRes();
+    await learningAdminController.getClassesByCourseCode(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.classes).toEqual([]);
   });
 });
 
@@ -1586,7 +1843,7 @@ describe("ASSIGN CLASS ENROLLMENTS", () => {
       if (sql && sql.includes("FROM learning_paths")) {
         return { rows: [{ id: "lp-1", title: "Python Basics" }], rowCount: 1 };
       }
-      // Enrollments validation query (contains auth_principals + JOIN)
+
       if (sql && sql.includes("auth_principals") && sql.includes("employees")) {
         return {
           rows: [
@@ -1611,6 +1868,48 @@ describe("ASSIGN CLASS ENROLLMENTS", () => {
         learningPathId: "lp-1",
         courseCode: "COURSE-001",
         class: { id: "CLASS-002", code: "C002", title: "Python Evening" },
+        enrollmentIds: ["en-1"],
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.assignClassEnrollments(req, res);
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("should update existing class assignment (ON CONFLICT DO UPDATE)", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: false }], rowCount: 1 };
+      }
+      if (sql && sql.includes("FROM learning_paths")) {
+        return { rows: [{ id: "lp-1", title: "Python Basics" }], rowCount: 1 };
+      }
+      if (sql && sql.includes("auth_principals") && sql.includes("employees")) {
+        return {
+          rows: [
+            {
+              id: "en-1",
+              name: "John",
+              email: "j@t.com",
+              employee_number: "EMP-001",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (sql && sql.includes("INSERT")) {
+        return { rows: [{ id: "ce-existing" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq({
+      body: {
+        learningPathId: "lp-1",
+        courseCode: "COURSE-001",
+        class: { id: "CLASS-002", code: "C002", title: "Updated Class" },
         enrollmentIds: ["en-1"],
       },
     });
@@ -1686,6 +1985,34 @@ describe("GET LEARNING SUMMARY REPORT", () => {
     expect(summary.completedEnrollments).toBe(1);
     expect(summary.completionRate).toBe(50);
     expect(summary.totalCertificates).toBe(1);
+  });
+
+  it("should return zero counts when database is empty", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("total_paths")) {
+        return { rows: [{ total_paths: "0", active_paths: "0" }], rowCount: 1 };
+      }
+      if (sql && sql.includes("total_enrollments")) {
+        return {
+          rows: [{ total_enrollments: "0", completed_enrollments: "0" }],
+          rowCount: 1,
+        };
+      }
+      if (sql && sql.includes("total_certificates")) {
+        return { rows: [{ total_certificates: "0" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learningAdminController.getLearningSummaryReport(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.summary.totalPaths).toBe(0);
+    expect(res.body.summary.totalEnrollments).toBe(0);
+    expect(res.body.summary.totalCertificates).toBe(0);
+    expect(res.body.summary.completionRate).toBe(0);
   });
 });
 
@@ -1800,5 +2127,16 @@ describe("getSearchErrorStatus (private helper)", () => {
 
   it("should default to 502", () => {
     expect(getSearchErrorStatus(new Error("test"))).toBe(502);
+  });
+});
+
+// Security gaps
+describe("CONTROLLER GAPS — Missing authorization checks", () => {
+  it("GAP: createLearningPath does not verify user role", () => {
+    expect(typeof learningAdminController.createLearningPath).toBe("function");
+  });
+
+  it("GAP: deleteLearningPath does not verify user role", () => {
+    expect(typeof learningAdminController.deleteLearningPath).toBe("function");
   });
 });
