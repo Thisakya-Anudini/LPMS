@@ -8,6 +8,7 @@ import {
   getAssignableEmployeeSearchOptions,
   getClassesByCourseCode,
   getClassAssignmentOptions,
+  getClassDetailReport,
   getCertificateCustomizationPaths,
   getLearningSummaryReport,
   getLearningPathById,
@@ -15,6 +16,7 @@ import {
   previewLearningPathCertificate,
   searchAssignableEmployees,
   updateAssignmentReportStatus,
+  upsertClassDetailReport,
   updateLearningPathCertificateSignature,
   updateLearningPath
 } from '../controllers/learningAdminController.js';
@@ -28,7 +30,7 @@ router.post(
   '/learning-paths',
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['title', 'description', 'category', 'totalDuration']),
+  requireFields(['title', 'description', 'category']),
   createLearningPath
 );
 router.get('/learning-paths', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPaths);
@@ -42,6 +44,8 @@ router.get('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN, RO
 router.put('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), updateLearningPath);
 router.delete('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), deleteLearningPath);
 router.get('/courses/:courseCode/classes', protect, requireRole([ROLES.LEARNING_ADMIN]), getClassesByCourseCode);
+router.get('/class-detail-reports', protect, requireRole([ROLES.LEARNING_ADMIN]), getClassDetailReport);
+router.put('/class-detail-reports', protect, requireRole([ROLES.LEARNING_ADMIN]), upsertClassDetailReport);
 
 router.post(
   '/enrollments',

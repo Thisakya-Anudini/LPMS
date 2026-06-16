@@ -38,7 +38,23 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
   });
 
   if (!response.ok) {
-    throw new Error(await parseApiError(response));
+    // Attempt to parse structured error payload
+    try {
+      const payload = await response.json();
+      if (response.status === 409 && payload?.error?.code === 'DUPLICATE_LEARNING_PATH') {
+        type ApiErrorPayload = { error?: { code?: string; message?: string; details?: unknown } };
+        const apiError = new Error(payload.error?.message || 'Conflict') as Error & {
+          status?: number;
+          payload?: ApiErrorPayload;
+        };
+        apiError.status = response.status;
+        apiError.payload = payload as ApiErrorPayload;
+        throw apiError;
+      }
+      throw new Error(await parseApiError(response));
+    } catch {
+      throw new Error(await parseApiError(response));
+    }
   }
 
   if (response.status === 204) {
@@ -409,6 +425,50 @@ export const learningApi = {
       body: payload
     });
   },
+  getClassDetailReport(
+    token: string,
+    params: { learningPathId: string; courseCode: string; classId: string }
+  ) {
+    const searchParams = new URLSearchParams({
+      learningPathId: params.learningPathId,
+      courseCode: params.courseCode,
+      classId: params.classId
+    });
+    return request<{
+      report: null | {
+        id: string;
+        learningPathId: string;
+        courseCode: string;
+        classId: string;
+        values: Record<string, string>;
+        updatedAt: string;
+      };
+    }>(`/class-detail-reports?${searchParams.toString()}`, { token });
+  },
+  saveClassDetailReport(
+    token: string,
+    payload: {
+      learningPathId: string;
+      courseCode: string;
+      classId: string;
+      values: Record<string, string>;
+    }
+  ) {
+    return request<{
+      report: {
+        id: string;
+        learningPathId: string;
+        courseCode: string;
+        classId: string;
+        values: Record<string, string>;
+        updatedAt: string;
+      };
+    }>('/class-detail-reports', {
+      method: 'PUT',
+      token,
+      body: payload
+    });
+  },
   getSummaryReport(token: string) {
     return request<{
       summary: {
@@ -646,6 +706,7 @@ export const learnerApi = {
         enrollmentId: string;
         learningPathId: string;
         title: string;
+        totalDuration: string | null;
         progress: number;
         status: string;
       }>;

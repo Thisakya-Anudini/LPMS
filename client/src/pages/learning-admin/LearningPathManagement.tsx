@@ -93,7 +93,6 @@ const initialPathForm = {
   title: '',
   description: '',
   category: 'PUBLIC' as Category,
-  totalDuration: '',
   stages: [] as StageForm[],
   draftStage: createStageForm(0) as StageForm
 };
@@ -131,8 +130,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [query, setQuery] = useState('');
 
   const [pathForm, setPathForm] = useState(initialPathForm);
+  type DuplicateExisting = { id?: string; title?: string; overlappingCourses?: Array<{ title?: string; code?: string }> };
+  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<DuplicateExisting> }>(null);
+  const [pathTitleError, setPathTitleError] = useState<string | null>(null);
+  const [editTitleError, setEditTitleError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
   const [createCourseSearch, setCreateCourseSearch] = useState('');
+  const [editCourseSearch, setEditCourseSearch] = useState('');
 
   const [editPathId, setEditPathId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -319,9 +323,36 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     return toStages(combined);
   };
 
+  const validateTitleValue = (value: string): { valid: true } | { valid: false; message: string } => {
+    const normalized = String(value || '').trim();
+    if (normalized === '') {
+      return { valid: false, message: 'Title is required.' };
+    }
+
+    const allowedTitleRegex = /^[A-Za-z\s\-_,.&()'"@:/]+$/;
+    if (!allowedTitleRegex.test(normalized)) {
+      return { valid: false, message: 'Title may only contain letters, spaces, and common punctuation.' };
+    }
+
+    if (!/[A-Za-z]/.test(normalized)) {
+      return { valid: false, message: 'Title must include at least one letter.' };
+    }
+
+    return { valid: true };
+  };
+
   const handleCreatePath = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPathFormLoading(true);
+    setPathDuplicateWarning(null);
+    setPathTitleError(null);
+    const titleValidation = validateTitleValue(pathForm.title);
+    if (!titleValidation.valid) {
+      setPathTitleError(titleValidation.message);
+      showToast(titleValidation.message, 'error');
+      setPathFormLoading(false);
+      return;
+    }
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -333,14 +364,23 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         title: pathForm.title,
         description: pathForm.description,
         category: pathForm.category,
-        totalDuration: pathForm.totalDuration,
+        totalDuration: '',
         stages: getCreateStagesPayload()
       });
       setPathForm(initialPathForm);
       showToast('Learning path created successfully.', 'success');
       await loadData();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
+      // If server returned structured DUPLICATE_LEARNING_PATH details, show inline warning
+      type ApiErrorPayload = { error?: { code?: string; message?: string; details?: { existing?: Array<DuplicateExisting> } }; existing?: Array<DuplicateExisting> };
+      const maybePayload = (err as unknown as { payload?: ApiErrorPayload }).payload;
+      if (err instanceof Error && maybePayload && (maybePayload.error?.code === 'DUPLICATE_LEARNING_PATH' || maybePayload.existing)) {
+        const existing = maybePayload.error?.details?.existing || maybePayload.existing || [];
+        setPathDuplicateWarning({ message: maybePayload.error?.message || 'Duplicate learning path detected.', existing });
+        showToast(maybePayload.error?.message || 'Duplicate learning path detected.', 'info');
+      } else {
+        showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
+      }
     } finally {
       setPathFormLoading(false);
     }
@@ -369,6 +409,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         }));
 
       setEditPathId(path.id);
+      setEditCourseSearch('');
       setEditForm({
         title: path.title,
         description: path.description,
@@ -388,6 +429,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       return;
     }
     setEditLoading(true);
+    setEditTitleError(null);
+    const titleValidation = validateTitleValue(editForm.title);
+    if (!titleValidation.valid) {
+      setEditTitleError(titleValidation.message);
+      showToast(titleValidation.message, 'error');
+      setEditLoading(false);
+      return;
+    }
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -565,7 +614,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     });
   };
 
-  const renderCourseSelector = (stages: StageForm[], mode: 'create' | 'edit') => (
+  const renderCourseSelector = (stages: StageForm[], mode: 'create' | 'edit') => {
+    const visibleCourses = mode === 'edit' ? filterCoursesByQuery(courses, editCourseSearch) : courses;
+
+    return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {stages.map((stage, stageIndex) => (
         <div key={`${mode}-${stage.stageId}`} className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
@@ -583,9 +635,32 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Select Courses</p>
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <p className="text-sm font-medium text-slate-700">Select Courses</p>
+                {mode === 'edit' ? (
+                  <div className="w-full md:w-80">
+                    <Input
+                      id={`edit-course-search-${stage.stageId}`}
+                      label="Search Courses"
+                      placeholder="Search by course name or ID"
+                      value={editCourseSearch}
+                      onChange={(event) => setEditCourseSearch(event.target.value)}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              {mode === 'edit' ? (
+                <p className="mb-2 text-xs text-slate-500">
+                  Showing {visibleCourses.length} of {courses.length} courses
+                </p>
+              ) : null}
               <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-              {courses.map((course, courseIndex) => (
+              {visibleCourses.length === 0 ? (
+                <p className="p-3 text-sm text-slate-500">
+                  No courses match "{editCourseSearch.trim()}".
+                </p>
+              ) : (
+              visibleCourses.map((course, courseIndex) => (
                 <label
                   key={getCourseRenderKey(course, courseIndex, `${mode}-${stage.stageId}`)}
                   className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
@@ -610,7 +685,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       ) : null}
                     </span>
                   </label>
-                ))}
+                ))
+              )}
               </div>
             </div>
             <div>
@@ -659,7 +735,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         </Button>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderCreateStageBuilder = () => (
     <div className="space-y-4">
@@ -836,9 +913,25 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 <Input
                   label="Title"
                   value={pathForm.title}
-                  onChange={(event) => setPathForm((prev) => ({ ...prev, title: event.target.value }))}
+                  error={pathTitleError ?? undefined}
+                  onChange={(event) => {
+                    setPathForm((prev) => ({ ...prev, title: event.target.value }));
+                    setPathTitleError(null);
+                  }}
+                  maxLength={50}
+                  helperText={`${pathForm.title.length}/50 characters entered, ${50 - pathForm.title.length} remaining`}
                   required
                 />
+                {pathDuplicateWarning ? (
+                  <div className="col-span-2 mt-1 text-sm text-amber-700">
+                    <p className="font-medium">{pathDuplicateWarning.message}</p>
+                    <ul className="list-disc list-inside">
+                      {pathDuplicateWarning.existing.map((e) => (
+                        <li key={e.id ?? String(e.title)}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <Select
                   label="Category"
                   value={pathForm.category}
@@ -849,15 +942,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     { value: 'PUBLIC', label: 'Public' },
                     { value: 'RESTRICTED', label: 'Restricted' }
                   ]}
-                />
-                <Input
-                  label="Total Duration"
-                  value={pathForm.totalDuration}
-                  onChange={(event) =>
-                    setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }))
-                  }
-                  placeholder="e.g. 4yr"
-                  required
                 />
                 <Input
                   label="Description"
@@ -887,7 +971,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   {pathForm.description.trim() || 'Add a description to preview details.'}
                 </p>
                 <p className="text-xs text-slate-500 mt-2">
-                  {pathForm.category.replace('_', ' ')} | {pathForm.totalDuration || 'Duration not set'}
+                  {pathForm.category.replace('_', ' ')}
                 </p>
               </div>
               <div>
@@ -1168,7 +1252,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 <tr>
                   <th className="px-6 py-3">Path Name</th>
                   <th className="px-6 py-3">Category</th>
-                  <th className="px-6 py-3">Duration</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3">Actions</th>
                 </tr>
@@ -1176,13 +1259,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td className="px-6 py-4 text-slate-500" colSpan={5}>
+                    <td className="px-6 py-4 text-slate-500" colSpan={4}>
                       Loading learning paths...
                     </td>
                   </tr>
                 ) : filteredPaths.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-4 text-slate-500" colSpan={5}>
+                    <td className="px-6 py-4 text-slate-500" colSpan={4}>
                       No learning paths found.
                     </td>
                   </tr>
@@ -1204,7 +1287,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                           {path.category.replace('_', ' ')}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">{path.total_duration}</td>
                       <td className="px-6 py-4 text-slate-600">{path.status}</td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
@@ -1275,7 +1357,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <Input
                     label="Title"
                     value={editForm.title}
-                    onChange={(event) => setEditForm((prev) => ({ ...prev, title: event.target.value }))}
+                    error={editTitleError ?? undefined}
+                    onChange={(event) => {
+                      setEditForm((prev) => ({ ...prev, title: event.target.value }));
+                      setEditTitleError(null);
+                    }}
                     required
                   />
                   <Select
@@ -1288,14 +1374,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       { value: 'PUBLIC', label: 'Public' },
                       { value: 'RESTRICTED', label: 'Restricted' }
                     ]}
-                  />
-                  <Input
-                    label="Total Duration"
-                    value={editForm.totalDuration}
-                    onChange={(event) =>
-                      setEditForm((prev) => ({ ...prev, totalDuration: event.target.value }))
-                    }
-                    required
                   />
                   <Select
                     label="Status"
