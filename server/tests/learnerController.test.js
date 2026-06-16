@@ -153,6 +153,57 @@ const normalizeDisplayValue = (value) => {
   return normalized;
 };
 
+const parseDurationToHours = (value) => {
+  const normalized = normalizeDisplayValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const compact = normalized.toLowerCase().replace(/,/g, " ");
+  const durationPattern =
+    /([0-9]+(?:\.[0-9]+)?)(?:\s*(days?|d|hours?|hrs?|hr|h))?(?=\s*(?:[0-9]|$|,)|\s*$)/gi;
+  let totalHours = 0;
+  let matched = false;
+
+  for (const match of compact.matchAll(durationPattern)) {
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+    const unit = String(match[2] || "hours").toLowerCase();
+    matched = true;
+    totalHours += unit.startsWith("d") ? amount * 6 : amount;
+  }
+
+  return matched ? totalHours : null;
+};
+
+const formatDurationHours = (hours) => {
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return null;
+  }
+  const rounded = Math.round(hours * 10) / 10;
+  const displayValue = Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(1).replace(/\.0$/, "");
+  return `${displayValue} ${rounded === 1 ? "hour" : "hours"}`;
+};
+
+const normalizeDurationDisplay = (value) => {
+  const hours = parseDurationToHours(value);
+  return hours === null
+    ? normalizeDisplayValue(value)
+    : formatDurationHours(hours);
+};
+
+const sumCourseDurations = (courses) => {
+  const totalHours = courses.reduce((sum, course) => {
+    const hours = parseDurationToHours(course?.duration);
+    return hours === null ? sum : sum + hours;
+  }, 0);
+  return formatDurationHours(totalHours);
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
@@ -384,7 +435,8 @@ describe("GET LEARNER DASHBOARD", () => {
         ],
         rowCount: 2,
       })
-
+      .mockResolvedValueOnce({ rows: [{ id: "cert-1" }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
       .mockResolvedValueOnce({
         rows: [
           {
@@ -403,6 +455,7 @@ describe("GET LEARNER DASHBOARD", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.assignedLearningPaths).toHaveLength(2);
+    expect(res.body.assignedLearningPaths[0]).toHaveProperty("totalDuration");
     expect(res.body.summary.totalLearningPaths).toBe(2);
     expect(res.body.summary.completedLearningPaths).toBe(1);
     expect(res.body.summary.averageProgress).toBe(75);
@@ -1178,6 +1231,7 @@ describe("GET LEARNER PATH COURSES", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.enrollment.id).toBe("en-1");
+    expect(res.body.enrollment).toHaveProperty("totalDuration");
   });
 
   it("should return 404 if enrollment not found", async () => {
@@ -1389,23 +1443,51 @@ describe("GET LEARNER CERTIFICATES", () => {
   });
 
   it("should return certificates for principal with path details", async () => {
-    vi.mocked(query).mockImplementation(async () => ({
-      rows: [
-        {
-          id: "cert-1",
-          scope: "FULL",
-          issued_at: new Date("2026-06-01"),
-          learning_path_id: "lp-1",
-          learning_path_title: "Python Basics",
-          learning_path_description: "Learn Python",
-          learning_path_duration: 20,
-          learner_name: "John Doe",
-          learner_email: "john@test.com",
-          completed_at: null,
-        },
-      ],
-      rowCount: 1,
-    }));
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("certificates") && sql.includes("cert")) {
+        return {
+          rows: [
+            {
+              id: "cert-1",
+              scope: "FULL",
+              issued_at: new Date("2026-06-01"),
+              learning_path_id: "lp-1",
+              learning_path_title: "Python Basics",
+              learning_path_description: "Learn Python",
+              learning_path_duration: 20,
+              enrollment_id: "en-1",
+              learner_name: "John Doe",
+              learner_email: "john@test.com",
+              completed_at: null,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      if (sql && sql.includes("learning_path_stages")) {
+        return {
+          rows: [
+            {
+              course_id: "COURSE-001",
+              course_code: "COURSE-001",
+              title: "Python Intro",
+              stage_title: "Stage 1",
+              stage_order: 1,
+              course_order: 1,
+              course_duration: "2 hours",
+              is_completed: true,
+              delivery_mode: "ONLINE",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
 
     const req = createMockReq();
     const res = createMockRes();
@@ -1417,35 +1499,63 @@ describe("GET LEARNER CERTIFICATES", () => {
   });
 
   it("should order certificates by issued_at DESC", async () => {
-    vi.mocked(query).mockImplementation(async () => ({
-      rows: [
-        {
-          id: "cert-2",
-          scope: "FULL",
-          issued_at: new Date("2026-05-15"),
-          learning_path_id: "lp-2",
-          learning_path_title: "Advanced Python",
-          learning_path_description: "Advanced topics",
-          learning_path_duration: 40,
-          learner_name: "John Doe",
-          learner_email: "john@test.com",
-          completed_at: null,
-        },
-        {
-          id: "cert-1",
-          scope: "FULL",
-          issued_at: new Date("2026-06-01"),
-          learning_path_id: "lp-1",
-          learning_path_title: "Python Basics",
-          learning_path_description: "Learn Python",
-          learning_path_duration: 20,
-          learner_name: "John Doe",
-          learner_email: "john@test.com",
-          completed_at: null,
-        },
-      ],
-      rowCount: 2,
-    }));
+    vi.mocked(query).mockImplementation(async (sql) => {
+      // Main certificates query
+      if (sql && sql.includes("certificates") && sql.includes("cert")) {
+        return {
+          rows: [
+            {
+              id: "cert-2",
+              scope: "FULL",
+              issued_at: new Date("2026-05-15"),
+              learning_path_id: "lp-2",
+              learning_path_title: "Advanced Python",
+              learning_path_description: "Advanced topics",
+              learning_path_duration: 40,
+              enrollment_id: "en-2",
+              learner_name: "John Doe",
+              learner_email: "john@test.com",
+              completed_at: null,
+            },
+            {
+              id: "cert-1",
+              scope: "FULL",
+              issued_at: new Date("2026-06-01"),
+              learning_path_id: "lp-1",
+              learning_path_title: "Python Basics",
+              learning_path_description: "Learn Python",
+              learning_path_duration: 20,
+              enrollment_id: "en-1",
+              learner_name: "John Doe",
+              learner_email: "john@test.com",
+              completed_at: null,
+            },
+          ],
+          rowCount: 2,
+        };
+      }
+      // usesCourseReferenceTable queries (info_schema)
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+      // listLearnerPathCourses query
+      return {
+        rows: [
+          {
+            course_id: "COURSE-001",
+            course_code: "COURSE-001",
+            title: "Python Intro",
+            stage_title: "Stage 1",
+            stage_order: 1,
+            course_order: 1,
+            course_duration: "2 hours",
+            is_completed: true,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 1,
+      };
+    });
 
     const req = createMockReq();
     const res = createMockRes();
@@ -1454,7 +1564,10 @@ describe("GET LEARNER CERTIFICATES", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.certificates).toHaveLength(2);
 
-    const sql = vi.mocked(query).mock.calls[0][0];
+    const allSqls = vi.mocked(query).mock.calls.map((c) => c[0]);
+    const sql = allSqls.find(
+      (s) => s.includes("ORDER BY") && s.includes("certificates"),
+    );
     expect(sql).toContain("ORDER BY");
     expect(sql).toContain("DESC");
   });
@@ -1478,10 +1591,6 @@ describe("DOWNLOAD LEARNER CERTIFICATE", () => {
   it("should retrieve certificate with path details", async () => {
     vi.mocked(query)
 
-      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
-
       .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
 
       .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
@@ -1504,7 +1613,29 @@ describe("DOWNLOAD LEARNER CERTIFICATE", () => {
             certificate_signer_title: null,
             certificate_signature_png: null,
             learner_name: "John Doe",
+            enrollment_id: "en-1",
             completed_at: null,
+          },
+        ],
+        rowCount: 1,
+      })
+
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            course_id: "COURSE-001",
+            course_code: "COURSE-001",
+            title: "Python Intro",
+            stage_title: "Stage 1",
+            stage_order: 1,
+            course_order: 1,
+            course_duration: "2 hours",
+            is_completed: true,
+            delivery_mode: "ONLINE",
           },
         ],
         rowCount: 1,
@@ -1535,10 +1666,16 @@ describe("DOWNLOAD LEARNER CERTIFICATE", () => {
     let callCount = 0;
     vi.mocked(query).mockImplementation(async () => {
       callCount++;
+
       if (callCount <= 4) {
         return { rows: [{ present: false }], rowCount: 1 };
       }
-      if (callCount === 5) {
+
+      if (callCount >= 5 && callCount <= 7) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      if (callCount === 8) {
         return {
           rows: [
             {
@@ -1555,14 +1692,35 @@ describe("DOWNLOAD LEARNER CERTIFICATE", () => {
               certificate_signer_title: null,
               certificate_signature_png: null,
               learner_name: "John Doe",
+              enrollment_id: "en-1",
               completed_at: null,
             },
           ],
           rowCount: 1,
         };
       }
-      return { rows: [], rowCount: 0 };
+      if (callCount >= 9 && callCount <= 11) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      return {
+        rows: [
+          {
+            course_id: "COURSE-001",
+            course_code: "COURSE-001",
+            title: "Python Intro",
+            stage_title: "Stage 1",
+            stage_order: 1,
+            course_order: 1,
+            course_duration: "2 hours",
+            is_completed: true,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 1,
+      };
     });
+
     vi.mocked(renderCertificatePdf).mockRejectedValueOnce({
       code: "PDF_ENGINE_NOT_AVAILABLE",
       message: "PDF library not installed",
@@ -1687,6 +1845,144 @@ describe("normalizeDisplayValue with HR-specific values", () => {
 
   it("should return null for empty arrays", () => {
     expect(normalizeDisplayValue([])).toBeNull();
+  });
+});
+
+describe("parseDurationToHours (private helper)", () => {
+  it("should return null for null/empty values", () => {
+    expect(parseDurationToHours(null)).toBeNull();
+    expect(parseDurationToHours("")).toBeNull();
+    expect(parseDurationToHours("N/A")).toBeNull();
+    expect(parseDurationToHours("-")).toBeNull();
+  });
+
+  it("should parse simple hours", () => {
+    expect(parseDurationToHours("2 hours")).toBe(2);
+    expect(parseDurationToHours("1 hour")).toBe(1);
+    expect(parseDurationToHours("0.5 hours")).toBe(0.5);
+  });
+
+  it("should parse abbreviated hour formats", () => {
+    expect(parseDurationToHours("3 hrs")).toBe(3);
+    expect(parseDurationToHours("4 hr")).toBe(4);
+    expect(parseDurationToHours("5h")).toBe(5);
+  });
+
+  it("should parse days (multiplying by 6)", () => {
+    expect(parseDurationToHours("1 day")).toBe(6);
+    expect(parseDurationToHours("2 days")).toBe(12);
+    expect(parseDurationToHours("3d")).toBe(18);
+    expect(parseDurationToHours("0.5 days")).toBe(3);
+  });
+
+  it("should handle duration without explicit unit (defaults to hours)", () => {
+    expect(parseDurationToHours("10")).toBe(10);
+  });
+
+  it("should handle combined units", () => {
+    expect(parseDurationToHours("1 day 3 hours")).toBe(9);
+    expect(parseDurationToHours("2d 4h")).toBe(16);
+  });
+
+  it("should handle mixed case and extra spaces", () => {
+    expect(parseDurationToHours("  2  DAYS  5  HOURS  ")).toBe(17);
+  });
+
+  it("should handle decimal values", () => {
+    expect(parseDurationToHours("1.5 hours")).toBe(1.5);
+    expect(parseDurationToHours("2.5 days")).toBe(15);
+  });
+
+  it("should return null for unparseable strings", () => {
+    expect(parseDurationToHours("some random text")).toBeNull();
+  });
+});
+
+describe("formatDurationHours (private helper)", () => {
+  it("should return null for non-finite or non-positive values", () => {
+    expect(formatDurationHours(null)).toBeNull();
+    expect(formatDurationHours(undefined)).toBeNull();
+    expect(formatDurationHours(0)).toBeNull();
+    expect(formatDurationHours(-1)).toBeNull();
+    expect(formatDurationHours(Infinity)).toBeNull();
+    expect(formatDurationHours(NaN)).toBeNull();
+  });
+
+  it("should format singular hour correctly", () => {
+    expect(formatDurationHours(1)).toBe("1 hour");
+  });
+
+  it("should format plural hours correctly", () => {
+    expect(formatDurationHours(2)).toBe("2 hours");
+    expect(formatDurationHours(10)).toBe("10 hours");
+  });
+
+  it("should format decimal hours", () => {
+    expect(formatDurationHours(1.5)).toBe("1.5 hours");
+    expect(formatDurationHours(2.333)).toBe("2.3 hours");
+  });
+
+  it("should round to one decimal place", () => {
+    expect(formatDurationHours(2.567)).toBe("2.6 hours");
+    expect(formatDurationHours(2.55)).toBe("2.6 hours");
+  });
+
+  it("should handle whole numbers that result from rounding", () => {
+    expect(formatDurationHours(2.04)).toBe("2 hours");
+  });
+});
+
+describe("normalizeDurationDisplay (private helper)", () => {
+  it("should convert parseable durations to formatted hours", () => {
+    expect(normalizeDurationDisplay("2 hours")).toBe("2 hours");
+    expect(normalizeDurationDisplay("1 day")).toBe("6 hours");
+    expect(normalizeDurationDisplay("2 days")).toBe("12 hours");
+  });
+
+  it("should return normalized display value for unparseable strings", () => {
+    expect(normalizeDurationDisplay("N/A")).toBeNull();
+    expect(normalizeDurationDisplay(null)).toBeNull();
+    expect(normalizeDurationDisplay("-")).toBeNull();
+  });
+
+  it("should pass through already-formatted values", () => {
+    expect(normalizeDurationDisplay("text value")).toBe("text value");
+  });
+});
+
+describe("sumCourseDurations (private helper)", () => {
+  it("should sum simple hour durations", () => {
+    const courses = [{ duration: "2 hours" }, { duration: "3 hours" }];
+    expect(sumCourseDurations(courses)).toBe("5 hours");
+  });
+
+  it("should handle mixed duration formats", () => {
+    const courses = [{ duration: "1 day" }, { duration: "4 hours" }];
+    expect(sumCourseDurations(courses)).toBe("10 hours");
+  });
+
+  it("should handle non-numeric durations (skip them)", () => {
+    const courses = [
+      { duration: "2 hours" },
+      { duration: null },
+      { duration: "N/A" },
+      { duration: "3 hours" },
+    ];
+    expect(sumCourseDurations(courses)).toBe("5 hours");
+  });
+
+  it("should handle empty courses array", () => {
+    expect(sumCourseDurations([])).toBeNull();
+  });
+
+  it("should handle courses with no valid durations", () => {
+    const courses = [{ duration: null }, { duration: "-" }];
+    expect(sumCourseDurations(courses)).toBeNull();
+  });
+
+  it("should handle decimal durations", () => {
+    const courses = [{ duration: "1.5 hours" }, { duration: "2.5 hours" }];
+    expect(sumCourseDurations(courses)).toBe("4 hours");
   });
 });
 
