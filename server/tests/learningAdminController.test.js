@@ -141,6 +141,117 @@ const parseCategory = (value) => {
   return allowed.includes(value) ? value : null;
 };
 
+const validateLearningPathTitle = (value) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return { valid: false, message: "title is required." };
+  }
+  const allowedTitleRegex = /^[A-Za-z\s\-_.,&()'":\/]+$/;
+  if (!allowedTitleRegex.test(normalized)) {
+    return {
+      valid: false,
+      message:
+        "title may only contain letters, spaces, and common punctuation.",
+    };
+  }
+  if (!/[A-Za-z]/.test(normalized)) {
+    return { valid: false, message: "title must include at least one letter." };
+  }
+  return { valid: true };
+};
+
+const parseTotalDurationValue = (value) => {
+  const normalized = String(value || "").trim();
+  if (normalized === "") {
+    return { valid: true };
+  }
+  if (normalized.startsWith("-")) {
+    return { valid: false, message: "totalDuration must not be negative." };
+  }
+  const durationMatch = normalized.match(
+    /^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i,
+  );
+  if (!durationMatch) {
+    return {
+      valid: false,
+      message: "totalDuration format is invalid. Use years or months.",
+    };
+  }
+  const numericValue = Number(durationMatch[1]);
+  const unit = durationMatch[2]?.toLowerCase() ?? "years";
+  if (unit === "month" || unit === "months") {
+    return numericValue <= 24
+      ? { valid: true }
+      : { valid: false, message: "totalDuration must be 2 years or less." };
+  }
+  return numericValue <= 2
+    ? { valid: true }
+    : { valid: false, message: "totalDuration must be 2 years or less." };
+};
+
+const CLASS_DETAIL_REPORT_FIELDS = [
+  "courseCategory",
+  "courseName",
+  "offeringName",
+  "catalogYear",
+  "location",
+  "classTitle",
+  "trainingCenter",
+  "startDate",
+  "endDate",
+  "duration",
+  "enrollmentStartDate",
+  "enrollmentEndDate",
+  "startTime",
+  "endTime",
+  "perHeadCost",
+  "bond",
+  "bondValue",
+  "bondDuration",
+];
+
+const CLASS_DETAIL_REPORT_COLUMNS = {
+  courseCategory: "course_category",
+  courseName: "course_name",
+  offeringName: "offering_name",
+  catalogYear: "catalog_year",
+  location: "location",
+  classTitle: "class_title",
+  trainingCenter: "training_center",
+  startDate: "start_date",
+  endDate: "end_date",
+  duration: "duration",
+  enrollmentStartDate: "enrollment_start_date",
+  enrollmentEndDate: "enrollment_end_date",
+  startTime: "start_time",
+  endTime: "end_time",
+  perHeadCost: "per_head_cost",
+  bond: "bond",
+  bondValue: "bond_value",
+  bondDuration: "bond_duration",
+};
+
+const mapClassDetailReportRow = (row) => {
+  if (!row) return null;
+  return {
+    id: row.id,
+    learningPathId: row.learning_path_id,
+    courseCode: row.course_code,
+    classId: row.class_id,
+    values: CLASS_DETAIL_REPORT_FIELDS.reduce((values, field) => {
+      values[field] = row[CLASS_DETAIL_REPORT_COLUMNS[field]] || "";
+      return values;
+    }, {}),
+    updatedAt: row.updated_at,
+  };
+};
+
+const normalizeClassDetailReportPayload = (payload = {}) =>
+  CLASS_DETAIL_REPORT_FIELDS.reduce((values, field) => {
+    values[field] = String(payload[field] ?? "").trim();
+    return values;
+  }, {});
+
 const normalizeEmployeeDisplayName = (row, employeeNo) => {
   if (row?.employeeName && String(row.employeeName).trim()) {
     return String(row.employeeName).trim();
@@ -244,6 +355,33 @@ const normalizeErpClassRow = (row, index = 0) => {
 const getSearchErrorStatus = (error) =>
   typeof error?.status === "number" ? error.status : 502;
 
+const normalizeErpCourseCatalog = (rows) =>
+  new Map(
+    (Array.isArray(rows) ? rows : [])
+      .map((row, index) => {
+        const code = String(row?.courseCode || "").trim();
+        const title =
+          String(row?.courseName || "").trim() || code || `Course ${index + 1}`;
+        const duration = String(
+          row?.duration ||
+            row?.Duration ||
+            row?.courseDuration ||
+            row?.CourseDuration ||
+            row?.durationHours ||
+            "",
+        ).trim();
+        const deliveryMode = String(
+          row?.deliveryMode ||
+            row?.DeliveryMode ||
+            row?.type ||
+            row?.Type ||
+            "",
+        ).trim();
+        return code ? [code, { code, title, duration, deliveryMode }] : null;
+      })
+      .filter(Boolean),
+  );
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(query).mockReset();
@@ -271,6 +409,8 @@ describe("LEARNING ADMIN CONTROLLER EXPORTS", () => {
     "getClassesByCourseCode",
     "assignClassEnrollments",
     "getLearningSummaryReport",
+    "getClassDetailReport",
+    "upsertClassDetailReport",
   ];
 
   for (const exportName of expectedExports) {
@@ -301,29 +441,32 @@ describe("CREATE LEARNING PATH", () => {
   });
 
   it("should create active learning path with certificate signer fields", async () => {
-    vi.mocked(query).mockResolvedValueOnce({
-      rows: [
-        {
-          id: "lp-new",
-          title: "React Basics",
-          description: "Learn React",
-          category: "PUBLIC",
-          total_duration: 12,
-          status: "ACTIVE",
-          created_at: new Date(),
-          certificate_signer_name: "Manager",
-          certificate_signer_title: "LPMS",
-        },
-      ],
-      rowCount: 1,
-    });
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-new",
+            title: "React Basics",
+            description: "Learn React",
+            category: "PUBLIC",
+            total_duration: null,
+            status: "ACTIVE",
+            created_at: new Date(),
+            certificate_signer_name: "Manager",
+            certificate_signer_title: "LPMS",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 });
 
     const req = createMockReq({
       body: {
         title: "React Basics",
         description: "Learn React",
         category: "PUBLIC",
-        totalDuration: 12,
         certificateSignerName: "Manager",
         certificateSignerTitle: "LPMS",
       },
@@ -360,26 +503,35 @@ describe("CREATE LEARNING PATH", () => {
   });
 
   it("should log create learning path audit on success", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
     vi.mocked(query).mockResolvedValueOnce({
       rows: [{ principal_id: "11111111-1111-4111-8111-111111111111" }],
       rowCount: 1,
     });
-    vi.mocked(query).mockResolvedValueOnce({
-      rows: [
-        {
-          id: "lp-new",
-          title: "Test",
-          description: "Test",
-          category: "PUBLIC",
-          total_duration: 10,
-          status: "ACTIVE",
-          created_at: new Date(),
-          certificate_signer_name: null,
-          certificate_signer_title: null,
-        },
-      ],
-      rowCount: 1,
-    });
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [{ principal_id: "11111111-1111-4111-8111-111111111111" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-new",
+            title: "Test",
+            description: "Test",
+            category: "PUBLIC",
+            total_duration: 10,
+            status: "ACTIVE",
+            created_at: new Date(),
+            certificate_signer_name: null,
+            certificate_signer_title: null,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 });
 
     const req = createMockReq({
       body: { title: "Test", description: "Test", category: "PUBLIC" },
@@ -392,6 +544,46 @@ describe("CREATE LEARNING PATH", () => {
       action: "CREATE_LEARNING_PATH",
       resourceType: "LEARNING_PATH",
     });
+  });
+
+  it("should return 409 when duplicate title with overlapping courses exists", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "existing-lp", title: "React Basics" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            learning_path_id: "existing-lp",
+            course_id: "COURSE-001",
+            course_title: "Python Intro",
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        title: "React Basics",
+        description: "Duplicate",
+        category: "PUBLIC",
+        stages: [
+          {
+            title: "Stage 1",
+            order: 1,
+            courses: [{ courseId: "COURSE-001", order: 1 }],
+          },
+        ],
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.createLearningPath(req, res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error.code).toBe("DUPLICATE_LEARNING_PATH");
   });
 
   it("should return 400 when title is empty", async () => {
@@ -654,33 +846,33 @@ describe("UPDATE LEARNING PATH", () => {
   });
 
   it("should replace stages when stages array is provided", async () => {
-    vi.mocked(query).mockResolvedValueOnce({
-      rows: [
-        {
-          id: "lp-1",
-          title: "Test",
-          description: "Test",
-          category: "PUBLIC",
-          total_duration: 10,
-          status: "ACTIVE",
-          updated_at: new Date(),
-          certificate_signer_name: null,
-          certificate_signer_title: null,
-        },
-      ],
-      rowCount: 1,
-    });
+    vi.mocked(query)
 
-    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
+      .mockResolvedValueOnce({
+        rows: [{ principal_id: "11111111-1111-4111-8111-111111111111" }],
+        rowCount: 1,
+      })
 
-    vi.mocked(query).mockResolvedValueOnce({
-      rows: [{ present: false }],
-      rowCount: 1,
-    });
-    vi.mocked(query).mockResolvedValueOnce({
-      rows: [{ present: false }],
-      rowCount: 1,
-    });
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Test",
+            description: "Test",
+            category: "PUBLIC",
+            total_duration: 10,
+            status: "ACTIVE",
+            updated_at: new Date(),
+            certificate_signer_name: null,
+            certificate_signer_title: null,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
@@ -695,22 +887,27 @@ describe("UPDATE LEARNING PATH", () => {
   });
 
   it("should log update learning path audit", async () => {
-    vi.mocked(query).mockResolvedValueOnce({
-      rows: [
-        {
-          id: "lp-1",
-          title: "Updated",
-          description: "Test",
-          category: "PUBLIC",
-          total_duration: 10,
-          status: "ACTIVE",
-          updated_at: new Date(),
-          certificate_signer_name: null,
-          certificate_signer_title: null,
-        },
-      ],
-      rowCount: 1,
-    });
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ principal_id: "11111111-1111-4111-8111-111111111111" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Updated",
+            description: "Test",
+            category: "PUBLIC",
+            total_duration: 10,
+            status: "ACTIVE",
+            updated_at: new Date(),
+            certificate_signer_name: null,
+            certificate_signer_title: null,
+          },
+        ],
+        rowCount: 1,
+      });
 
     const req = createMockReq({
       params: { id: "lp-1" },
@@ -1920,6 +2117,145 @@ describe("ASSIGN CLASS ENROLLMENTS", () => {
   });
 });
 
+// Get class detail report testing
+
+describe("GET CLASS DETAIL REPORT", () => {
+  it("should return 400 when required query params are missing", async () => {
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await learningAdminController.getClassDetailReport(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should create table if not exists and fetch report", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({
+      query: {
+        learningPathId: "lp-1",
+        courseCode: "COURSE-001",
+        classId: "CLASS-001",
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.getClassDetailReport(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.report).toBeNull();
+  });
+
+  it("should return existing report data", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "rpt-1",
+            learning_path_id: "lp-1",
+            course_code: "COURSE-001",
+            class_id: "CLASS-001",
+            course_category: "Technical",
+            course_name: "Python Training",
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      query: {
+        learningPathId: "lp-1",
+        courseCode: "COURSE-001",
+        classId: "CLASS-001",
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.getClassDetailReport(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.report.id).toBe("rpt-1");
+    expect(res.body.report.values.courseCategory).toBe("Technical");
+  });
+});
+
+// Upsert class detail report testing
+
+describe("UPSERT CLASS DETAIL REPORT", () => {
+  it("should return 400 when required body params are missing", async () => {
+    const req = createMockReq({
+      body: { courseCode: "COURSE-001", classId: "CLASS-001" },
+    });
+    const res = createMockRes();
+    await learningAdminController.upsertClassDetailReport(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should create or update a class detail report", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "rpt-1",
+            learning_path_id: "lp-1",
+            course_code: "COURSE-001",
+            class_id: "CLASS-001",
+            course_category: "Technical",
+            course_name: "Python",
+            offering_name: "",
+            catalog_year: "",
+            location: "",
+            class_title: "",
+            training_center: "",
+            start_date: "",
+            end_date: "",
+            duration: "",
+            enrollment_start_date: "",
+            enrollment_end_date: "",
+            start_time: "",
+            end_time: "",
+            per_head_cost: "",
+            bond: "",
+            bond_value: "",
+            bond_duration: "",
+            created_by: "11111111-1111-4111-8111-111111111111",
+            updated_by: "11111111-1111-4111-8111-111111111111",
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        learningPathId: "lp-1",
+        courseCode: "COURSE-001",
+        classId: "CLASS-001",
+        values: {
+          courseCategory: "Technical",
+          courseName: "Python",
+        },
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.upsertClassDetailReport(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.report.id).toBe("rpt-1");
+    expect(res.body.report.values.courseCategory).toBe("Technical");
+  });
+});
+
 // Get learning summary report testing
 
 describe("GET LEARNING SUMMARY REPORT", () => {
@@ -2127,6 +2463,204 @@ describe("getSearchErrorStatus (private helper)", () => {
 
   it("should default to 502", () => {
     expect(getSearchErrorStatus(new Error("test"))).toBe(502);
+  });
+});
+
+describe("validateLearningPathTitle (private helper)", () => {
+  it("should reject empty values", () => {
+    const result = validateLearningPathTitle("");
+    expect(result.valid).toBe(false);
+    expect(result.message).toBe("title is required.");
+  });
+
+  it("should reject values with no letters", () => {
+    const result = validateLearningPathTitle("-----");
+    expect(result.valid).toBe(false);
+    expect(result.message).toBe("title must include at least one letter.");
+  });
+
+  it("should reject titles with special characters", () => {
+    const result = validateLearningPathTitle("Hello @World");
+    expect(result.valid).toBe(false);
+  });
+
+  it("should accept valid titles with common punctuation", () => {
+    expect(validateLearningPathTitle("Python Basics").valid).toBe(true);
+    expect(validateLearningPathTitle("Leadership & Management").valid).toBe(
+      true,
+    );
+    expect(validateLearningPathTitle("Intro to AI/ML").valid).toBe(true);
+  });
+});
+
+describe("parseTotalDurationValue (private helper)", () => {
+  it("should accept empty value", () => {
+    expect(parseTotalDurationValue("").valid).toBe(true);
+    expect(parseTotalDurationValue(null).valid).toBe(true);
+  });
+
+  it("should reject negative values", () => {
+    const result = parseTotalDurationValue("-1");
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain("negative");
+  });
+
+  it("should accept valid years", () => {
+    expect(parseTotalDurationValue("1 year").valid).toBe(true);
+    expect(parseTotalDurationValue("2 years").valid).toBe(true);
+    expect(parseTotalDurationValue("1 yr").valid).toBe(true);
+    expect(parseTotalDurationValue("2 yrs").valid).toBe(true);
+  });
+
+  it("should reject years over 2", () => {
+    const result = parseTotalDurationValue("3 years");
+    expect(result.valid).toBe(false);
+  });
+
+  it("should accept valid months", () => {
+    expect(parseTotalDurationValue("6 months").valid).toBe(true);
+    expect(parseTotalDurationValue("24 months").valid).toBe(true);
+  });
+
+  it("should reject months over 24", () => {
+    const result = parseTotalDurationValue("36 months");
+    expect(result.valid).toBe(false);
+  });
+
+  it("should reject invalid format", () => {
+    const result = parseTotalDurationValue("abc");
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain("format is invalid");
+  });
+
+  it("should default to years when no unit", () => {
+    expect(parseTotalDurationValue("1").valid).toBe(true);
+    expect(parseTotalDurationValue("2").valid).toBe(true);
+    expect(parseTotalDurationValue("3").valid).toBe(false);
+  });
+});
+
+describe("mapClassDetailReportRow (private helper)", () => {
+  it("should return null for null/undefined row", () => {
+    expect(mapClassDetailReportRow(null)).toBeNull();
+    expect(mapClassDetailReportRow(undefined)).toBeNull();
+  });
+
+  it("should map row fields to report object", () => {
+    const row = {
+      id: "rpt-1",
+      learning_path_id: "lp-1",
+      course_code: "COURSE-001",
+      class_id: "CLASS-001",
+      course_category: "Technical",
+      course_name: "Python",
+      location: "Colombo",
+      duration: "2 days",
+      updated_at: new Date(),
+    };
+    const result = mapClassDetailReportRow(row);
+    expect(result.id).toBe("rpt-1");
+    expect(result.learningPathId).toBe("lp-1");
+    expect(result.values.courseCategory).toBe("Technical");
+    expect(result.values.courseName).toBe("Python");
+    expect(result.values.location).toBe("Colombo");
+  });
+
+  it("should default missing values to empty string", () => {
+    const row = {
+      id: "rpt-1",
+      learning_path_id: "lp-1",
+      course_code: "COURSE-001",
+      class_id: "CLASS-001",
+      updated_at: new Date(),
+    };
+    const result = mapClassDetailReportRow(row);
+    expect(result.values.courseCategory).toBe("");
+    expect(result.values.courseName).toBe("");
+  });
+});
+
+describe("normalizeClassDetailReportPayload (private helper)", () => {
+  it("should normalize all fields from payload", () => {
+    const payload = {
+      courseCategory: "  Technical  ",
+      courseName: "Python",
+      location: "Colombo",
+    };
+    const result = normalizeClassDetailReportPayload(payload);
+    expect(result.courseCategory).toBe("Technical");
+    expect(result.courseName).toBe("Python");
+    expect(result.location).toBe("Colombo");
+    expect(Object.keys(result)).toHaveLength(18);
+    expect(result.bondDuration).toBe("");
+  });
+
+  it("should handle empty payload", () => {
+    const result = normalizeClassDetailReportPayload();
+    expect(Object.keys(result)).toHaveLength(18);
+    expect(result.courseName).toBe("");
+  });
+});
+
+describe("normalizeErpCourseCatalog (private helper)", () => {
+  it("should create a Map from ERP course rows", () => {
+    const rows = [
+      {
+        courseCode: "C-001",
+        courseName: "Python",
+        duration: "2 hours",
+        deliveryMode: "ONLINE",
+      },
+      {
+        courseCode: "C-002",
+        courseName: "React",
+        duration: "3 days",
+        deliveryMode: "PHYSICAL",
+      },
+    ];
+    const catalog = normalizeErpCourseCatalog(rows);
+    expect(catalog.size).toBe(2);
+    expect(catalog.get("C-001").title).toBe("Python");
+    expect(catalog.get("C-001").duration).toBe("2 hours");
+    expect(catalog.get("C-001").deliveryMode).toBe("ONLINE");
+    expect(catalog.get("C-002").title).toBe("React");
+  });
+
+  it("should handle empty rows array", () => {
+    const catalog = normalizeErpCourseCatalog([]);
+    expect(catalog.size).toBe(0);
+  });
+
+  it("should skip rows without courseCode", () => {
+    const rows = [
+      { courseName: "No Code" },
+      { courseCode: "C-001", courseName: "Valid" },
+    ];
+    const catalog = normalizeErpCourseCatalog(rows);
+    expect(catalog.size).toBe(1);
+    expect(catalog.get("C-001").title).toBe("Valid");
+  });
+
+  it("should handle case-variant duration keys", () => {
+    const rows = [
+      { courseCode: "C-001", courseName: "Python", Duration: "4 hours" },
+    ];
+    const catalog = normalizeErpCourseCatalog(rows);
+    expect(catalog.get("C-001")).toBeDefined();
+  });
+});
+
+// constants testing
+describe("class_detail_report constants", () => {
+  it("should have 18 fields each", () => {
+    expect(CLASS_DETAIL_REPORT_FIELDS).toHaveLength(18);
+    expect(Object.keys(CLASS_DETAIL_REPORT_COLUMNS)).toHaveLength(18);
+  });
+
+  it("should have matching keys between fields and columns", () => {
+    for (const field of CLASS_DETAIL_REPORT_FIELDS) {
+      expect(CLASS_DETAIL_REPORT_COLUMNS[field]).toBeDefined();
+    }
   });
 });
 
