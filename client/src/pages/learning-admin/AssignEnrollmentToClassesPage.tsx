@@ -303,6 +303,7 @@ export function AssignEnrollmentToClassesPage() {
   const [classes, setClasses] = useState<ClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<string[]>([]);
+  const [assignmentMode, setAssignmentMode] = useState<'assign' | 'reassign'>('assign');
   const [learnerSearch, setLearnerSearch] = useState('');
   const [batchSize, setBatchSize] = useState('50');
   const [pathsLoading, setPathsLoading] = useState(true);
@@ -334,19 +335,31 @@ export function AssignEnrollmentToClassesPage() {
     [learners, selectedCourseCode]
   );
 
-  const availableLearners = useMemo(() => {
+  const unassignedLearners = useMemo(() => {
     if (!selectedCourseCode) {
       return learners;
     }
     return learners.filter((learner) => !getAssignmentForCourse(learner, selectedCourseCode));
   }, [learners, selectedCourseCode]);
 
+  const reassignableLearners = useMemo(() => {
+    if (!selectedCourseCode) {
+      return [];
+    }
+    return learners.filter((learner) => {
+      const assignment = getAssignmentForCourse(learner, selectedCourseCode);
+      return assignment && assignment.classId !== selectedClassId;
+    });
+  }, [learners, selectedClassId, selectedCourseCode]);
+
+  const selectableLearners = assignmentMode === 'reassign' ? reassignableLearners : unassignedLearners;
+
   const filteredLearners = useMemo(() => {
     const search = learnerSearch.trim().toLowerCase();
     if (!search) {
-      return availableLearners;
+      return selectableLearners;
     }
-    return availableLearners.filter((learner) =>
+    return selectableLearners.filter((learner) =>
       [
         learner.name,
         learner.email,
@@ -358,7 +371,18 @@ export function AssignEnrollmentToClassesPage() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(search))
     );
-  }, [availableLearners, learnerSearch, selectedCourseCode]);
+  }, [learnerSearch, selectableLearners, selectedCourseCode]);
+
+  const selectedLearnersForCourse = useMemo(
+    () => learners.filter((learner) => selectedEnrollmentIds.includes(learner.enrollmentId)),
+    [learners, selectedEnrollmentIds]
+  );
+
+  const selectedReassignmentCount = useMemo(
+    () =>
+      selectedLearnersForCourse.filter((learner) => Boolean(getAssignmentForCourse(learner, selectedCourseCode))).length,
+    [selectedCourseCode, selectedLearnersForCourse]
+  );
 
   const reportRows = useMemo(() => {
     if (!selectedPath || courses.length === 0 || learners.length === 0) {
@@ -585,7 +609,7 @@ export function AssignEnrollmentToClassesPage() {
 
   const selectNextBatch = () => {
     const count = Math.max(1, Number(batchSize) || 50);
-    const nextLearners = availableLearners
+    const nextLearners = selectableLearners
       .slice(0, count)
       .map((learner) => learner.enrollmentId);
     setSelectedEnrollmentIds(nextLearners);
@@ -614,10 +638,14 @@ export function AssignEnrollmentToClassesPage() {
         class: selectedClass,
         enrollmentIds: selectedEnrollmentIds
       });
-      showToast(`${response.assigned.length} learner(s) assigned to ${selectedClass.title}.`, 'success');
+      const actionLabel = assignmentMode === 'reassign' ? 'reassigned' : 'assigned';
+      showToast(`${response.assigned.length} learner(s) ${actionLabel} to ${selectedClass.title}.`, 'success');
       await loadPathOptions();
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to assign learners to class.', 'error');
+      showToast(
+        error instanceof Error ? error.message : `Failed to ${assignmentMode === 'reassign' ? 'reassign' : 'assign'} learners to class.`,
+        'error'
+      );
     } finally {
       setAssigning(false);
     }
@@ -850,6 +878,7 @@ export function AssignEnrollmentToClassesPage() {
               setSelectedCourseCode(event.target.value);
               setSelectedClassId('');
               setSelectedEnrollmentIds([]);
+              setAssignmentMode('assign');
             }}
           />
         </div>
@@ -913,7 +942,10 @@ export function AssignEnrollmentToClassesPage() {
                 <button
                   key={`${classItem.id}-${classItem.code}`}
                   type="button"
-                  onClick={() => setSelectedClassId(classItem.id)}
+                  onClick={() => {
+                    setSelectedClassId(classItem.id);
+                    setSelectedEnrollmentIds([]);
+                  }}
                   className={`rounded-lg border p-4 text-left transition ${
                     active
                       ? 'border-primary-500 bg-primary-50 shadow-sm'
@@ -941,18 +973,53 @@ export function AssignEnrollmentToClassesPage() {
       </Card>
 
       <Card
-        title="Learners in Selected Learning Path"
-        description="Select unassigned learners to allocate to the selected course class."
+        title={assignmentMode === 'reassign' ? 'Reassign Learners to Replacement Class' : 'Learners in Selected Learning Path'}
+        description={
+          assignmentMode === 'reassign'
+            ? 'Move learners who missed an earlier session into the selected course class.'
+            : 'Select unassigned learners to allocate to the selected course class.'
+        }
         action={
           <Button
             onClick={handleAssign}
             isLoading={assigning}
             disabled={!selectedClass || selectedEnrollmentIds.length === 0}
           >
-            Assign to Class
+            {assignmentMode === 'reassign' ? 'Reassign to Class' : 'Assign to Class'}
           </Button>
         }
       >
+        <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:w-fit">
+          <button
+            type="button"
+            onClick={() => {
+              setAssignmentMode('assign');
+              setSelectedEnrollmentIds([]);
+            }}
+            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+              assignmentMode === 'assign'
+                ? 'bg-white text-primary-700 shadow-sm'
+                : 'text-secondary-700 hover:bg-white/70'
+            }`}
+          >
+            Assign new
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAssignmentMode('reassign');
+              setSelectedEnrollmentIds([]);
+            }}
+            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+              assignmentMode === 'reassign'
+                ? 'bg-white text-primary-700 shadow-sm'
+                : 'text-secondary-700 hover:bg-white/70'
+            }`}
+          >
+            Reassign missed session
+          </button>
+        </div>
+
         <div className="mb-4 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
           <Input
             value={learnerSearch}
@@ -967,7 +1034,7 @@ export function AssignEnrollmentToClassesPage() {
             onChange={(event) => setBatchSize(event.target.value)}
             aria-label="Batch size"
           />
-          <Button variant="outline" onClick={selectNextBatch} disabled={!selectedCourseCode || availableLearners.length === 0}>
+          <Button variant="outline" onClick={selectNextBatch} disabled={!selectedCourseCode || selectableLearners.length === 0}>
             Select
           </Button>
           <Button variant="outline" onClick={selectVisibleLearners} disabled={filteredLearners.length === 0}>
@@ -980,8 +1047,12 @@ export function AssignEnrollmentToClassesPage() {
 
         <div className="mb-3 flex items-center gap-2 text-sm text-secondary-600">
           <Search className="h-4 w-4" />
-          {selectedEnrollmentIds.length} selected from {filteredLearners.length} visible unassigned learners
-          {selectedCourseCode ? ` (${assignedForCourse} already assigned)` : ''}
+          {selectedEnrollmentIds.length} selected from {filteredLearners.length} visible{' '}
+          {assignmentMode === 'reassign' ? 'reassignable' : 'unassigned'} learners
+          {selectedCourseCode
+            ? ` (${assignedForCourse} already assigned, ${unassignedLearners.length} unassigned)`
+            : ''}
+          {selectedReassignmentCount > 0 ? ` - ${selectedReassignmentCount} will move from another class` : ''}
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-secondary-200">
@@ -1000,7 +1071,9 @@ export function AssignEnrollmentToClassesPage() {
             </div>
           ) : filteredLearners.length === 0 ? (
             <p className="p-4 text-sm text-secondary-500">
-              No unassigned learners found for this course. Check the report below to view learners already assigned to classes.
+              {assignmentMode === 'reassign'
+                ? 'No learners are assigned to another class for this course. Choose a different replacement class or course.'
+                : 'No unassigned learners found for this course. Use reassignment if a learner missed a previous session.'}
             </p>
           ) : (
             <div className="max-h-[32rem] min-w-[760px] divide-y divide-secondary-100 overflow-auto">
