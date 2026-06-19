@@ -367,6 +367,17 @@ describe("GET TEAM PROGRESS", () => {
     expect(member.avg_progress).toBe("0.00");
     expect(member.completed_count).toBe(0);
   });
+
+  it("should return empty progress array when team has no members", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ user: { id: "no-team-supervisor" } });
+    const res = createMockRes();
+    await supervisorController.getTeamProgress(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.progress).toEqual([]);
+  });
 });
 
 // getPendingApprovals testing
@@ -538,6 +549,17 @@ describe("GET PENDING APPROVALS", () => {
 
     const sql = vi.mocked(query).mock.calls[0][0];
     expect(sql).toContain("ORDER BY en.enrolled_at DESC");
+  });
+
+  it("should return empty approvals array when no pending items exist", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await supervisorController.getPendingApprovals(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.approvals).toEqual([]);
   });
 });
 
@@ -953,6 +975,91 @@ describe("ENROLL TEAM MEMBERS", () => {
     expect(sql).toContain("ON CONFLICT");
     expect(sql).toContain("DO NOTHING");
   });
+
+  it("should return 404 when learningPathId is missing (no pre-validation)", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({
+      body: { employeePrincipalIds: ["employee-1"] },
+    });
+    const res = createMockRes();
+    await supervisorController.enrollTeamMembers(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("should return 400 when employeePrincipalIds is not an array", async () => {
+    const req = createMockReq({
+      body: { learningPathId: "lp-1", employeePrincipalIds: "not-an-array" },
+    });
+    const res = createMockRes();
+    await supervisorController.enrollTeamMembers(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should skip all non-team members and return empty enrollments array", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "lp-1", title: "Python Basics", category: "PUBLIC" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            name: "Alice",
+            email: "alice@test.com",
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: { learningPathId: "lp-1", employeePrincipalIds: ["employee-3"] },
+    });
+    const res = createMockRes();
+    await supervisorController.enrollTeamMembers(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.enrollments).toEqual([]);
+  });
+
+  it("should not create assignment report when no learners were inserted", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "lp-1", title: "Python Basics", category: "PUBLIC" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            name: "Alice",
+            email: "alice@test.com",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({
+      body: { learningPathId: "lp-1", employeePrincipalIds: ["employee-1"] },
+    });
+    const res = createMockRes();
+    await supervisorController.enrollTeamMembers(req, res);
+
+    expect(vi.mocked(createAssignmentReport)).not.toHaveBeenCalled();
+    expect(res.body.enrollments).toEqual([]);
+  });
 });
 
 // approveEnrollment testing
@@ -1063,6 +1170,67 @@ describe("APPROVE ENROLLMENT", () => {
     expect(res.body.enrollment.approval_status).toBe("APPROVED");
     expect(res.body.enrollment.approval_updated_at).toBeDefined();
   });
+
+  it("should be idempotent — approving already approved enrollment returns success", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "en-1",
+          approval_status: "APPROVED",
+          approval_updated_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ params: { id: "en-1" } });
+    const res = createMockRes();
+    await supervisorController.approveEnrollment(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.enrollment.approval_status).toBe("APPROVED");
+  });
+
+  it("should verify supervisor_id parameter matches authenticated user", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "en-1",
+          approval_status: "APPROVED",
+          approval_updated_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ params: { id: "en-1" } });
+    const res = createMockRes();
+    await supervisorController.approveEnrollment(req, res);
+
+    const params = vi.mocked(query).mock.calls[0][1];
+    expect(params[0]).toBe("en-1");
+    expect(params[1]).toBe("supervisor-1");
+  });
+
+  it("should update approval_updated_at via SQL (NOW())", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "en-1",
+          approval_status: "APPROVED",
+          approval_updated_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ params: { id: "en-1" } });
+    const res = createMockRes();
+    await supervisorController.approveEnrollment(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("approval_updated_at = NOW()");
+  });
 });
 
 // rejectEnrollment testing
@@ -1171,5 +1339,57 @@ describe("REJECT ENROLLMENT", () => {
     expect(res.body.enrollment.id).toBe("en-1");
     expect(res.body.enrollment.approval_status).toBe("REJECTED");
     expect(res.body.enrollment.approval_updated_at).toBeDefined();
+  });
+
+  it("should be idempotent — rejecting already rejected enrollment returns success", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "en-1",
+          approval_status: "REJECTED",
+          approval_updated_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ params: { id: "en-1" } });
+    const res = createMockRes();
+    await supervisorController.rejectEnrollment(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.enrollment.approval_status).toBe("REJECTED");
+  });
+
+  it("should update approval_updated_by to supervisor's id", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "en-1",
+          approval_status: "REJECTED",
+          approval_updated_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ params: { id: "en-1" } });
+    const res = createMockRes();
+    await supervisorController.rejectEnrollment(req, res);
+
+    const params = vi.mocked(query).mock.calls[0][1];
+    expect(params[1]).toBe("supervisor-1");
+  });
+});
+
+// Security Gaps
+
+describe("SUPERVISOR AUTHORIZATION GAPS", () => {
+  it("GAP: getTeam does not verify req.user.role is SUPERVISOR", () => {
+    expect(typeof supervisorController.getTeam).toBe("function");
+  });
+
+  it("GAP: enrollTeamMembers does not check if learning path is PUBLIC", () => {
+    expect(typeof supervisorController.enrollTeamMembers).toBe("function");
   });
 });
