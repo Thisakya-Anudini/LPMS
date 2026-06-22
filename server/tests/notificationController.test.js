@@ -565,7 +565,6 @@ describe("MARK ALL NOTIFICATIONS AS READ", () => {
   it("should not count already read notifications", async () => {
     vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
 
-    // Only 2 unread notifications match WHERE is_read = FALSE
     vi.mocked(query).mockResolvedValueOnce({
       rows: [],
       rowCount: 2,

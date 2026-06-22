@@ -608,7 +608,6 @@ describe("IMPORT ERP EMPLOYEES", () => {
     const res = createMockRes();
     await importErpEmployees(req, res);
 
-    // "  ".trim() = "" → treated as missing employeeNumber → skipped
     expect(res.body.importedCount).toBe(0);
     expect(res.body.skippedCount).toBe(1);
     expect(res.body.skipped[0].reason).toBe("Missing employeeNumber");

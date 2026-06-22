@@ -1500,7 +1500,6 @@ describe("GET LEARNER CERTIFICATES", () => {
 
   it("should order certificates by issued_at DESC", async () => {
     vi.mocked(query).mockImplementation(async (sql) => {
-      // Main certificates query
       if (sql && sql.includes("certificates") && sql.includes("cert")) {
         return {
           rows: [
@@ -1534,11 +1533,11 @@ describe("GET LEARNER CERTIFICATES", () => {
           rowCount: 2,
         };
       }
-      // usesCourseReferenceTable queries (info_schema)
+      
       if (sql && sql.includes("information_schema")) {
         return { rows: [{ present: true }], rowCount: 1 };
       }
-      // listLearnerPathCourses query
+      
       return {
         rows: [
           {
