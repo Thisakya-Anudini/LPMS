@@ -662,7 +662,6 @@ export function AssignEnrollmentToClassesPage() {
         (learner) => `
           <tr>
             <td>${escapeHtml(learner.id)}</td>
-            <td>${escapeHtml(learner.name)}</td>
           </tr>`
       )
       .join('');
@@ -695,7 +694,6 @@ export function AssignEnrollmentToClassesPage() {
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Name</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -962,7 +960,7 @@ export function AssignEnrollmentToClassesPage() {
                   <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-secondary-600 sm:grid-cols-2">
                     <span>Start Date: {classItem.startDate || '-'}</span>
                     <span>End Date: {classItem.endDate || '-'}</span>
-                    <span>Venue: {classItem.venue || '-'}</span>
+                    <span>Mode: {classItem.venue || '-'}</span>
                     <span>Capacity: {classItem.capacity || '-'}</span>
                   </div>
                 </button>
