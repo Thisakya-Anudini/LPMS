@@ -661,7 +661,7 @@ export function AssignEnrollmentToClassesPage() {
       .map(
         (learner) => `
           <tr>
-            <td>${escapeHtml(learner.id)}</td>
+            <td style="mso-number-format:'\\@';">${escapeHtml(learner.id)}</td>
           </tr>`
       )
       .join('');
