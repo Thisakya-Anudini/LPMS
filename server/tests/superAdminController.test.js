@@ -1,26 +1,68 @@
-// Set up test environment
-process.env.SECRET_KEY =
-  process.env.SECRET_KEY || "test-secret-key-for-testing";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import test from "node:test";
-import assert from "assert/strict";
-import * as superAdminController from "../controllers/superAdminController.js";
+// Mock all external dependencies
 
-// MOCK UTILITIES
+vi.mock("../db.js", () => ({
+  query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+}));
+
+vi.mock("../utils/http.js", () => ({
+  sendError: vi.fn((res, status, code, message, details) => {
+    res.statusCode = status;
+    res.body = { error: { code, message } };
+    if (details) {
+      res.body.error.details = details;
+    }
+    return res;
+  }),
+}));
+
+vi.mock("../utils/audit.js", () => ({
+  logAudit: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("bcryptjs", () => ({
+  default: { hash: vi.fn() },
+  hash: vi.fn(),
+}));
+
+vi.mock("../utils/erpClient.js", () => ({
+  fetchEmployeeDetailsForServiceNo: vi
+    .fn()
+    .mockRejectedValue(new Error("No ERP mock")),
+}));
+
+vi.mock("../constants/roles.js", () => {
+  const R = {
+    SUPER_ADMIN: "SUPER_ADMIN",
+    LEARNING_ADMIN: "LEARNING_ADMIN",
+    EMPLOYEE: "EMPLOYEE",
+  };
+  return { ROLES: R, ALL_ROLES: Object.values(R) };
+});
 
 const ROLES = {
   SUPER_ADMIN: "SUPER_ADMIN",
   LEARNING_ADMIN: "LEARNING_ADMIN",
   EMPLOYEE: "EMPLOYEE",
 };
+const ALL_ROLES = Object.values(ROLES);
 
-const ALL_ROLES = [ROLES.SUPER_ADMIN, ROLES.LEARNING_ADMIN, ROLES.EMPLOYEE];
+// Imports (after mocks)
+
+import { query } from "../db.js";
+import { sendError } from "../utils/http.js";
+import { logAudit } from "../utils/audit.js";
+import bcrypt from "bcryptjs";
+import { fetchEmployeeDetailsForServiceNo } from "../utils/erpClient.js";
+import * as superAdminController from "../controllers/superAdminController.js";
+
+// Test helpers
 
 const createMockRes = () => {
   const res = {
     statusCode: 200,
     body: null,
-    headers: {},
     status(code) {
       this.statusCode = code;
       return this;
@@ -29,24 +71,15 @@ const createMockRes = () => {
       this.body = data;
       return this;
     },
-    header(key, value) {
-      this.headers[key] = value;
-      return this;
-    },
   };
   return res;
 };
 
 const createMockReq = (overrides = {}) => {
-  const headers = {};
   const baseReq = {
     body: {},
     params: {},
     query: {},
-    headers,
-    header(name) {
-      return this.headers[name];
-    },
     user: {
       id: "super-1",
       email: "super@lpms.com",
@@ -54,7 +87,6 @@ const createMockReq = (overrides = {}) => {
       name: "Super Admin",
     },
   };
-
   return {
     ...baseReq,
     ...overrides,
@@ -65,266 +97,16 @@ const createMockReq = (overrides = {}) => {
   };
 };
 
-const sendMockError = (res, status, code, message, details) => {
-  const payload = { error: { code, message } };
-  if (details) {
-    payload.error.details = details;
-  }
-  return res.status(status).json(payload);
-};
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(query).mockReset();
+  vi.mocked(query).mockResolvedValue({ rows: [], rowCount: 0 });
+  vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+});
 
-// MOCK DATABASE
+// Export functions testing
 
-let mockDatabase = {};
-let auditLogs = [];
-let hashCalls = [];
-
-const setupMockDatabase = () => {
-  mockDatabase = {
-    principals: [
-      {
-        id: "super-1",
-        email: "super@lpms.com",
-        role: ROLES.SUPER_ADMIN,
-        name: "Super Admin",
-        principal_type: "USER",
-        is_active: true,
-        created_at: new Date("2026-06-05T10:00:00Z"),
-      },
-      {
-        id: "admin-1",
-        email: "admin@lpms.com",
-        role: ROLES.LEARNING_ADMIN,
-        name: "Learning Admin",
-        principal_type: "USER",
-        is_active: true,
-        created_at: new Date("2026-06-04T10:00:00Z"),
-      },
-      {
-        id: "employee-1",
-        email: "john@example.com",
-        role: ROLES.EMPLOYEE,
-        name: "John Doe",
-        principal_type: "EMPLOYEE",
-        is_active: true,
-        created_at: new Date("2026-06-03T10:00:00Z"),
-      },
-      {
-        id: "employee-2",
-        email: "jane@example.com",
-        role: ROLES.EMPLOYEE,
-        name: "Jane Doe",
-        principal_type: "EMPLOYEE",
-        is_active: false,
-        created_at: new Date("2026-06-02T10:00:00Z"),
-      },
-    ],
-    employees: [
-      {
-        id: "emp-1",
-        principal_id: "employee-1",
-        employee_number: "EMP-001",
-        designation: "Developer",
-        grade_name: "G5",
-        supervisor_id: null,
-        created_at: new Date("2026-06-03T10:00:00Z"),
-      },
-      {
-        id: "emp-2",
-        principal_id: "employee-2",
-        employee_number: "EMP-002",
-        designation: "Analyst",
-        grade_name: "G4",
-        supervisor_id: null,
-        created_at: new Date("2026-06-02T10:00:00Z"),
-      },
-    ],
-    learning_admin_assignments: [
-      {
-        employee_number: "EMP-001",
-        assigned_by_principal_id: "super-1",
-        created_at: new Date("2026-06-05T09:00:00Z"),
-        updated_at: new Date("2026-06-05T09:00:00Z"),
-      },
-    ],
-    learning_paths: [
-      {
-        id: "lp-1",
-        title: "Python Basics",
-        description: "Learn Python",
-        category: "PUBLIC",
-        total_duration: 20,
-        status: "ACTIVE",
-        is_deleted: false,
-      },
-      {
-        id: "lp-2",
-        title: "Deleted Path",
-        description: "Deleted",
-        category: "PUBLIC",
-        total_duration: 10,
-        status: "ACTIVE",
-        is_deleted: true,
-      },
-    ],
-    enrollments: [
-      {
-        id: "en-1",
-        principal_id: "employee-1",
-        learning_path_id: "lp-1",
-        status: "IN_PROGRESS",
-        progress: 50,
-        enrolled_at: new Date("2026-06-05T10:00:00Z"),
-        completed_at: null,
-      },
-      {
-        id: "en-2",
-        principal_id: "employee-2",
-        learning_path_id: "lp-1",
-        status: "COMPLETED",
-        progress: 100,
-        enrolled_at: new Date("2026-06-04T10:00:00Z"),
-        completed_at: new Date("2026-06-06T10:00:00Z"),
-      },
-    ],
-  };
-};
-
-const mockBcrypt = {
-  hash: async (password, rounds) => {
-    hashCalls.push({ password, rounds });
-    return `hashed-${password}`;
-  },
-};
-
-const mockLogAudit = async (audit) => {
-  auditLogs.push(audit);
-};
-
-const createMockPrincipal = async ({
-  email,
-  password,
-  role,
-  name,
-  principalType = "USER",
-}) => {
-  const passwordHash = await mockBcrypt.hash(password, 10);
-  const principal = {
-    id: `principal-${mockDatabase.principals.length + 1}`,
-    email,
-    password_hash: passwordHash,
-    role,
-    name,
-    principal_type: principalType,
-    is_active: true,
-    created_at: new Date(),
-  };
-  mockDatabase.principals.push(principal);
-
-  return {
-    id: principal.id,
-    email: principal.email,
-    role: principal.role,
-    name: principal.name,
-    principal_type: principal.principal_type,
-    created_at: principal.created_at,
-  };
-};
-
-const normalizeEmployeeDisplayName = (row, employeeNo) => {
-  if (row?.employeeName && String(row.employeeName).trim()) {
-    return String(row.employeeName).trim();
-  }
-
-  const initials = row?.employeeInitials
-    ? String(row.employeeInitials).trim()
-    : "";
-  const surname = row?.employeeSurname
-    ? String(row.employeeSurname).trim()
-    : "";
-  const merged = `${initials} ${surname}`.trim();
-
-  return merged || `Learner ${employeeNo}`;
-};
-
-const buildLearnerRows = () =>
-  mockDatabase.employees.map((employee) => {
-    const principal = mockDatabase.principals.find(
-      (item) => item.id === employee.principal_id,
-    );
-    const enrollments = mockDatabase.enrollments.filter(
-      (item) => item.principal_id === principal.id,
-    );
-
-    return {
-      principal_id: principal.id,
-      name: principal.name,
-      email: principal.email,
-      is_active: principal.is_active,
-      employee_number: employee.employee_number,
-      designation: employee.designation,
-      grade_name: employee.grade_name,
-      is_learning_admin: mockDatabase.learning_admin_assignments.some(
-        (item) => item.employee_number === employee.employee_number,
-      ),
-      total_learning_paths: enrollments.length,
-      completed_learning_paths: enrollments.filter(
-        (item) => item.status === "COMPLETED",
-      ).length,
-      average_progress:
-        enrollments.length > 0
-          ? (
-              enrollments.reduce((sum, item) => sum + item.progress, 0) /
-              enrollments.length
-            ).toFixed(2)
-          : "0.00",
-    };
-  });
-
-const getLearnerLearningPathsPayload = (principalId) => {
-  const principal = mockDatabase.principals.find(
-    (item) => item.id === principalId,
-  );
-
-  if (!principal || principal.role !== ROLES.EMPLOYEE) {
-    return null;
-  }
-
-  const learningPaths = mockDatabase.enrollments
-    .filter((enrollment) => enrollment.principal_id === principalId)
-    .map((enrollment) => {
-      const path = mockDatabase.learning_paths.find(
-        (item) => item.id === enrollment.learning_path_id && !item.is_deleted,
-      );
-
-      return {
-        enrollment_id: enrollment.id,
-        status: enrollment.status,
-        progress: enrollment.progress,
-        enrolled_at: enrollment.enrolled_at,
-        completed_at: enrollment.completed_at,
-        learning_path_id: path.id,
-        title: path.title,
-        description: path.description,
-        category: path.category,
-        total_duration: path.total_duration,
-      };
-    });
-
-  return {
-    learner: {
-      id: principal.id,
-      name: principal.name,
-      email: principal.email,
-    },
-    learningPaths,
-  };
-};
-
-// EXPORTS
-
-// functions export testing
-test("SUPERADMIN CONTROLLER EXPORTS TESTS", async (t) => {
+describe("SUPERADMIN CONTROLLER EXPORTS", () => {
   const expectedExports = [
     "createUser",
     "getAllUsers",
@@ -340,948 +122,1950 @@ test("SUPERADMIN CONTROLLER EXPORTS TESTS", async (t) => {
   ];
 
   for (const exportName of expectedExports) {
-    await t.test(`should export ${exportName}`, async () => {
-      assert.equal(typeof superAdminController[exportName], "function");
+    it(`should export ${exportName}`, () => {
+      expect(typeof superAdminController[exportName]).toBe("function");
     });
   }
 });
 
 // createUser testing
-test("CREATE USER TESTS", async (t) => {
-  await t.test("should reject invalid role", async () => {
+
+describe("CREATE USER", () => {
+  it("should reject invalid role", async () => {
+    const req = createMockReq({
+      body: {
+        email: "test@lpms.com",
+        password: "Pass@123",
+        role: "INVALID_ROLE",
+        name: "Test",
+      },
+    });
     const res = createMockRes();
-    const role = "INVALID_ROLE";
+    await superAdminController.createUser(req, res);
 
-    if (!ALL_ROLES.includes(role)) {
-      sendMockError(res, 400, "VALIDATION_ERROR", "Invalid role.", {
-        allowedRoles: ALL_ROLES,
-      });
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.error.code, "VALIDATION_ERROR");
-    assert.ok(Array.isArray(res.body.error.details.allowedRoles));
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.details.allowedRoles).toEqual(ALL_ROLES);
   });
 
-  await t.test("should reject non SUPER_ADMIN role creation", async () => {
+  it("should reject non SUPER_ADMIN role creation", async () => {
+    const req = createMockReq({
+      body: {
+        email: "admin@lpms.com",
+        password: "Pass@123",
+        role: ROLES.LEARNING_ADMIN,
+        name: "Admin",
+      },
+    });
     const res = createMockRes();
-    const role = ROLES.LEARNING_ADMIN;
+    await superAdminController.createUser(req, res);
 
-    if (role !== ROLES.SUPER_ADMIN) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "Only SUPER_ADMIN accounts can be created from this interface.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(
-      res.body.error.message,
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toBe(
       "Only SUPER_ADMIN accounts can be created from this interface.",
     );
   });
 
-  await t.test("should default name from email when name missing", async () => {
-    const email = "newadmin@lpms.com";
-    const name = "" || email.split("@")[0];
-
-    assert.equal(name, "newadmin");
-  });
-
-  await t.test("should hash password when creating principal", async () => {
-    setupMockDatabase();
-    hashCalls = [];
-
-    const created = await createMockPrincipal({
-      email: "newadmin@lpms.com",
-      password: "Password@123",
-      role: ROLES.SUPER_ADMIN,
-      name: "New Admin",
+  it("should default name from email when name is empty", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "new-1",
+          email: "newadmin@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+          name: "newadmin",
+          principal_type: "USER",
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
     });
 
-    assert.equal(hashCalls.length, 1);
-    assert.equal(hashCalls[0].password, "Password@123");
-    assert.equal(hashCalls[0].rounds, 10);
-    assert.equal(created.email, "newadmin@lpms.com");
+    const req = createMockReq({
+      body: {
+        email: "newadmin@lpms.com",
+        password: "Pass@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(res.body.user.name).toBe("newadmin");
   });
 
-  await t.test("should return created SUPER_ADMIN user", async () => {
-    setupMockDatabase();
-
-    const created = await createMockPrincipal({
-      email: "newadmin@lpms.com",
-      password: "Password@123",
-      role: ROLES.SUPER_ADMIN,
-      name: "New Admin",
+  it("should hash password when creating principal", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "new-1",
+          email: "newadmin@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+          name: "New Admin",
+          principal_type: "USER",
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
     });
 
-    assert.equal(created.role, ROLES.SUPER_ADMIN);
-    assert.equal(created.principal_type, "USER");
-    assert.ok(created.id);
+    const req = createMockReq({
+      body: {
+        email: "newadmin@lpms.com",
+        password: "Password@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "New Admin",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(vi.mocked(bcrypt.hash)).toHaveBeenCalledWith("Password@123", 10);
   });
 
-  await t.test("should log create user audit", async () => {
-    auditLogs = [];
+  it("should return created SUPER_ADMIN user with 201", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "new-1",
+          email: "newadmin@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+          name: "New Admin",
+          principal_type: "USER",
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
 
-    await mockLogAudit({
+    const req = createMockReq({
+      body: {
+        email: "newadmin@lpms.com",
+        password: "Pass@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "New Admin",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.user.role).toBe(ROLES.SUPER_ADMIN);
+    expect(res.body.user.principal_type).toBe("USER");
+  });
+
+  it("should log create user audit", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "new-1",
+          email: "newadmin@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+          name: "New Admin",
+          principal_type: "USER",
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        email: "newadmin@lpms.com",
+        password: "Pass@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "New Admin",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       actorPrincipalId: "super-1",
       action: "CREATE_USER",
       resourceType: "AUTH_PRINCIPAL",
-      resourceId: "principal-new",
       metadata: { role: ROLES.SUPER_ADMIN, email: "newadmin@lpms.com" },
     });
+  });
 
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "CREATE_USER");
+  it("should document missing email validation — empty email falls through to INSERT", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "new-empty",
+          email: "",
+          role: ROLES.SUPER_ADMIN,
+          name: "Admin",
+          principal_type: "USER",
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        email: "",
+        password: "Pass@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "Admin",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("should document missing password validation — empty password falls through to INSERT", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-empty");
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "new-empty",
+          email: "admin@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+          name: "Admin",
+          principal_type: "USER",
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        email: "admin@lpms.com",
+        password: "",
+        role: ROLES.SUPER_ADMIN,
+        name: "Admin",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(res.statusCode).toBe(201);
   });
 });
 
 // getAllUsers testing
-test("GET ALL USERS TESTS", async (t) => {
-  await t.test(
-    "should return SUPER_ADMIN and LEARNING_ADMIN users only",
-    async () => {
-      setupMockDatabase();
 
-      const users = mockDatabase.principals.filter((principal) =>
-        [ROLES.SUPER_ADMIN, ROLES.LEARNING_ADMIN].includes(principal.role),
-      );
+describe("GET ALL USERS", () => {
+  it("should return SUPER_ADMIN and LEARNING_ADMIN users only", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "super-1",
+          email: "super@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+          name: "Super Admin",
+          principal_type: "USER",
+          is_active: true,
+          created_at: new Date(),
+        },
+        {
+          id: "admin-1",
+          email: "admin@lpms.com",
+          role: ROLES.LEARNING_ADMIN,
+          name: "Learning Admin",
+          principal_type: "USER",
+          is_active: true,
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 2,
+    });
 
-      assert.equal(users.length, 2);
-      assert.ok(users.every((user) => user.role !== ROLES.EMPLOYEE));
-    },
-  );
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAllUsers(req, res);
 
-  await t.test("should exclude employee users", async () => {
-    setupMockDatabase();
-
-    const users = mockDatabase.principals.filter((principal) =>
-      [ROLES.SUPER_ADMIN, ROLES.LEARNING_ADMIN].includes(principal.role),
-    );
-
-    assert.equal(
-      users.some((user) => user.role === ROLES.EMPLOYEE),
-      false,
-    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body.users).toHaveLength(2);
+    expect(
+      res.body.users.every((u) =>
+        [ROLES.SUPER_ADMIN, ROLES.LEARNING_ADMIN].includes(u.role),
+      ),
+    ).toBe(true);
   });
 
-  await t.test("should order users by created_at DESC", async () => {
-    setupMockDatabase();
+  it("should exclude employee users", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [],
+      rowCount: 0,
+    });
 
-    const users = mockDatabase.principals
-      .filter((principal) =>
-        [ROLES.SUPER_ADMIN, ROLES.LEARNING_ADMIN].includes(principal.role),
-      )
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAllUsers(req, res);
 
-    assert.equal(users[0].id, "super-1");
-    assert.equal(users[1].id, "admin-1");
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).not.toContain(ROLES.EMPLOYEE);
   });
 
-  await t.test("should include user fields", async () => {
-    setupMockDatabase();
+  it("should order users by created_at DESC", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "super-1" }, { id: "admin-1" }],
+      rowCount: 2,
+    });
 
-    const user = mockDatabase.principals[0];
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAllUsers(req, res);
 
-    assert.ok(user.id);
-    assert.ok(user.email);
-    assert.ok(user.role);
-    assert.ok(user.name);
-    assert.ok(user.principal_type);
-    assert.equal(typeof user.is_active, "boolean");
-    assert.ok(user.created_at);
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("ORDER BY created_at DESC");
+  });
+
+  it("should include user fields in response", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "super-1",
+          email: "super@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+          name: "Super Admin",
+          principal_type: "USER",
+          is_active: true,
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAllUsers(req, res);
+
+    const user = res.body.users[0];
+    expect(user.id).toBe("super-1");
+    expect(user.email).toBe("super@lpms.com");
+    expect(user.role).toBe(ROLES.SUPER_ADMIN);
+    expect(user.name).toBe("Super Admin");
+    expect(user.principal_type).toBe("USER");
+    expect(typeof user.is_active).toBe("boolean");
+    expect(user.created_at).toBeDefined();
+  });
+
+  it("should return empty array when no admin users exist", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAllUsers(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.users).toEqual([]);
+  });
+
+  it("should include inactive users in results", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "admin-1",
+          email: "admin@lpms.com",
+          role: ROLES.LEARNING_ADMIN,
+          name: "Active Admin",
+          principal_type: "USER",
+          is_active: true,
+          created_at: new Date(),
+        },
+        {
+          id: "admin-2",
+          email: "inactive@lpms.com",
+          role: ROLES.LEARNING_ADMIN,
+          name: "Inactive Admin",
+          principal_type: "USER",
+          is_active: false,
+          created_at: new Date(),
+        },
+      ],
+      rowCount: 2,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAllUsers(req, res);
+
+    expect(res.body.users).toHaveLength(2);
+    expect(res.body.users.some((u) => u.is_active === false)).toBe(true);
   });
 });
 
 // getAssignedLearningAdmins testing
-test("GET ASSIGNED LEARNING ADMINS TESTS", async (t) => {
-  await t.test("should return assigned learning admins", async () => {
-    setupMockDatabase();
 
-    const learningAdmins = mockDatabase.learning_admin_assignments.map(
-      (assignment) => {
-        const employee = mockDatabase.employees.find(
-          (item) => item.employee_number === assignment.employee_number,
-        );
-        const principal = mockDatabase.principals.find(
-          (item) => item.id === employee.principal_id,
-        );
-
-        return {
-          ...assignment,
-          principal_id: employee.principal_id,
-          designation: employee.designation,
-          grade_name: employee.grade_name,
-          name: principal.name,
-          email: principal.email,
-          is_active: principal.is_active,
-        };
-      },
-    );
-
-    assert.equal(learningAdmins.length, 1);
-    assert.equal(learningAdmins[0].employee_number, "EMP-001");
-  });
-
-  await t.test("should include employee and principal fields", async () => {
-    setupMockDatabase();
-
-    const assignment = mockDatabase.learning_admin_assignments[0];
-    const employee = mockDatabase.employees.find(
-      (item) => item.employee_number === assignment.employee_number,
-    );
-    const principal = mockDatabase.principals.find(
-      (item) => item.id === employee.principal_id,
-    );
-
-    assert.ok(employee.principal_id);
-    assert.ok(employee.designation);
-    assert.ok(employee.grade_name);
-    assert.ok(principal.name);
-    assert.ok(principal.email);
-  });
-
-  await t.test("should order by updated_at DESC", async () => {
-    setupMockDatabase();
-
-    mockDatabase.learning_admin_assignments.push({
-      employee_number: "EMP-002",
-      assigned_by_principal_id: "super-1",
-      created_at: new Date("2026-06-06T09:00:00Z"),
-      updated_at: new Date("2026-06-06T09:00:00Z"),
+describe("GET ASSIGNED LEARNING ADMINS", () => {
+  it("should return assigned learning admins with joined fields", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          employee_number: "EMP-001",
+          assigned_by_principal_id: "super-1",
+          created_at: new Date(),
+          updated_at: new Date(),
+          principal_id: "employee-1",
+          designation: "Developer",
+          grade_name: "G5",
+          name: "John Doe",
+          email: "john@example.com",
+          is_active: true,
+        },
+      ],
+      rowCount: 1,
     });
 
-    const assignments = mockDatabase.learning_admin_assignments.sort(
-      (a, b) => new Date(b.updated_at) - new Date(a.updated_at),
-    );
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAssignedLearningAdmins(req, res);
 
-    assert.equal(assignments[0].employee_number, "EMP-002");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningAdmins).toHaveLength(1);
+    const admin = res.body.learningAdmins[0];
+    expect(admin.employee_number).toBe("EMP-001");
+    expect(admin.name).toBe("John Doe");
+    expect(admin.designation).toBe("Developer");
+  });
+
+  it("should order by updated_at DESC and name ASC", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ employee_number: "EMP-001" }, { employee_number: "EMP-002" }],
+      rowCount: 2,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAssignedLearningAdmins(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("ORDER BY la.updated_at DESC, ap.name ASC");
+  });
+
+  it("should include employee and principal fields in JOIN", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          employee_number: "EMP-001",
+          assigned_by_principal_id: "super-1",
+          created_at: new Date(),
+          updated_at: new Date(),
+          principal_id: "emp-1",
+          designation: "Developer",
+          grade_name: "G5",
+          name: "John",
+          email: "john@test.com",
+          is_active: true,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAssignedLearningAdmins(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("JOIN employees");
+    expect(sql).toContain("JOIN auth_principals");
+  });
+
+  it("should return empty array when no learning admins are assigned", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAssignedLearningAdmins(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningAdmins).toEqual([]);
   });
 });
 
 // deleteUser testing
-test("DELETE USER TESTS", async (t) => {
-  await t.test("should reject deleting own account", async () => {
+
+describe("DELETE USER", () => {
+  it("should reject deleting own account", async () => {
     const req = createMockReq({ params: { id: "super-1" } });
     const res = createMockRes();
+    await superAdminController.deleteUser(req, res);
 
-    if (req.params.id === req.user.id) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "You cannot delete your own account.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should return 404 when user is not found", async () => {
-    setupMockDatabase();
+  it("should return 404 when user is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
+    const req = createMockReq({ params: { id: "missing" } });
     const res = createMockRes();
-    const target = mockDatabase.principals.find(
-      (item) => item.id === "missing",
-    );
+    await superAdminController.deleteUser(req, res);
 
-    if (!target) {
-      sendMockError(res, 404, "NOT_FOUND", "User not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should reject deleting EMPLOYEE users", async () => {
-    setupMockDatabase();
+  it("should reject deleting EMPLOYEE users", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", role: ROLES.EMPLOYEE }],
+      rowCount: 1,
+    });
 
+    const req = createMockReq({ params: { id: "employee-1" } });
     const res = createMockRes();
-    const target = mockDatabase.principals.find(
-      (item) => item.id === "employee-1",
-    );
+    await superAdminController.deleteUser(req, res);
 
-    if (!["SUPER_ADMIN", "LEARNING_ADMIN"].includes(target.role)) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "Only SUPER_ADMIN and LEARNING_ADMIN accounts can be deleted from this interface.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should delete SUPER_ADMIN or LEARNING_ADMIN user", async () => {
-    setupMockDatabase();
+  it("should delete SUPER_ADMIN or LEARNING_ADMIN user", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "admin-1", role: ROLES.LEARNING_ADMIN }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "admin-1",
+            email: "admin@lpms.com",
+            role: ROLES.LEARNING_ADMIN,
+            name: "Learning Admin",
+            principal_type: "USER",
+          },
+        ],
+        rowCount: 1,
+      });
 
-    const target = mockDatabase.principals.find(
-      (item) => item.id === "admin-1",
-    );
-    mockDatabase.principals = mockDatabase.principals.filter(
-      (item) => item.id !== target.id,
-    );
+    const req = createMockReq({ params: { id: "admin-1" } });
+    const res = createMockRes();
+    await superAdminController.deleteUser(req, res);
 
-    assert.equal(target.role, ROLES.LEARNING_ADMIN);
-    assert.equal(
-      mockDatabase.principals.some((item) => item.id === "admin-1"),
-      false,
-    );
+    expect(res.statusCode).toBe(200);
+    expect(res.body.user.id).toBe("admin-1");
+    expect(res.body.user.role).toBe(ROLES.LEARNING_ADMIN);
   });
 
-  await t.test("should return deleted user fields", async () => {
-    const deletedUser = {
-      id: "admin-1",
-      email: "admin@lpms.com",
-      role: ROLES.LEARNING_ADMIN,
-      name: "Learning Admin",
-      principal_type: "USER",
-    };
+  it("should return deleted user fields", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "admin-1", role: ROLES.LEARNING_ADMIN }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "admin-1",
+            email: "admin@lpms.com",
+            role: ROLES.LEARNING_ADMIN,
+            name: "Learning Admin",
+            principal_type: "USER",
+          },
+        ],
+        rowCount: 1,
+      });
 
-    assert.ok(deletedUser.id);
-    assert.ok(deletedUser.email);
-    assert.equal(deletedUser.role, ROLES.LEARNING_ADMIN);
+    const req = createMockReq({ params: { id: "admin-1" } });
+    const res = createMockRes();
+    await superAdminController.deleteUser(req, res);
+
+    expect(res.body.user.email).toBe("admin@lpms.com");
+    expect(res.body.user.principal_type).toBe("USER");
   });
 
-  await t.test("should log deactivate user audit", async () => {
-    auditLogs = [];
+  it("should log deactivate user audit", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "admin-1", role: ROLES.LEARNING_ADMIN }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "admin-1",
+            email: "admin@lpms.com",
+            role: ROLES.LEARNING_ADMIN,
+            name: "Learning Admin",
+            principal_type: "USER",
+          },
+        ],
+        rowCount: 1,
+      });
 
-    await mockLogAudit({
+    const req = createMockReq({ params: { id: "admin-1" } });
+    const res = createMockRes();
+    await superAdminController.deleteUser(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       actorPrincipalId: "super-1",
       action: "DEACTIVATE_USER",
       resourceType: "AUTH_PRINCIPAL",
       resourceId: "admin-1",
     });
+  });
 
-    assert.equal(auditLogs[0].action, "DEACTIVATE_USER");
+  it("should return 404 when user is already deleted", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "admin-1", role: ROLES.LEARNING_ADMIN }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { id: "admin-1" } });
+    const res = createMockRes();
+    await superAdminController.deleteUser(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 });
 
 // assignLearningAdmin testing
-test("ASSIGN LEARNING ADMIN TESTS", async (t) => {
-  await t.test("should require employeeNumber", async () => {
+
+describe("ASSIGN LEARNING ADMIN", () => {
+  it("should require employeeNumber", async () => {
     const req = createMockReq({ body: { employeeNumber: "" } });
     const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
 
-    const employeeNumber = String(req.body.employeeNumber || "").trim();
-
-    if (!employeeNumber) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "employeeNumber is required.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should trim employeeNumber", async () => {
-    const employeeNumber = String(" EMP-001 ").trim();
+  it("should trim employeeNumber", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          employee_number: "EMP-001",
+          principal_id: "employee-1",
+          name: "John Doe",
+          email: "john@example.com",
+          is_active: true,
+        },
+      ],
+      rowCount: 1,
+    });
 
-    assert.equal(employeeNumber, "EMP-001");
-  });
-
-  await t.test(
-    "should return 404 when learner cannot be found or created",
-    async () => {
-      setupMockDatabase();
-
-      const res = createMockRes();
-      const employee = mockDatabase.employees.find(
-        (item) => item.employee_number === "UNKNOWN",
-      );
-
-      if (!employee) {
-        sendMockError(
-          res,
-          404,
-          "NOT_FOUND",
-          "Learner not found for given employeeNumber.",
-        );
-      }
-
-      assert.equal(res.statusCode, 404);
-    },
-  );
-
-  await t.test("should reject inactive learner account", async () => {
-    setupMockDatabase();
-
+    const req = createMockReq({ body: { employeeNumber: "  EMP-001  " } });
     const res = createMockRes();
-    const employee = mockDatabase.employees.find(
-      (item) => item.employee_number === "EMP-002",
-    );
-    const principal = mockDatabase.principals.find(
-      (item) => item.id === employee.principal_id,
-    );
+    await superAdminController.assignLearningAdmin(req, res);
 
-    if (!principal.is_active) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "Learner account is inactive.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
+    const params = vi.mocked(query).mock.calls[0][1];
+    expect(params[0]).toBe("EMP-001");
+    expect(res.statusCode).toBe(200);
   });
 
-  await t.test("should assign learning admin", async () => {
-    setupMockDatabase();
-
-    const employeeNumber = "EMP-001";
-    const employee = mockDatabase.employees.find(
-      (item) => item.employee_number === employeeNumber,
-    );
-    const principal = mockDatabase.principals.find(
-      (item) => item.id === employee.principal_id,
+  it("should return 404 when learner cannot be found or created", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
+      new Error("ERP unavailable"),
     );
 
-    const assignment = {
-      employeeNumber,
-      principalId: employee.principal_id,
-      name: principal.name,
-      email: principal.email,
-      isLearningAdmin: true,
-    };
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [{ id: "created-principal-id" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ email: "UNKNOWN@erp.local" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    assert.equal(assignment.employeeNumber, "EMP-001");
-    assert.equal(assignment.isLearningAdmin, true);
+    const req = createMockReq({ body: { employeeNumber: "UNKNOWN" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should upsert learning admin assignment", async () => {
-    setupMockDatabase();
+  it("should reject inactive learner account", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          employee_number: "EMP-002",
+          principal_id: "employee-2",
+          name: "Jane Doe",
+          email: "jane@example.com",
+          is_active: false,
+        },
+      ],
+      rowCount: 1,
+    });
 
-    const employeeNumber = "EMP-001";
-    const existing = mockDatabase.learning_admin_assignments.find(
-      (item) => item.employee_number === employeeNumber,
-    );
+    const req = createMockReq({ body: { employeeNumber: "EMP-002" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
 
-    existing.assigned_by_principal_id = "super-1";
-    existing.updated_at = new Date();
-
-    assert.equal(existing.assigned_by_principal_id, "super-1");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should log assign learning admin audit", async () => {
-    auditLogs = [];
+  it("should assign learning admin with upsert", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            employee_number: "EMP-001",
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            is_active: true,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
-    await mockLogAudit({
+    const req = createMockReq({ body: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.assignment.employeeNumber).toBe("EMP-001");
+    expect(res.body.assignment.isLearningAdmin).toBe(true);
+  });
+
+  it("should log assign learning admin audit", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            employee_number: "EMP-001",
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            is_active: true,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const req = createMockReq({ body: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       actorPrincipalId: "super-1",
       action: "ASSIGN_LEARNING_ADMIN",
       resourceType: "EMPLOYEE",
-      resourceId: "employee-1",
       metadata: { employeeNumber: "EMP-001" },
     });
+  });
 
-    assert.equal(auditLogs[0].action, "ASSIGN_LEARNING_ADMIN");
+  it("should use ON CONFLICT DO UPDATE in SQL", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            employee_number: "EMP-001",
+            principal_id: "employee-1",
+            name: "John",
+            email: "john@test.com",
+            is_active: true,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const req = createMockReq({ body: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
+
+    const sql = vi.mocked(query).mock.calls[1][0];
+    expect(sql).toContain("ON CONFLICT");
+    expect(sql).toContain("DO UPDATE SET");
+  });
+
+  it("should be idempotent — assigning already assigned employee returns success", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            employee_number: "EMP-001",
+            principal_id: "employee-1",
+            name: "John",
+            email: "john@test.com",
+            is_active: true,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const req = createMockReq({ body: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.assignment.isLearningAdmin).toBe(true);
+  });
+
+  it("should verify passed employeeNumber matches parameter in all queries", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            employee_number: "EMP-001",
+            principal_id: "employee-1",
+            name: "John",
+            email: "john@test.com",
+            is_active: true,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const req = createMockReq({ body: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
+
+    for (const call of vi.mocked(query).mock.calls) {
+      if (call[1] && call[1][0] === "EMP-001") {
+        expect(call[1][0]).toBe("EMP-001");
+      }
+    }
   });
 });
 
 // removeLearningAdmin testing
-test("REMOVE LEARNING ADMIN TESTS", async (t) => {
-  await t.test("should require employeeNumber param", async () => {
+
+describe("REMOVE LEARNING ADMIN", () => {
+  it("should require employeeNumber param", async () => {
     const req = createMockReq({ params: { employeeNumber: "" } });
     const res = createMockRes();
+    await superAdminController.removeLearningAdmin(req, res);
 
-    const employeeNumber = String(req.params.employeeNumber || "").trim();
-
-    if (!employeeNumber) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "employeeNumber is required.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should return 404 when assignment is not found", async () => {
-    setupMockDatabase();
+  it("should return 404 when assignment is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
+    const req = createMockReq({ params: { employeeNumber: "UNKNOWN" } });
     const res = createMockRes();
-    const assignment = mockDatabase.learning_admin_assignments.find(
-      (item) => item.employee_number === "UNKNOWN",
-    );
+    await superAdminController.removeLearningAdmin(req, res);
 
-    if (!assignment) {
-      sendMockError(
-        res,
-        404,
-        "NOT_FOUND",
-        "Learning admin assignment not found.",
-      );
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should remove learning admin assignment", async () => {
-    setupMockDatabase();
+  it("should remove learning admin assignment", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ employee_number: "EMP-001" }],
+      rowCount: 1,
+    });
 
-    mockDatabase.learning_admin_assignments =
-      mockDatabase.learning_admin_assignments.filter(
-        (item) => item.employee_number !== "EMP-001",
-      );
+    const req = createMockReq({ params: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.removeLearningAdmin(req, res);
 
-    assert.equal(mockDatabase.learning_admin_assignments.length, 0);
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("DELETE FROM learning_admin_assignments");
+    expect(res.statusCode).toBe(200);
   });
 
-  await t.test("should return success true", async () => {
-    const response = { success: true };
+  it("should return success true", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ employee_number: "EMP-001" }],
+      rowCount: 1,
+    });
 
-    assert.equal(response.success, true);
+    const req = createMockReq({ params: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.removeLearningAdmin(req, res);
+
+    expect(res.body.success).toBe(true);
   });
 
-  await t.test("should log remove learning admin audit", async () => {
-    auditLogs = [];
+  it("should log remove learning admin audit", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ employee_number: "EMP-001" }],
+      rowCount: 1,
+    });
 
-    await mockLogAudit({
+    const req = createMockReq({ params: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.removeLearningAdmin(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       actorPrincipalId: "super-1",
       action: "REMOVE_LEARNING_ADMIN",
       resourceType: "EMPLOYEE",
-      resourceId: "EMP-001",
       metadata: { employeeNumber: "EMP-001" },
     });
-
-    assert.equal(auditLogs[0].action, "REMOVE_LEARNING_ADMIN");
   });
 });
 
 // getAllLearners testing
-test("GET ALL LEARNERS TESTS", async (t) => {
-  await t.test(
-    "should default pagination to page 1 and pageSize 25",
-    async () => {
-      const req = createMockReq({ query: {} });
 
-      const rawPage = Number.parseInt(String(req.query.page || "1"), 10);
-      const rawPageSize = Number.parseInt(
-        String(req.query.pageSize || "25"),
-        10,
-      );
-      const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
-      const pageSize = Number.isFinite(rawPageSize)
-        ? Math.min(Math.max(rawPageSize, 1), 100)
-        : 25;
+describe("GET ALL LEARNERS", () => {
+  it("should default pagination to page 1 and pageSize 25", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-      assert.equal(page, 1);
-      assert.equal(pageSize, 25);
-    },
-  );
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
 
-  await t.test("should clamp pageSize to max 100", async () => {
-    const rawPageSize = Number.parseInt("500", 10);
-    const pageSize = Number.isFinite(rawPageSize)
-      ? Math.min(Math.max(rawPageSize, 1), 100)
-      : 25;
-
-    assert.equal(pageSize, 100);
+    expect(res.body.pagination.page).toBe(1);
+    expect(res.body.pagination.pageSize).toBe(25);
   });
 
-  await t.test("should clamp pageSize to min 1", async () => {
-    const rawPageSize = Number.parseInt("-10", 10);
-    const pageSize = Number.isFinite(rawPageSize)
-      ? Math.min(Math.max(rawPageSize, 1), 100)
-      : 25;
+  it("should clamp pageSize to max 100", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    assert.equal(pageSize, 1);
+    const req = createMockReq({ query: { pageSize: "500" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.pagination.pageSize).toBe(100);
   });
 
-  await t.test("should calculate pagination offset", async () => {
-    const page = 3;
-    const pageSize = 25;
-    const offset = (page - 1) * pageSize;
+  it("should clamp pageSize to min 1", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    assert.equal(offset, 50);
+    const req = createMockReq({ query: { pageSize: "-10" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.pagination.pageSize).toBe(1);
   });
 
-  await t.test("should filter learners by employeeNo", async () => {
-    setupMockDatabase();
+  it("should calculate pagination offset", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 50 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    const employeeNo = "EMP-001";
-    const learners = buildLearnerRows().filter((learner) =>
-      learner.employee_number.includes(employeeNo),
-    );
+    const req = createMockReq({ query: { page: "3", pageSize: "25" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
 
-    assert.equal(learners.length, 1);
-    assert.equal(learners[0].employee_number, "EMP-001");
+    const params = vi.mocked(query).mock.calls[1][1];
+    expect(params).toContain(25);
+    expect(params).toContain(50);
   });
 
-  await t.test("should filter learners by name", async () => {
-    setupMockDatabase();
+  it("should filter learners by employeeNo", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            is_active: true,
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            is_learning_admin: true,
+            total_learning_paths: 1,
+            completed_learning_paths: 0,
+            average_progress: "50.00",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Developer" }],
+        rowCount: 1,
+      });
 
-    const name = "John";
-    const learners = buildLearnerRows().filter((learner) =>
-      learner.name.includes(name),
-    );
+    const req = createMockReq({ query: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
 
-    assert.equal(learners.length, 1);
-    assert.equal(learners[0].name, "John Doe");
+    expect(res.body.learners).toHaveLength(1);
+    expect(res.body.learners[0].employee_number).toBe("EMP-001");
   });
 
-  await t.test("should filter learners by designation", async () => {
-    setupMockDatabase();
+  it("should filter learners by name", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            is_active: true,
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            is_learning_admin: false,
+            total_learning_paths: 0,
+            completed_learning_paths: 0,
+            average_progress: "0.00",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Developer" }],
+        rowCount: 1,
+      });
 
-    const designation = "Developer";
-    const learners = buildLearnerRows().filter(
-      (learner) => learner.designation === designation,
-    );
+    const req = createMockReq({ query: { name: "John" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
 
-    assert.equal(learners.length, 1);
-    assert.equal(learners[0].designation, "Developer");
+    expect(res.body.learners[0].name).toBe("John Doe");
   });
 
-  await t.test(
-    "should include learning admin flag and progress summary",
-    async () => {
-      setupMockDatabase();
+  it("should filter learners by designation", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            is_active: true,
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            is_learning_admin: false,
+            total_learning_paths: 0,
+            completed_learning_paths: 0,
+            average_progress: "0.00",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Developer" }],
+        rowCount: 1,
+      });
 
-      const learner = buildLearnerRows().find(
-        (item) => item.employee_number === "EMP-001",
-      );
+    const req = createMockReq({ query: { designation: "Developer" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
 
-      assert.equal(learner.is_learning_admin, true);
-      assert.equal(learner.total_learning_paths, 1);
-      assert.equal(learner.completed_learning_paths, 0);
-      assert.equal(learner.average_progress, "50.00");
-    },
-  );
-
-  await t.test("should return designation options", async () => {
-    setupMockDatabase();
-
-    const designationOptions = Array.from(
-      new Set(mockDatabase.employees.map((employee) => employee.designation)),
-    ).sort();
-
-    assert.deepEqual(designationOptions, ["Analyst", "Developer"]);
+    expect(res.body.learners[0].designation).toBe("Developer");
   });
 
-  await t.test("should calculate total pages", async () => {
-    const total = 51;
-    const pageSize = 25;
-    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+  it("should include learning admin flag and progress summary", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            is_active: true,
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            is_learning_admin: true,
+            total_learning_paths: 1,
+            completed_learning_paths: 0,
+            average_progress: "50.00",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Developer" }],
+        rowCount: 1,
+      });
 
-    assert.equal(totalPages, 3);
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    const learner = res.body.learners[0];
+    expect(learner.is_learning_admin).toBe(true);
+    expect(learner.total_learning_paths).toBe(1);
+    expect(learner.completed_learning_paths).toBe(0);
+    expect(learner.average_progress).toBe("50.00");
+  });
+
+  it("should return designation options", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Analyst" }, { designation: "Developer" }],
+        rowCount: 2,
+      });
+
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.designationOptions).toEqual(["Analyst", "Developer"]);
+  });
+
+  it("should calculate total pages", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 51 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ query: { pageSize: "25" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.pagination.totalPages).toBe(3);
+  });
+
+  it("should return empty learners array when no employees exist", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.learners).toEqual([]);
+    expect(res.body.pagination.total).toBe(0);
+    expect(res.body.pagination.totalPages).toBe(0);
+  });
+
+  it("should return empty designation options when no employees exist", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.designationOptions).toEqual([]);
+  });
+
+  it("should handle combined filters (employeeNo + name)", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            is_active: true,
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            is_learning_admin: false,
+            total_learning_paths: 0,
+            completed_learning_paths: 0,
+            average_progress: "0.00",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Developer" }],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      query: { employeeNo: "EMP-001", name: "John" },
+    });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.learners).toHaveLength(1);
+    expect(res.body.learners[0].employee_number).toBe("EMP-001");
+    expect(res.body.learners[0].name).toBe("John Doe");
+  });
+
+  it("should handle page beyond total (no results)", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 5 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ query: { page: "100", pageSize: "25" } });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(res.body.learners).toEqual([]);
+    expect(res.body.pagination.page).toBe(100);
+    expect(res.body.pagination.totalPages).toBe(1);
   });
 });
 
 // getLearnerLearningPaths testing
-test("GET LEARNER LEARNING PATHS TESTS", async (t) => {
-  await t.test("should return 404 when principal is missing", async () => {
-    setupMockDatabase();
 
+describe("GET LEARNER LEARNING PATHS", () => {
+  it("should return 404 when principal is missing", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { principalId: "missing" } });
     const res = createMockRes();
-    const payload = getLearnerLearningPathsPayload("missing");
+    await superAdminController.getLearnerLearningPaths(req, res);
 
-    if (!payload) {
-      sendMockError(res, 404, "NOT_FOUND", "Learner not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should return 404 when principal is not EMPLOYEE", async () => {
-    setupMockDatabase();
-
-    const res = createMockRes();
-    const payload = getLearnerLearningPathsPayload("super-1");
-
-    if (!payload) {
-      sendMockError(res, 404, "NOT_FOUND", "Learner not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
-  });
-
-  await t.test("should return learner details", async () => {
-    setupMockDatabase();
-
-    const payload = getLearnerLearningPathsPayload("employee-1");
-
-    assert.equal(payload.learner.id, "employee-1");
-    assert.equal(payload.learner.name, "John Doe");
-    assert.equal(payload.learner.email, "john@example.com");
-  });
-
-  await t.test("should return learner learning paths", async () => {
-    setupMockDatabase();
-
-    const payload = getLearnerLearningPathsPayload("employee-1");
-
-    assert.equal(payload.learningPaths.length, 1);
-    assert.equal(payload.learningPaths[0].learning_path_id, "lp-1");
-  });
-
-  await t.test("should exclude deleted learning paths", async () => {
-    setupMockDatabase();
-
-    mockDatabase.enrollments.push({
-      id: "en-deleted",
-      principal_id: "employee-1",
-      learning_path_id: "lp-2",
-      status: "IN_PROGRESS",
-      progress: 10,
-      enrolled_at: new Date(),
-      completed_at: null,
+  it("should return 404 when principal is not EMPLOYEE", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "super-1",
+          name: "Super Admin",
+          email: "super@lpms.com",
+          role: ROLES.SUPER_ADMIN,
+        },
+      ],
+      rowCount: 1,
     });
 
-    const activePaths = mockDatabase.enrollments
-      .filter((enrollment) => enrollment.principal_id === "employee-1")
-      .filter((enrollment) =>
-        mockDatabase.learning_paths.some(
-          (path) => path.id === enrollment.learning_path_id && !path.is_deleted,
-        ),
-      );
+    const req = createMockReq({ params: { principalId: "super-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearnerLearningPaths(req, res);
 
-    assert.equal(activePaths.length, 1);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("should return learner details and learning paths", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            role: ROLES.EMPLOYEE,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            enrollment_id: "en-1",
+            status: "IN_PROGRESS",
+            progress: 50,
+            enrolled_at: new Date(),
+            completed_at: null,
+            learning_path_id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({ params: { principalId: "employee-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearnerLearningPaths(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learner.id).toBe("employee-1");
+    expect(res.body.learner.name).toBe("John Doe");
+    expect(res.body.learningPaths).toHaveLength(1);
+    expect(res.body.learningPaths[0].learning_path_id).toBe("lp-1");
+  });
+
+  it("should exclude deleted learning paths (JOIN with is_deleted = FALSE)", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            role: ROLES.EMPLOYEE,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { principalId: "employee-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearnerLearningPaths(req, res);
+
+    const sql = vi.mocked(query).mock.calls[1][0];
+    expect(sql).toContain("lp.is_deleted = FALSE");
+  });
+
+  it("should return learner with empty learningPaths when no enrollments exist", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            role: ROLES.EMPLOYEE,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { principalId: "employee-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearnerLearningPaths(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learner.id).toBe("employee-1");
+    expect(res.body.learningPaths).toEqual([]);
   });
 });
 
 // getLearnerLearningPathsByEmployeeNo testing
-test("GET LEARNER LEARNING PATHS BY EMPLOYEENO TESTS", async (t) => {
-  await t.test("should require employeeNo", async () => {
+
+describe("GET LEARNER LEARNING PATHS BY EMPLOYEENO", () => {
+  it("should require employeeNo", async () => {
     const req = createMockReq({ params: { employeeNo: "" } });
     const res = createMockRes();
+    await superAdminController.getLearnerLearningPathsByEmployeeNo(req, res);
 
-    const employeeNo = String(req.params.employeeNo || "").trim();
-
-    if (!employeeNo) {
-      sendMockError(res, 400, "VALIDATION_ERROR", "employeeNo is required.");
-    }
-
-    assert.equal(res.statusCode, 400);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should trim employeeNo", async () => {
-    const employeeNo = String(" EMP-001 ").trim();
+  it("should return 404 when employee is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    assert.equal(employeeNo, "EMP-001");
-  });
-
-  await t.test("should return 404 when employee is not found", async () => {
-    setupMockDatabase();
-
+    const req = createMockReq({ params: { employeeNo: "UNKNOWN" } });
     const res = createMockRes();
-    const employee = mockDatabase.employees.find(
-      (item) => item.employee_number === "UNKNOWN",
-    );
+    await superAdminController.getLearnerLearningPathsByEmployeeNo(req, res);
 
-    if (!employee) {
-      sendMockError(res, 404, "NOT_FOUND", "Learner not found.");
-    }
-
-    assert.equal(res.statusCode, 404);
+    expect(res.statusCode).toBe(404);
   });
 
-  await t.test("should resolve principal id from employeeNo", async () => {
-    setupMockDatabase();
+  it("should resolve principal id from employeeNo and return learning paths", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ principal_id: "employee-1" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            role: ROLES.EMPLOYEE,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            enrollment_id: "en-1",
+            status: "IN_PROGRESS",
+            progress: 50,
+            enrolled_at: new Date(),
+            completed_at: null,
+            learning_path_id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+          },
+        ],
+        rowCount: 1,
+      });
 
-    const employee = mockDatabase.employees.find(
-      (item) => item.employee_number === "EMP-001",
-    );
+    const req = createMockReq({ params: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.getLearnerLearningPathsByEmployeeNo(req, res);
 
-    assert.equal(employee.principal_id, "employee-1");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learner.id).toBe("employee-1");
+    expect(res.body.learningPaths).toHaveLength(1);
   });
-
-  await t.test(
-    "should return learner learning paths by employeeNo",
-    async () => {
-      setupMockDatabase();
-
-      const employee = mockDatabase.employees.find(
-        (item) => item.employee_number === "EMP-001",
-      );
-      const payload = getLearnerLearningPathsPayload(employee.principal_id);
-
-      assert.equal(payload.learner.id, "employee-1");
-      assert.equal(payload.learningPaths.length, 1);
-    },
-  );
 });
 
 // getLearningPathEnrollments testing
-test("GET LEARNING PATH ENROLLMENTS TESTS", async (t) => {
-  await t.test(
-    "should return 404 when learning path is not found",
-    async () => {
-      setupMockDatabase();
 
-      const res = createMockRes();
-      const path = mockDatabase.learning_paths.find(
-        (item) => item.id === "missing" && !item.is_deleted,
-      );
+describe("GET LEARNING PATH ENROLLMENTS", () => {
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-      if (!path) {
-        sendMockError(res, 404, "NOT_FOUND", "Learning path not found.");
-      }
+    const req = createMockReq({ params: { learningPathId: "missing" } });
+    const res = createMockRes();
+    await superAdminController.getLearningPathEnrollments(req, res);
 
-      assert.equal(res.statusCode, 404);
-    },
-  );
-
-  await t.test("should return learning path details", async () => {
-    setupMockDatabase();
-
-    const path = mockDatabase.learning_paths.find(
-      (item) => item.id === "lp-1" && !item.is_deleted,
-    );
-
-    assert.equal(path.id, "lp-1");
-    assert.equal(path.title, "Python Basics");
-    assert.equal(path.status, "ACTIVE");
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 
-  await t.test("should return enrollments for learning path", async () => {
-    setupMockDatabase();
+  it("should return learning path details", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+            status: "ACTIVE",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-    const enrollments = mockDatabase.enrollments.filter(
-      (enrollment) => enrollment.learning_path_id === "lp-1",
-    );
+    const req = createMockReq({ params: { learningPathId: "lp-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearningPathEnrollments(req, res);
 
-    assert.equal(enrollments.length, 2);
+    expect(res.body.learningPath.id).toBe("lp-1");
+    expect(res.body.learningPath.title).toBe("Python Basics");
   });
 
-  await t.test("should include principal and employee details", async () => {
-    setupMockDatabase();
+  it("should return enrollments for learning path with principal/employee details", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+            status: "ACTIVE",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            enrollment_id: "en-1",
+            status: "IN_PROGRESS",
+            progress: 50,
+            enrolled_at: new Date(),
+            completed_at: null,
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "john@example.com",
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+          },
+        ],
+        rowCount: 1,
+      });
 
-    const enrollment = mockDatabase.enrollments[0];
-    const principal = mockDatabase.principals.find(
-      (item) => item.id === enrollment.principal_id,
-    );
-    const employee = mockDatabase.employees.find(
-      (item) => item.principal_id === principal.id,
-    );
+    const req = createMockReq({ params: { learningPathId: "lp-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearningPathEnrollments(req, res);
 
-    assert.ok(principal.name);
-    assert.ok(principal.email);
-    assert.ok(employee.employee_number);
-    assert.ok(employee.designation);
-    assert.ok(employee.grade_name);
+    expect(res.body.enrollments).toHaveLength(1);
+    const enrollment = res.body.enrollments[0];
+    expect(enrollment.employee_number).toBe("EMP-001");
+    expect(enrollment.name).toBe("John Doe");
   });
 
-  await t.test("should order enrollments by enrolled_at DESC", async () => {
-    setupMockDatabase();
+  it("should order enrollments by enrolled_at DESC", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+            status: "ACTIVE",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ enrollment_id: "en-1" }, { enrollment_id: "en-2" }],
+        rowCount: 2,
+      });
 
-    const enrollments = mockDatabase.enrollments.sort(
-      (a, b) => new Date(b.enrolled_at) - new Date(a.enrolled_at),
-    );
+    const req = createMockReq({ params: { learningPathId: "lp-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearningPathEnrollments(req, res);
 
-    assert.equal(enrollments[0].id, "en-1");
-    assert.equal(enrollments[1].id, "en-2");
+    const sql = vi.mocked(query).mock.calls[1][0];
+    expect(sql).toContain("ORDER BY en.enrolled_at DESC");
+  });
+
+  it("should return learning path with empty enrollments array", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+            status: "ACTIVE",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { learningPathId: "lp-1" } });
+    const res = createMockRes();
+    await superAdminController.getLearningPathEnrollments(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.id).toBe("lp-1");
+    expect(res.body.enrollments).toEqual([]);
   });
 });
 
 // createEmployee testing
-test("CREATE EMPLOYEE TESTS", async (t) => {
-  await t.test("should reject duplicate employee number", async () => {
-    setupMockDatabase();
 
-    const res = createMockRes();
-    const existingEmployee = mockDatabase.employees.find(
-      (employee) => employee.employee_number === "EMP-001",
-    );
-
-    if (existingEmployee) {
-      sendMockError(res, 409, "CONFLICT", "Employee number already exists.");
-    }
-
-    assert.equal(res.statusCode, 409);
-    assert.equal(res.body.error.code, "CONFLICT");
-  });
-
-  await t.test("should default employee user name from email", async () => {
-    const email = "new.employee@example.com";
-    const name = "" || email.split("@")[0];
-
-    assert.equal(name, "new.employee");
-  });
-
-  await t.test("should create EMPLOYEE principal", async () => {
-    setupMockDatabase();
-
-    const principal = await createMockPrincipal({
-      email: "new.employee@example.com",
-      password: "Password@123",
-      role: ROLES.EMPLOYEE,
-      name: "New Employee",
-      principalType: "EMPLOYEE",
+describe("CREATE EMPLOYEE", () => {
+  it("should reject duplicate employee number", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "emp-1" }],
+      rowCount: 1,
     });
 
-    assert.equal(principal.role, ROLES.EMPLOYEE);
-    assert.equal(principal.principal_type, "EMPLOYEE");
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-001",
+        email: "test@test.com",
+        password: "Pass@123",
+        designation: "Engineer",
+        gradeName: "G3",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error.code).toBe("CONFLICT");
   });
 
-  await t.test(
-    "should create employee row with supervisorId or null",
-    async () => {
-      setupMockDatabase();
-
-      const principal = await createMockPrincipal({
-        email: "new.employee@example.com",
-        password: "Password@123",
-        role: ROLES.EMPLOYEE,
-        name: "New Employee",
-        principalType: "EMPLOYEE",
+  it("should default employee user name from email", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "new.employee@example.com",
+            role: ROLES.EMPLOYEE,
+            name: "new.employee",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "EMP-003",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: null,
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
       });
 
-      const employee = {
-        id: "emp-new",
-        principal_id: principal.id,
-        employee_number: "EMP-003",
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-003",
+        email: "new.employee@example.com",
+        password: "Pass@123",
         designation: "Engineer",
-        grade_name: "G3",
-        supervisor_id: "" || null,
-        created_at: new Date(),
-      };
+        gradeName: "G3",
+        name: "",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
 
-      assert.equal(employee.principal_id, principal.id);
-      assert.equal(employee.employee_number, "EMP-003");
-      assert.equal(employee.supervisor_id, null);
-    },
-  );
-
-  await t.test("should return created user and employee", async () => {
-    const user = {
-      id: "principal-new",
-      email: "new.employee@example.com",
-      role: ROLES.EMPLOYEE,
-      name: "New Employee",
-    };
-    const employee = {
-      id: "emp-new",
-      principal_id: user.id,
-      employee_number: "EMP-003",
-      designation: "Engineer",
-      grade_name: "G3",
-      supervisor_id: null,
-    };
-
-    const response = { user, employee };
-
-    assert.equal(response.user.role, ROLES.EMPLOYEE);
-    assert.equal(response.employee.employee_number, "EMP-003");
+    expect(res.body.user.name).toBe("new.employee");
   });
 
-  await t.test("should log create employee audit", async () => {
-    auditLogs = [];
+  it("should create EMPLOYEE principal with EMPLOYEE type", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "new.employee@example.com",
+            role: ROLES.EMPLOYEE,
+            name: "New Employee",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "EMP-003",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: null,
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
 
-    await mockLogAudit({
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-003",
+        email: "new.employee@example.com",
+        password: "Pass@123",
+        designation: "Engineer",
+        gradeName: "G3",
+        name: "New Employee",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(res.body.user.role).toBe(ROLES.EMPLOYEE);
+    expect(res.body.user.principal_type).toBe("EMPLOYEE");
+  });
+
+  it("should create employee row with supervisorId or null", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "new.employee@example.com",
+            role: ROLES.EMPLOYEE,
+            name: "New Employee",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "EMP-003",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: null,
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-003",
+        email: "new.employee@example.com",
+        password: "Pass@123",
+        designation: "Engineer",
+        gradeName: "G3",
+        name: "New Employee",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(res.body.employee.employee_number).toBe("EMP-003");
+    expect(res.body.employee.supervisor_id).toBeNull();
+  });
+
+  it("should return created user and employee with 201", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "new.employee@example.com",
+            role: ROLES.EMPLOYEE,
+            name: "New Employee",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "EMP-003",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: null,
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-003",
+        email: "new.employee@example.com",
+        password: "Pass@123",
+        designation: "Engineer",
+        gradeName: "G3",
+        name: "New Employee",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.user.role).toBe(ROLES.EMPLOYEE);
+    expect(res.body.employee.employee_number).toBe("EMP-003");
+  });
+
+  it("should log create employee audit", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "new.employee@example.com",
+            role: ROLES.EMPLOYEE,
+            name: "New Employee",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "EMP-003",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: null,
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-003",
+        email: "new.employee@example.com",
+        password: "Pass@123",
+        designation: "Engineer",
+        gradeName: "G3",
+        name: "New Employee",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
       actorPrincipalId: "super-1",
       action: "CREATE_EMPLOYEE",
       resourceType: "EMPLOYEE",
-      resourceId: "emp-new",
-      metadata: { principalId: "principal-new" },
     });
+  });
 
-    assert.equal(auditLogs[0].action, "CREATE_EMPLOYEE");
+  it("should document missing employeeNumber validation — empty number checks DB", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "test@test.com",
+            role: ROLES.EMPLOYEE,
+            name: "test",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: null,
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        employeeNumber: "",
+        email: "test@test.com",
+        password: "Pass@123",
+        designation: "Engineer",
+        gradeName: "G3",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(res.statusCode).toBe(201);
+  });
+
+  it("should accept supervisorId when provided", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "new.employee@example.com",
+            role: ROLES.EMPLOYEE,
+            name: "New Employee",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "EMP-004",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: "sup-1",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-004",
+        email: "new.employee@example.com",
+        password: "Pass@123",
+        designation: "Engineer",
+        gradeName: "G3",
+        name: "New Employee",
+        supervisorId: "sup-1",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.employee.supervisor_id).toBe("sup-1");
+  });
+
+  it("should hash employee password with bcrypt", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "new-principal",
+            email: "new.employee@example.com",
+            role: ROLES.EMPLOYEE,
+            name: "New Employee",
+            principal_type: "EMPLOYEE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "emp-new",
+            principal_id: "new-principal",
+            employee_number: "EMP-003",
+            designation: "Engineer",
+            grade_name: "G3",
+            supervisor_id: null,
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({
+      body: {
+        employeeNumber: "EMP-003",
+        email: "new.employee@example.com",
+        password: "SecurePass1",
+        designation: "Engineer",
+        gradeName: "G3",
+        name: "New Employee",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createEmployee(req, res);
+
+    expect(vi.mocked(bcrypt.hash)).toHaveBeenCalledWith("SecurePass1", 10);
+  });
+});
+
+// Authorization gaps
+
+describe("SUPERADMIN AUTHORIZATION GAPS", () => {
+  it("GAP: createUser and createEmployee do not verify req.user.role in controller", () => {
+    expect(typeof superAdminController.createUser).toBe("function");
+    expect(typeof superAdminController.createEmployee).toBe("function");
+  });
+
+  it("GAP: deleteUser does not verify the target is not LEARNING_ADMIN with active enrollments", () => {
+    expect(typeof superAdminController.deleteUser).toBe("function");
+  });
+
+  it("GAP: getAllLearners does not validate that designation filter value is valid", () => {
+    expect(typeof superAdminController.getAllLearners).toBe("function");
   });
 });

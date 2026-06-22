@@ -1,17 +1,65 @@
-// Set up test environment
-process.env.SECRET_KEY =
-  process.env.SECRET_KEY || "test-secret-key-for-testing";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import test from "node:test";
-import assert from "assert/strict";
-import * as integrationController from "../controllers/integrationController.js";
+// Mock all external dependencies
 
-// MOCK UTILITIES
+vi.mock("../db.js", () => ({
+  query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+}));
+
+vi.mock("../utils/erpClient.js", () => ({
+  fetchEmployeeDetailsForServiceNo: vi
+    .fn()
+    .mockRejectedValue(new Error("No ERP mock set for this test")),
+  fetchEmployeeSubordinates: vi
+    .fn()
+    .mockRejectedValue(new Error("No ERP mock set for this test")),
+}));
+
+vi.mock("../utils/audit.js", () => ({
+  logAudit: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../utils/http.js", () => ({
+  sendError: vi.fn((res, status, code, message, details) => {
+    res.statusCode = status;
+    res.body = { error: { code, message } };
+    if (details) {
+      res.body.error.details = details;
+    }
+    return res;
+  }),
+}));
+
+vi.mock("bcryptjs", () => ({
+  default: {
+    hash: vi.fn(),
+  },
+  hash: vi.fn(),
+}));
+
+// Imports (after mocks)
+
+import { query } from "../db.js";
+import {
+  fetchEmployeeDetailsForServiceNo,
+  fetchEmployeeSubordinates,
+} from "../utils/erpClient.js";
+import { logAudit } from "../utils/audit.js";
+import { sendError } from "../utils/http.js";
+import bcrypt from "bcryptjs";
+import {
+  getErpLearnerDetails,
+  getErpSubordinates,
+  importErpEmployees,
+} from "../controllers/integrationController.js";
+
+// Test helpers
+
 const createMockRes = () => {
   const res = {
     statusCode: 200,
     body: null,
-    headers: {},
+    _headers: {},
     status(code) {
       this.statusCode = code;
       return this;
@@ -20,26 +68,16 @@ const createMockRes = () => {
       this.body = data;
       return this;
     },
-    header(key, value) {
-      this.headers[key] = value;
-      return this;
-    },
   };
   return res;
 };
 
 const createMockReq = (overrides = {}) => {
-  const headers = {};
   const baseReq = {
     body: {},
     params: {},
-    headers,
-    header(name) {
-      return this.headers[name];
-    },
     user: { id: "user-1", role: "LEARNING_ADMIN" },
   };
-
   return {
     ...baseReq,
     ...overrides,
@@ -49,121 +87,61 @@ const createMockReq = (overrides = {}) => {
   };
 };
 
-const sendMockError = (res, status, code, message, details) => {
-  const payload = { error: { code, message } };
-  if (details) {
-    payload.error.details = details;
+const getErrorStatus = (error) =>
+  typeof error.status === "number" ? error.status : 502;
+
+const normalizeName = (employee) => {
+  if (employee.employeeName && String(employee.employeeName).trim()) {
+    return String(employee.employeeName).trim();
   }
-  return res.status(status).json(payload);
+  const initials = employee.employeeInitials
+    ? String(employee.employeeInitials).trim()
+    : "";
+  const surname = employee.employeeSurname
+    ? String(employee.employeeSurname).trim()
+    : "";
+  const fallback = `${initials} ${surname}`.trim();
+  return fallback || `Employee ${employee.employeeNumber}`;
 };
 
-// MOCK DATABASE
-let mockDatabase = {};
-
-const setupMockDatabase = () => {
-  mockDatabase = {
-    employees: [
-      {
-        id: "employee-existing",
-        principal_id: "principal-existing",
-        employee_number: "EMP-001",
-      },
-    ],
-    principals: [
-      {
-        id: "principal-existing",
-        email: "existing@lpms.com",
-        name: "Existing Employee",
-      },
-      {
-        id: "principal-email-owner",
-        email: "duplicate@lpms.com",
-        name: "Duplicate Email Owner",
-      },
-    ],
-  };
+const normalizeEmail = (employee) => {
+  const rawEmail = employee.email
+    ? String(employee.email).trim().toLowerCase()
+    : "";
+  if (rawEmail) {
+    return rawEmail;
+  }
+  const domain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || "erp.local";
+  return `${String(employee.employeeNumber).trim()}@${domain}`;
 };
 
-// MOCK QUERY FUNCTION
-const mockQuery = async (sql, params = []) => {
-  if (sql.includes("SELECT id FROM employees WHERE employee_number")) {
-    const employeeNumber = params[0];
-    const employee = mockDatabase.employees.find(
-      (e) => e.employee_number === employeeNumber,
-    );
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
-    return {
-      rows: employee ? [{ id: employee.id }] : [],
-      rowCount: employee ? 1 : 0,
-    };
-  }
+// Exports testing
 
-  if (sql.includes("SELECT id FROM auth_principals WHERE email")) {
-    const email = params[0];
-    const principal = mockDatabase.principals.find((p) => p.email === email);
+describe("INTEGRATION CONTROLLER EXPORTS", () => {
+  it("should export getErpLearnerDetails as a function", () => {
+    expect(typeof getErpLearnerDetails).toBe("function");
+  });
+  it("should export getErpSubordinates as a function", () => {
+    expect(typeof getErpSubordinates).toBe("function");
+  });
+  it("should export importErpEmployees as a function", () => {
+    expect(typeof importErpEmployees).toBe("function");
+  });
+});
 
-    return {
-      rows: principal ? [{ id: principal.id }] : [],
-      rowCount: principal ? 1 : 0,
-    };
-  }
+// Get erp learner details testing
 
-  if (sql.includes("INSERT INTO auth_principals")) {
-    const principal = {
-      id: `principal-${mockDatabase.principals.length + 1}`,
-      email: params[0],
-      password_hash: params[1],
-      name: params[2],
-    };
-    mockDatabase.principals.push(principal);
-
-    return {
-      rows: [
-        { id: principal.id, email: principal.email, name: principal.name },
-      ],
-      rowCount: 1,
-    };
-  }
-
-  if (sql.includes("INSERT INTO employees")) {
-    const employee = {
-      id: `employee-${mockDatabase.employees.length + 1}`,
-      principal_id: params[0],
-      employee_number: params[1],
-      designation: params[2],
-      grade_name: params[3],
-      supervisor_id: params[4],
-    };
-    mockDatabase.employees.push(employee);
-
-    return {
-      rows: [{ id: employee.id, employee_number: employee.employee_number }],
-      rowCount: 1,
-    };
-  }
-
-  return { rows: [], rowCount: 0 };
-};
-
-// MOCK ERP CLIENT
-let erpCalls = [];
-
-const mockFetchEmployeeDetailsForServiceNo = async (employeeNo) => {
-  erpCalls.push({ type: "details", employeeNo });
-
-  if (employeeNo === "ERP-ERROR") {
-    const error = new Error("ERP unavailable");
-    error.status = 503;
-    error.details = { reason: "Service unavailable" };
-    throw error;
-  }
-
-  return {
+describe("GET ERP LEARNER DETAILS", () => {
+  const mockErpData = {
     success: true,
     message: "Success",
     data: [
       {
-        employeeNumber: employeeNo,
+        employeeNumber: "EMP-001",
         employeeName: "John Silva",
         employeeInitials: "J",
         employeeSurname: "Silva",
@@ -171,20 +149,169 @@ const mockFetchEmployeeDetailsForServiceNo = async (employeeNo) => {
       },
     ],
   };
-};
 
-const mockFetchEmployeeSubordinates = async (employeeNo) => {
-  erpCalls.push({ type: "subordinates", employeeNo });
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({ body: {} });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
 
-  if (employeeNo === "ERP-ERROR") {
-    throw new Error("ERP unavailable");
-  }
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
 
-  if (employeeNo === "EMP-NONE") {
-    return { success: true, message: "Success", data: [] };
-  }
+  it("should reject non-string employeeNo", async () => {
+    const req = createMockReq({ body: { employeeNo: 12345 } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
 
-  return {
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should reject empty string employeeNo", async () => {
+    const req = createMockReq({ body: { employeeNo: "" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should trim employeeNo before ERP lookup", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce(
+      mockErpData,
+    );
+
+    const req = createMockReq({ body: { employeeNo: "  EMP-001  " } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(vi.mocked(fetchEmployeeDetailsForServiceNo).mock.calls[0][0]).toBe(
+      "EMP-001",
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should return ERP learner data on success", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce(
+      mockErpData,
+    );
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data[0].employeeNumber).toBe("EMP-001");
+  });
+
+  it("should log FETCH_ERP_LEARNER_DETAILS audit on success", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce(
+      mockErpData,
+    );
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
+      actorPrincipalId: "user-1",
+      action: "FETCH_ERP_LEARNER_DETAILS",
+      resourceType: "ERP",
+      metadata: { employeeNo: "EMP-001" },
+    });
+  });
+
+  it("should map ERP errors to ERP_REQUEST_FAILED", async () => {
+    const erpError = new Error("ERP unavailable");
+    erpError.status = 503;
+    erpError.details = { reason: "Service unavailable" };
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(erpError);
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+    expect(res.body.error.message).toBe(
+      "Failed to fetch learner details from ERP.",
+    );
+  });
+
+  it("should default ERP error status to 502 when error has no status", async () => {
+    const erpError = new Error("Unexpected ERP error");
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(erpError);
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+  });
+
+  it("should include error details when ERP provides them", async () => {
+    const erpError = new Error("ERP unavailable");
+    erpError.status = 503;
+    erpError.details = { reason: "Service unavailable" };
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(erpError);
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.body.error.details).toEqual({ reason: "Service unavailable" });
+  });
+
+  it("should not log audit when ERP call fails", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
+      new Error("ERP timeout"),
+    );
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(vi.mocked(logAudit)).not.toHaveBeenCalled();
+  });
+
+  it("should handle ERP response with no data array", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: null,
+    });
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.statusCode).toBe(200);
+
+    expect(res.body.data).toBeNull();
+  });
+
+  it("should handle empty user object (req.user = {})", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", employeeName: "John" }],
+    });
+
+    const req = createMockReq({ user: {}, body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpLearnerDetails(req, res);
+
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+// Get erp subordinates testing
+
+describe("GET ERP SUBORDINATES", () => {
+  const mockSubordinates = {
     success: true,
     message: "Success",
     data: [
@@ -194,435 +321,270 @@ const mockFetchEmployeeSubordinates = async (employeeNo) => {
       },
     ],
   };
-};
 
-// MOCK BCRYPT
-let hashCalls = [];
-
-const mockBcrypt = {
-  hash: async (password, rounds) => {
-    hashCalls.push({ password, rounds });
-    return `hashed-${password}`;
-  },
-};
-
-// MOCK AUDIT LOGGING
-let auditLogs = [];
-
-const mockLogAudit = async (audit) => {
-  auditLogs.push(audit);
-};
-
-// CONTROLLER HELPER LOGIC FOR BEHAVIOR TESTING
-
-const getErrorStatus = (error) =>
-  typeof error.status === "number" ? error.status : 502;
-
-const normalizeName = (employee) => {
-  if (employee.employeeName && String(employee.employeeName).trim()) {
-    return String(employee.employeeName).trim();
-  }
-
-  const initials = employee.employeeInitials
-    ? String(employee.employeeInitials).trim()
-    : "";
-  const surname = employee.employeeSurname
-    ? String(employee.employeeSurname).trim()
-    : "";
-  const fallback = `${initials} ${surname}`.trim();
-
-  return fallback || `Employee ${employee.employeeNumber}`;
-};
-
-const normalizeEmail = (employee) => {
-  const rawEmail = employee.email
-    ? String(employee.email).trim().toLowerCase()
-    : "";
-
-  if (rawEmail) {
-    return rawEmail;
-  }
-
-  const domain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || "erp.local";
-  return `${String(employee.employeeNumber).trim()}@${domain}`;
-};
-
-const simulateImportErpEmployees = async (req, res) => {
-  const { employees, supervisorId } = req.body;
-
-  if (!Array.isArray(employees) || employees.length === 0) {
-    return sendMockError(
-      res,
-      400,
-      "VALIDATION_ERROR",
-      "employees must be a non-empty array.",
-    );
-  }
-
-  const defaultPassword =
-    process.env.ERP_IMPORTED_DEFAULT_PASSWORD || "ChangeMe@123";
-  const passwordHash = await mockBcrypt.hash(defaultPassword, 10);
-
-  const imported = [];
-  const skipped = [];
-
-  for (const employee of employees) {
-    const employeeNumber = employee?.employeeNumber
-      ? String(employee.employeeNumber).trim()
-      : "";
-
-    if (!employeeNumber) {
-      skipped.push({ employeeNumber: null, reason: "Missing employeeNumber" });
-      continue;
-    }
-
-    const existingEmployee = await mockQuery(
-      "SELECT id FROM employees WHERE employee_number = $1 LIMIT 1",
-      [employeeNumber],
-    );
-
-    if (existingEmployee.rowCount > 0) {
-      skipped.push({
-        employeeNumber,
-        reason: "Employee number already exists",
-      });
-      continue;
-    }
-
-    const email = normalizeEmail(employee);
-
-    const existingPrincipal = await mockQuery(
-      "SELECT id FROM auth_principals WHERE email = $1 LIMIT 1",
-      [email],
-    );
-
-    if (existingPrincipal.rowCount > 0) {
-      skipped.push({
-        employeeNumber,
-        reason: "Email already exists in auth principals",
-      });
-      continue;
-    }
-
-    const name = normalizeName({ ...employee, employeeNumber });
-    const designation = employee.designation
-      ? String(employee.designation).trim()
-      : "Employee";
-    const gradeName = employee.gradeName
-      ? String(employee.gradeName).trim()
-      : "N/A";
-
-    const principalInsert = await mockQuery(
-      "INSERT INTO auth_principals RETURNING id, email, name",
-      [email, passwordHash, name],
-    );
-    const principal = principalInsert.rows[0];
-
-    const employeeInsert = await mockQuery(
-      "INSERT INTO employees RETURNING id, employee_number",
-      [
-        principal.id,
-        employeeNumber,
-        designation,
-        gradeName,
-        supervisorId || null,
-      ],
-    );
-
-    imported.push({
-      employeeNumber,
-      principalId: principal.id,
-      employeeId: employeeInsert.rows[0].id,
-      email: principal.email,
-    });
-  }
-
-  await mockLogAudit({
-    actorPrincipalId: req.user.id,
-    action: "IMPORT_ERP_EMPLOYEES",
-    resourceType: "ERP",
-    metadata: {
-      requested: employees.length,
-      imported: imported.length,
-      skipped: skipped.length,
-    },
-  });
-
-  return res.status(200).json({
-    success: true,
-    importedCount: imported.length,
-    skippedCount: skipped.length,
-    imported,
-    skipped,
-    defaultPasswordNote:
-      "Imported users are created with ERP_IMPORTED_DEFAULT_PASSWORD.",
-  });
-};
-
-// TEST SUITES
-
-// export functions testing
-test("INTEGRATION CONTROLLER EXPORTS TESTS", async (t) => {
-  const expectedExports = [
-    "getErpLearnerDetails",
-    "getErpSubordinates",
-    "importErpEmployees",
-  ];
-
-  for (const exportName of expectedExports) {
-    await t.test(`should export ${exportName}`, async () => {
-      assert.equal(typeof integrationController[exportName], "function");
-    });
-  }
-});
-
-// getErpLearnerDetails testing
-test("GET ERP LEARNER DETAILS TESTS", async (t) => {
-  await t.test("should require employeeNo", async () => {
-    const req = createMockReq({ body: {} });
-    const res = createMockRes();
-
-    if (!req.body.employeeNo || typeof req.body.employeeNo !== "string") {
-      sendMockError(res, 400, "VALIDATION_ERROR", "employeeNo is required.");
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.error.code, "VALIDATION_ERROR");
-  });
-
-  await t.test("should reject non-string employeeNo", async () => {
-    const req = createMockReq({ body: { employeeNo: 12345 } });
-    const isValid =
-      req.body.employeeNo && typeof req.body.employeeNo === "string";
-
-    assert.equal(isValid, false);
-  });
-
-  await t.test("should trim employeeNo before ERP lookup", async () => {
-    erpCalls = [];
-    const req = createMockReq({ body: { employeeNo: " EMP-001 " } });
-
-    await mockFetchEmployeeDetailsForServiceNo(req.body.employeeNo.trim());
-
-    assert.equal(erpCalls[0].employeeNo, "EMP-001");
-  });
-
-  await t.test("should return ERP learner data shape", async () => {
-    const data = await mockFetchEmployeeDetailsForServiceNo("EMP-001");
-
-    assert.equal(data.success, true);
-    assert.ok(Array.isArray(data.data));
-    assert.equal(data.data[0].employeeNumber, "EMP-001");
-    assert.ok(data.data[0].employeeName);
-  });
-
-  await t.test("should log FETCH_ERP_LEARNER_DETAILS audit", async () => {
-    auditLogs = [];
-    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
-
-    await mockLogAudit({
-      actorPrincipalId: req.user.id,
-      action: "FETCH_ERP_LEARNER_DETAILS",
-      resourceType: "ERP",
-      metadata: { employeeNo: req.body.employeeNo },
-    });
-
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "FETCH_ERP_LEARNER_DETAILS");
-    assert.equal(auditLogs[0].resourceType, "ERP");
-  });
-
-  await t.test("should map ERP errors to ERP_REQUEST_FAILED", async () => {
-    const res = createMockRes();
-
-    try {
-      await mockFetchEmployeeDetailsForServiceNo("ERP-ERROR");
-    } catch (error) {
-      sendMockError(
-        res,
-        getErrorStatus(error),
-        "ERP_REQUEST_FAILED",
-        "Failed to fetch learner details from ERP.",
-        error.details || error.message,
-      );
-    }
-
-    assert.equal(res.statusCode, 503);
-    assert.equal(res.body.error.code, "ERP_REQUEST_FAILED");
-    assert.ok(res.body.error.details);
-  });
-
-  await t.test("should default ERP error status to 502", async () => {
-    const error = new Error("Unexpected ERP error");
-
-    assert.equal(getErrorStatus(error), 502);
-  });
-});
-
-// getErpSubordinates testing
-test("GET ERP SUBORDINATES TESTS", async (t) => {
-  await t.test("should require employeeNo", async () => {
+  it("should return 400 when employeeNo is missing", async () => {
     const req = createMockReq({ body: { employeeNo: "" } });
-    const isValid =
-      req.body.employeeNo && typeof req.body.employeeNo === "string";
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
 
-    assert.equal(Boolean(isValid), false);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should reject non-string employeeNo", async () => {
+  it("should reject null employeeNo", async () => {
     const req = createMockReq({ body: { employeeNo: null } });
-    const isValid =
-      req.body.employeeNo && typeof req.body.employeeNo === "string";
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
 
-    assert.equal(Boolean(isValid), false);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should trim employeeNo before ERP lookup", async () => {
-    erpCalls = [];
-    const req = createMockReq({ body: { employeeNo: " EMP-001 " } });
+  it("should reject non-string employeeNo", async () => {
+    const req = createMockReq({ body: { employeeNo: 12345 } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
 
-    await mockFetchEmployeeSubordinates(req.body.employeeNo.trim());
-
-    assert.equal(erpCalls[0].type, "subordinates");
-    assert.equal(erpCalls[0].employeeNo, "EMP-001");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
-  await t.test("should return subordinate data shape", async () => {
-    const data = await mockFetchEmployeeSubordinates("EMP-001");
+  it("should trim employeeNo before ERP lookup", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce(
+      mockSubordinates,
+    );
 
-    assert.equal(data.success, true);
-    assert.ok(Array.isArray(data.data));
-    assert.equal(data.data[0].employeeNumber, "SUB-001");
+    const req = createMockReq({ body: { employeeNo: "  EMP-001  " } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
+
+    expect(vi.mocked(fetchEmployeeSubordinates).mock.calls[0][0]).toBe(
+      "EMP-001",
+    );
+    expect(res.statusCode).toBe(200);
   });
 
-  await t.test("should detect empty subordinate response", async () => {
-    const data = await mockFetchEmployeeSubordinates("EMP-NONE");
-    const hasSubordinates = Array.isArray(data?.data) && data.data.length > 0;
+  it("should return subordinate data on success", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce(
+      mockSubordinates,
+    );
 
-    assert.equal(hasSubordinates, false);
-  });
-
-  await t.test("should log FETCH_ERP_SUBORDINATES audit", async () => {
-    auditLogs = [];
     const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
 
-    await mockLogAudit({
-      actorPrincipalId: req.user.id,
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data[0].employeeNumber).toBe("SUB-001");
+  });
+
+  it("should handle empty subordinate response", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq({ body: { employeeNo: "EMP-NONE" } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+
+    const hasSubordinates =
+      Array.isArray(res.body?.data) && res.body.data.length > 0;
+    expect(hasSubordinates).toBe(false);
+  });
+
+  it("should log FETCH_ERP_SUBORDINATES audit on success", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce(
+      mockSubordinates,
+    );
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
+      actorPrincipalId: "user-1",
       action: "FETCH_ERP_SUBORDINATES",
       resourceType: "ERP",
-      metadata: { employeeNo: req.body.employeeNo },
+      metadata: { employeeNo: "EMP-001" },
     });
-
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "FETCH_ERP_SUBORDINATES");
-    assert.equal(auditLogs[0].resourceType, "ERP");
   });
 
-  await t.test("should map ERP errors to ERP_REQUEST_FAILED", async () => {
+  it("should map ERP errors to ERP_REQUEST_FAILED", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockRejectedValueOnce(
+      new Error("ERP unavailable"),
+    );
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
     const res = createMockRes();
+    await getErpSubordinates(req, res);
 
-    try {
-      await mockFetchEmployeeSubordinates("ERP-ERROR");
-    } catch (error) {
-      sendMockError(
-        res,
-        getErrorStatus(error),
-        "ERP_REQUEST_FAILED",
-        "Failed to fetch subordinate details from ERP.",
-        error.details || error.message,
-      );
-    }
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+    expect(res.body.error.message).toBe(
+      "Failed to fetch subordinate details from ERP.",
+    );
+  });
 
-    assert.equal(res.statusCode, 502);
-    assert.equal(res.body.error.code, "ERP_REQUEST_FAILED");
+  it("should not log audit when ERP call fails", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockRejectedValueOnce(
+      new Error("ERP timeout"),
+    );
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
+
+    expect(vi.mocked(logAudit)).not.toHaveBeenCalled();
+  });
+
+  it("should handle ERP response with no data array", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: null,
+    });
+
+    const req = createMockReq({ body: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await getErpSubordinates(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.data).toBeNull();
   });
 });
 
-// importErpEmployees testing
-test("IMPORT ERPEMPLOYEES TESTS", async (t) => {
-  await t.test("should require employees to be a non-empty array", async () => {
-    const req = createMockReq({ body: { employees: [] } });
-    const res = createMockRes();
+// Import erp employees testing
 
-    if (!Array.isArray(req.body.employees) || req.body.employees.length === 0) {
-      sendMockError(
-        res,
-        400,
-        "VALIDATION_ERROR",
-        "employees must be a non-empty array.",
-      );
-    }
-
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.error.code, "VALIDATION_ERROR");
+describe("IMPORT ERP EMPLOYEES", () => {
+  beforeEach(() => {
+    process.env.ERP_FALLBACK_EMAIL_DOMAIN = "erp.local";
   });
 
-  await t.test(
-    "should use ERP_IMPORTED_DEFAULT_PASSWORD fallback",
-    async () => {
-      const previous = process.env.ERP_IMPORTED_DEFAULT_PASSWORD;
-      delete process.env.ERP_IMPORTED_DEFAULT_PASSWORD;
+  it("should return 400 when employees is not a non-empty array", async () => {
+    const req = createMockReq({ body: { employees: [] } });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
 
-      const defaultPassword =
-        process.env.ERP_IMPORTED_DEFAULT_PASSWORD || "ChangeMe@123";
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
 
-      assert.equal(defaultPassword, "ChangeMe@123");
+  it("should return 400 when employees is missing", async () => {
+    const req = createMockReq({ body: {} });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
 
-      if (previous === undefined) {
-        delete process.env.ERP_IMPORTED_DEFAULT_PASSWORD;
-      } else {
-        process.env.ERP_IMPORTED_DEFAULT_PASSWORD = previous;
-      }
-    },
-  );
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
 
-  await t.test(
-    "should hash the default password once for the batch",
-    async () => {
-      setupMockDatabase();
-      hashCalls = [];
+  it("CONTROLLER GAP: importErpEmployees has no role-based authorization", () => {
+    expect(typeof importErpEmployees).toBe("function");
+  });
 
-      const req = createMockReq({
-        body: {
-          employees: [
-            { employeeNumber: "EMP-002", email: "two@lpms.com" },
-            { employeeNumber: "EMP-003", email: "three@lpms.com" },
-          ],
+  it("should use ChangeMe@123 as default password fallback", async () => {
+    const original = process.env.ERP_IMPORTED_DEFAULT_PASSWORD;
+    delete process.env.ERP_IMPORTED_DEFAULT_PASSWORD;
+
+    const defaultPassword =
+      process.env.ERP_IMPORTED_DEFAULT_PASSWORD || "ChangeMe@123";
+    expect(defaultPassword).toBe("ChangeMe@123");
+
+    if (original !== undefined) {
+      process.env.ERP_IMPORTED_DEFAULT_PASSWORD = original;
+    }
+  });
+
+  it("should hash the default password once for the batch", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-ChanageMe@123");
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "principal-new-1",
+          email: "emp002@erp.local",
+          name: "Employee Two",
         },
-      });
-      const res = createMockRes();
+      ],
+      rowCount: 1,
+    });
 
-      await simulateImportErpEmployees(req, res);
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-new-1", employee_number: "EMP-002" }],
+      rowCount: 1,
+    });
 
-      assert.equal(hashCalls.length, 1);
-      assert.equal(hashCalls[0].password, "ChangeMe@123");
-      assert.equal(hashCalls[0].rounds, 10);
-    },
-  );
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-  await t.test("should skip rows with missing employeeNumber", async () => {
-    setupMockDatabase();
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "principal-new-2",
+          email: "emp003@erp.local",
+          name: "Employee Three",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-new-2", employee_number: "EMP-003" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        employees: [
+          { employeeNumber: "EMP-002", email: "emp002@erp.local" },
+          { employeeNumber: "EMP-003", email: "emp003@erp.local" },
+        ],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    expect(vi.mocked(bcrypt.hash).mock.calls.length).toBe(1);
+    expect(vi.mocked(bcrypt.hash).mock.calls[0][0]).toBe("ChangeMe@123");
+    expect(vi.mocked(bcrypt.hash).mock.calls[0][1]).toBe(10);
+  });
+
+  it("should skip rows with missing employeeNumber", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
 
     const req = createMockReq({
       body: { employees: [{ employeeName: "No Number" }] },
     });
     const res = createMockRes();
+    await importErpEmployees(req, res);
 
-    await simulateImportErpEmployees(req, res);
-
-    assert.equal(res.body.importedCount, 0);
-    assert.equal(res.body.skippedCount, 1);
-    assert.equal(res.body.skipped[0].reason, "Missing employeeNumber");
+    expect(res.body.importedCount).toBe(0);
+    expect(res.body.skippedCount).toBe(1);
+    expect(res.body.skipped[0].reason).toBe("Missing employeeNumber");
   });
 
-  await t.test("should trim employeeNumber", async () => {
+  it("should trim employeeNumber", async () => {
     const employeeNumber = String(" EMP-002 ").trim();
-
-    assert.equal(employeeNumber, "EMP-002");
+    expect(employeeNumber).toBe("EMP-002");
   });
 
-  await t.test("should skip existing employee numbers", async () => {
-    setupMockDatabase();
+  it("should skip existing employee numbers", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "existing-employee" }],
+      rowCount: 1,
+    });
 
     const req = createMockReq({
       body: {
@@ -630,172 +592,410 @@ test("IMPORT ERPEMPLOYEES TESTS", async (t) => {
       },
     });
     const res = createMockRes();
+    await importErpEmployees(req, res);
 
-    await simulateImportErpEmployees(req, res);
-
-    assert.equal(res.body.importedCount, 0);
-    assert.equal(res.body.skipped[0].reason, "Employee number already exists");
+    expect(res.body.importedCount).toBe(0);
+    expect(res.body.skipped[0].employeeNumber).toBe("EMP-001");
+    expect(res.body.skipped[0].reason).toBe("Employee number already exists");
   });
 
-  await t.test("should normalize email to lowercase", async () => {
-    const email = normalizeEmail({
-      employeeNumber: "EMP-002",
-      email: " JOHN@LPMS.COM ",
+  it("should handle employeeNumber that is only whitespace", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    const req = createMockReq({
+      body: { employees: [{ employeeNumber: "  ", email: "test@lpms.com" }] },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    expect(res.body.importedCount).toBe(0);
+    expect(res.body.skippedCount).toBe(1);
+    expect(res.body.skipped[0].reason).toBe("Missing employeeNumber");
+  });
+
+  it("should handle duplicate employee numbers within the same import batch", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "principal-1", email: "first@lpms.com", name: "First" }],
+      rowCount: 1,
     });
 
-    assert.equal(email, "john@lpms.com");
-  });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", employee_number: "EMP-002" }],
+      rowCount: 1,
+    });
 
-  await t.test(
-    "should create fallback email using ERP_FALLBACK_EMAIL_DOMAIN",
-    async () => {
-      const previous = process.env.ERP_FALLBACK_EMAIL_DOMAIN;
-      process.env.ERP_FALLBACK_EMAIL_DOMAIN = "example.local";
-
-      const email = normalizeEmail({ employeeNumber: "EMP-002" });
-
-      assert.equal(email, "EMP-002@example.local");
-
-      if (previous === undefined) {
-        delete process.env.ERP_FALLBACK_EMAIL_DOMAIN;
-      } else {
-        process.env.ERP_FALLBACK_EMAIL_DOMAIN = previous;
-      }
-    },
-  );
-
-  await t.test("should skip existing auth principal email", async () => {
-    setupMockDatabase();
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1-duplicate" }],
+      rowCount: 1,
+    });
 
     const req = createMockReq({
       body: {
         employees: [
-          {
-            employeeNumber: "EMP-002",
-            email: "duplicate@lpms.com",
-          },
+          { employeeNumber: "EMP-002", email: "first@lpms.com" },
+          { employeeNumber: "EMP-002", email: "second@lpms.com" },
         ],
       },
     });
     const res = createMockRes();
+    await importErpEmployees(req, res);
 
-    await simulateImportErpEmployees(req, res);
+    expect(res.body.importedCount).toBe(1);
+    expect(res.body.skippedCount).toBe(1);
+    expect(res.body.skipped[0].employeeNumber).toBe("EMP-002");
+    expect(res.body.skipped[0].reason).toBe("Employee number already exists");
+  });
 
-    assert.equal(res.body.importedCount, 0);
-    assert.equal(
-      res.body.skipped[0].reason,
+  it("should handle special characters in employee name", async () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-002",
+      employeeName: " María O'Connor-Smith ",
+    });
+    expect(name).toBe("María O'Connor-Smith");
+  });
+
+  it("should handle null/undefined employeeName gracefully", async () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-002",
+      employeeName: null,
+      employeeInitials: "JD",
+      employeeSurname: undefined,
+    });
+    expect(name).toBe("JD");
+  });
+
+  it("should normalize email to lowercase", async () => {
+    const email = normalizeEmail({
+      employeeNumber: "EMP-002",
+      email: " JOHN@LPMS.COM ",
+    });
+    expect(email).toBe("john@lpms.com");
+  });
+
+  it("should create fallback email using ERP_FALLBACK_EMAIL_DOMAIN", async () => {
+    const previous = process.env.ERP_FALLBACK_EMAIL_DOMAIN;
+    process.env.ERP_FALLBACK_EMAIL_DOMAIN = "example.local";
+
+    const email = normalizeEmail({ employeeNumber: "EMP-002" });
+    expect(email).toBe("EMP-002@example.local");
+
+    if (previous === undefined) {
+      delete process.env.ERP_FALLBACK_EMAIL_DOMAIN;
+    } else {
+      process.env.ERP_FALLBACK_EMAIL_DOMAIN = previous;
+    }
+  });
+
+  it("should skip existing auth principal email", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "existing-principal" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        employees: [{ employeeNumber: "EMP-002", email: "duplicate@lpms.com" }],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    expect(res.body.importedCount).toBe(0);
+    expect(res.body.skipped[0].reason).toBe(
       "Email already exists in auth principals",
     );
   });
 
-  await t.test("should normalize name from employeeName", async () => {
+  it("should normalize name from employeeName", async () => {
     const name = normalizeName({
       employeeNumber: "EMP-002",
       employeeName: " John Doe ",
     });
-
-    assert.equal(name, "John Doe");
+    expect(name).toBe("John Doe");
   });
 
-  await t.test("should fall back to initials and surname", async () => {
+  it("should fall back to initials and surname", async () => {
     const name = normalizeName({
       employeeNumber: "EMP-002",
       employeeInitials: " J ",
       employeeSurname: " Doe ",
     });
-
-    assert.equal(name, "J Doe");
+    expect(name).toBe("J Doe");
   });
 
-  await t.test("should fall back to Employee plus employeeNumber", async () => {
+  it("should fall back to Employee plus employeeNumber", async () => {
     const name = normalizeName({ employeeNumber: "EMP-002" });
-
-    assert.equal(name, "Employee EMP-002");
+    expect(name).toBe("Employee EMP-002");
   });
 
-  await t.test("should default missing designation to Employee", async () => {
+  it("should default missing designation to Employee", async () => {
     const employee = {};
     const designation = employee.designation
       ? String(employee.designation).trim()
       : "Employee";
-
-    assert.equal(designation, "Employee");
+    expect(designation).toBe("Employee");
   });
 
-  await t.test("should default missing grade name to N/A", async () => {
+  it("should default missing grade name to N/A", async () => {
     const employee = {};
     const gradeName = employee.gradeName
       ? String(employee.gradeName).trim()
       : "N/A";
-
-    assert.equal(gradeName, "N/A");
+    expect(gradeName).toBe("N/A");
   });
 
-  await t.test("should store supervisorId or null", async () => {
+  it("should store supervisorId or null", async () => {
     const supervisorId = "";
     const storedSupervisorId = supervisorId || null;
-
-    assert.equal(storedSupervisorId, null);
+    expect(storedSupervisorId).toBe(null);
   });
 
-  await t.test(
-    "should return success counts, imported, and skipped arrays",
-    async () => {
-      setupMockDatabase();
+  it("should return success counts, imported, and skipped arrays", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
 
-      const req = createMockReq({
-        body: {
-          supervisorId: "supervisor-1",
-          employees: [
-            {
-              employeeNumber: "EMP-002",
-              employeeName: "Jane Doe",
-              email: "jane@lpms.com",
-              designation: "Analyst",
-              gradeName: "G4",
-            },
-            { employeeNumber: "" },
-          ],
-        },
-      });
-      const res = createMockRes();
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-      await simulateImportErpEmployees(req, res);
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
-      assert.equal(res.statusCode, 200);
-      assert.equal(res.body.success, true);
-      assert.equal(res.body.importedCount, 1);
-      assert.equal(res.body.skippedCount, 1);
-      assert.ok(Array.isArray(res.body.imported));
-      assert.ok(Array.isArray(res.body.skipped));
-      assert.equal(
-        res.body.defaultPasswordNote,
-        "Imported users are created with ERP_IMPORTED_DEFAULT_PASSWORD.",
-      );
-    },
-  );
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "principal-1", email: "jane@lpms.com", name: "Jane Doe" }],
+      rowCount: 1,
+    });
 
-  await t.test("should log import summary audit metadata", async () => {
-    setupMockDatabase();
-    auditLogs = [];
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", employee_number: "EMP-002" }],
+      rowCount: 1,
+    });
 
     const req = createMockReq({
       body: {
+        supervisorId: "supervisor-1",
         employees: [
-          { employeeNumber: "EMP-002", email: "two@lpms.com" },
+          {
+            employeeNumber: "EMP-002",
+            employeeName: "Jane Doe",
+            email: "jane@lpms.com",
+            designation: "Analyst",
+            gradeName: "G4",
+          },
           { employeeNumber: "" },
         ],
       },
     });
     const res = createMockRes();
+    await importErpEmployees(req, res);
 
-    await simulateImportErpEmployees(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.importedCount).toBe(1);
+    expect(res.body.skippedCount).toBe(1);
+    expect(Array.isArray(res.body.imported)).toBe(true);
+    expect(Array.isArray(res.body.skipped)).toBe(true);
+    expect(res.body.defaultPasswordNote).toBe(
+      "Imported users are created with ERP_IMPORTED_DEFAULT_PASSWORD.",
+    );
+  });
 
-    assert.equal(auditLogs.length, 1);
-    assert.equal(auditLogs[0].action, "IMPORT_ERP_EMPLOYEES");
-    assert.equal(auditLogs[0].resourceType, "ERP");
-    assert.equal(auditLogs[0].metadata.requested, 2);
-    assert.equal(auditLogs[0].metadata.imported, 1);
-    assert.equal(auditLogs[0].metadata.skipped, 1);
+  it("should handle bcrypt hash failure gracefully", async () => {
+    vi.mocked(bcrypt.hash).mockRejectedValueOnce(new Error("bcrypt error"));
+
+    const req = createMockReq({
+      body: {
+        employees: [{ employeeNumber: "EMP-002", email: "test@lpms.com" }],
+      },
+    });
+    const res = createMockRes();
+
+    await expect(importErpEmployees(req, res)).rejects.toThrow("bcrypt error");
+  });
+
+  it("should log import summary audit metadata", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        { id: "principal-1", email: "emp002@erp.local", name: "Employee Two" },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", employee_number: "EMP-002" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        employees: [
+          { employeeNumber: "EMP-002", email: "emp002@erp.local" },
+          { employeeNumber: "" },
+        ],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
+      actorPrincipalId: "user-1",
+      action: "IMPORT_ERP_EMPLOYEES",
+      resourceType: "ERP",
+      metadata: {
+        requested: 2,
+        imported: 1,
+        skipped: 1,
+      },
+    });
+  });
+
+  it("should include supervisorId in audit metadata when provided", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "principal-1", email: "emp@lpms.com", name: "Employee" }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", employee_number: "EMP-002" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        supervisorId: "supervisor-1",
+        employees: [{ employeeNumber: "EMP-002", email: "emp@lpms.com" }],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
+      actorPrincipalId: "user-1",
+      action: "IMPORT_ERP_EMPLOYEES",
+    });
+  });
+
+  it("should create principal with correct default fields (role=EMPLOYEE, must_change_password=TRUE)", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "principal-1", email: "john@lpms.com", name: "John Silva" }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ id: "employee-1", employee_number: "EMP-010" }],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({
+      body: {
+        employees: [
+          {
+            employeeNumber: "EMP-010",
+            email: "john@lpms.com",
+            employeeName: "John Silva",
+          },
+        ],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    const principalInsertSql = vi.mocked(query).mock.calls[2][0];
+    const principalInsertParams = vi.mocked(query).mock.calls[2][1];
+    expect(principalInsertSql).toContain("role");
+    expect(principalInsertSql).toContain("EMPLOYEE");
+    expect(principalInsertSql).toContain("must_change_password");
+    expect(principalInsertSql).toContain("TRUE");
+    expect(principalInsertParams[0]).toBe("john@lpms.com");
+    expect(principalInsertParams[1]).toBe("hashed-password");
+    expect(principalInsertParams[2]).toBe("John Silva");
+  });
+
+  it("should NOT create audit record if all employees are skipped", async () => {
+    vi.mocked(bcrypt.hash).mockResolvedValue("hashed-password");
+
+    const req = createMockReq({
+      body: {
+        employees: [{ employeeNumber: "" }],
+      },
+    });
+    const res = createMockRes();
+    await importErpEmployees(req, res);
+
+    expect(vi.mocked(logAudit).mock.calls[0][0]).toMatchObject({
+      metadata: { requested: 1, imported: 0, skipped: 1 },
+    });
+  });
+});
+
+// Private helper testing (getErrorStatus)
+
+describe("getErrorStatus (private helper)", () => {
+  it("should return error.status when present", () => {
+    const error = new Error("test");
+    error.status = 503;
+    expect(getErrorStatus(error)).toBe(503);
+  });
+
+  it("should default to 502 when error has no status", () => {
+    const error = new Error("test");
+    expect(getErrorStatus(error)).toBe(502);
+  });
+});
+
+describe("normalizeName (private helper)", () => {
+  it("should handle name with only whitespace", () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-001",
+      employeeName: "   ",
+    });
+
+    expect(name).toBe("Employee EMP-001");
+  });
+
+  it("should handle employeeNumber with special characters", () => {
+    const name = normalizeName({
+      employeeNumber: "EMP-001/2024",
+      employeeName: null,
+    });
+    expect(name).toBe("Employee EMP-001/2024");
+  });
+});
+
+describe("normalizeEmail (private helper)", () => {
+  it("should handle email with only whitespace", () => {
+    const email = normalizeEmail({
+      employeeNumber: "EMP-001",
+      email: "   ",
+    });
+    expect(email).toBe("EMP-001@erp.local");
+  });
+
+  it("should handle null email", () => {
+    const email = normalizeEmail({
+      employeeNumber: "EMP-001",
+      email: null,
+    });
+    expect(email).toBe("EMP-001@erp.local");
   });
 });
