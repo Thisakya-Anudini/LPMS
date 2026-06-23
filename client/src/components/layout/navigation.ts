@@ -89,7 +89,7 @@ const learningAdminLinks: NavigationLink[] = [
     icon: FolderKanban
   },
   {
-    label: 'Certificates',
+    label: 'Manage Certificates',
     to: '/learning-admin/certificates',
     icon: Shield
   },

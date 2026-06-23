@@ -89,7 +89,7 @@ export function Sidebar({
         {
           to: '/learning-admin/certificates',
           icon: ChevronRight,
-          label: 'Certificate Customization',
+          label: 'Manage Certificates',
           isSubmenu: true
         },
         {
@@ -165,7 +165,7 @@ export function Sidebar({
               {
                 to: '/learning-admin/certificates',
                 icon: ChevronRight,
-                label: 'Certificate Customization',
+                label: 'Manage Certificates',
                 isSubmenu: true
               },
               {
