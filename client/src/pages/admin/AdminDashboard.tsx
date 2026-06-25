@@ -114,9 +114,9 @@ export function AdminDashboard() {
   };
 
   const activateAssignEmployeeSearch = () => {
+    setAssignSearchErrors((prev) => ({ ...prev, name: undefined }));
     if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
-      setAssignSearchErrors((prev) => ({ ...prev, name: undefined }));
     }
     if (hasAssignFilterSearch) {
       clearAssignFilters();
@@ -124,9 +124,9 @@ export function AdminDashboard() {
   };
 
   const activateAssignNameSearch = () => {
+    setAssignSearchErrors((prev) => ({ ...prev, employeeNo: undefined }));
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
-      setAssignSearchErrors((prev) => ({ ...prev, employeeNo: undefined }));
     }
     if (hasAssignFilterSearch) {
       clearAssignFilters();
@@ -134,13 +134,12 @@ export function AdminDashboard() {
   };
 
   const activateAssignFilterSearch = () => {
+    setAssignSearchErrors({});
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
-      setAssignSearchErrors((prev) => ({ ...prev, employeeNo: undefined }));
     }
     if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
-      setAssignSearchErrors((prev) => ({ ...prev, name: undefined }));
     }
   };
 
