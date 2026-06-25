@@ -79,6 +79,7 @@ export function AdminDashboard() {
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserRow | null>(null);
 
   const [userForm, setUserForm] = useState(initialUserForm);
+  const [userFormErrors, setUserFormErrors] = useState<{ name?: string }>({});
   const [userFormLoading, setUserFormLoading] = useState(false);
   const [assignOptionsLoading, setAssignOptionsLoading] = useState(true);
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
@@ -253,6 +254,18 @@ export function AdminDashboard() {
 
   const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const trimmedName = userForm.name.trim();
+    if (!trimmedName) {
+      setUserFormErrors({ name: 'Name cannot be blank.' });
+      return;
+    }
+    if (!/^[A-Za-z\s]+$/.test(trimmedName)) {
+      setUserFormErrors({ name: 'Only letters and spaces are allowed.' });
+      return;
+    }
+
+    setUserFormErrors({});
     setUserFormLoading(true);
     try {
       const token = await getAccessToken();
@@ -261,9 +274,10 @@ export function AdminDashboard() {
         return;
       }
 
-      await userApi.createUser(token, { ...userForm, role: 'SUPER_ADMIN' });
+      await userApi.createUser(token, { ...userForm, name: trimmedName, role: 'SUPER_ADMIN' });
       showToast('User account created successfully.', 'success');
       setUserForm(initialUserForm);
+      setUserFormErrors({});
       await loadUsers();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to create user.', 'error');
@@ -400,8 +414,18 @@ export function AdminDashboard() {
             <Input
               label="Name"
               value={userForm.name}
-              onChange={(event) => setUserForm((prev) => ({ ...prev, name: event.target.value }))}
-              required
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setUserForm((prev) => ({ ...prev, name: nextValue }));
+                if (!nextValue.trim()) {
+                  setUserFormErrors((prev) => ({ ...prev, name: 'Name cannot be blank.' }));
+                } else if (!/^[A-Za-z\s]+$/.test(nextValue.trim())) {
+                  setUserFormErrors((prev) => ({ ...prev, name: 'Only letters and spaces are allowed.' }));
+                } else {
+                  setUserFormErrors((prev) => ({ ...prev, name: undefined }));
+                }
+              }}
+              error={userFormErrors.name}
             />
             <Input
               label="Email"

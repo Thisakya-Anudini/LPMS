@@ -166,21 +166,7 @@ describe("CREATE USER", () => {
     );
   });
 
-  it("should default name from email when name is empty", async () => {
-    vi.mocked(query).mockResolvedValueOnce({
-      rows: [
-        {
-          id: "new-1",
-          email: "newadmin@lpms.com",
-          role: ROLES.SUPER_ADMIN,
-          name: "newadmin",
-          principal_type: "USER",
-          created_at: new Date(),
-        },
-      ],
-      rowCount: 1,
-    });
-
+  it("should reject empty name", async () => {
     const req = createMockReq({
       body: {
         email: "newadmin@lpms.com",
@@ -192,7 +178,60 @@ describe("CREATE USER", () => {
     const res = createMockRes();
     await superAdminController.createUser(req, res);
 
-    expect(res.body.user.name).toBe("newadmin");
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toBe("Name cannot be blank.");
+    expect(vi.mocked(query)).not.toHaveBeenCalled();
+  });
+
+  it("should reject name with only spaces", async () => {
+    const req = createMockReq({
+      body: {
+        email: "newadmin@lpms.com",
+        password: "Pass@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "     ",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toBe("Name cannot be blank.");
+    expect(vi.mocked(query)).not.toHaveBeenCalled();
+  });
+
+  it("should reject name with numbers", async () => {
+    const req = createMockReq({
+      body: {
+        email: "newadmin@lpms.com",
+        password: "Pass@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "Admin 10",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toBe("Only letters and spaces are allowed for name.");
+    expect(vi.mocked(query)).not.toHaveBeenCalled();
+  });
+
+  it("should reject name with special characters", async () => {
+    const req = createMockReq({
+      body: {
+        email: "newadmin@lpms.com",
+        password: "Pass@123",
+        role: ROLES.SUPER_ADMIN,
+        name: "LPMS_BugReport",
+      },
+    });
+    const res = createMockRes();
+    await superAdminController.createUser(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.message).toBe("Only letters and spaces are allowed for name.");
+    expect(vi.mocked(query)).not.toHaveBeenCalled();
   });
 
   it("should hash password when creating principal", async () => {
