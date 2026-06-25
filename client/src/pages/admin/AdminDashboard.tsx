@@ -85,6 +85,7 @@ export function AdminDashboard() {
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
   const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
+  const [assignSearchErrors, setAssignSearchErrors] = useState<{ employeeNo?: string; name?: string }>({});
   const [assignDesignationFilter, setAssignDesignationFilter] = useState('');
   const [assignGradeFilter, setAssignGradeFilter] = useState('');
   const [assignOrganizationFilter, setAssignOrganizationFilter] = useState('');
@@ -115,6 +116,7 @@ export function AdminDashboard() {
   const activateAssignEmployeeSearch = () => {
     if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
+      setAssignSearchErrors((prev) => ({ ...prev, name: undefined }));
     }
     if (hasAssignFilterSearch) {
       clearAssignFilters();
@@ -124,6 +126,7 @@ export function AdminDashboard() {
   const activateAssignNameSearch = () => {
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
+      setAssignSearchErrors((prev) => ({ ...prev, employeeNo: undefined }));
     }
     if (hasAssignFilterSearch) {
       clearAssignFilters();
@@ -133,24 +136,45 @@ export function AdminDashboard() {
   const activateAssignFilterSearch = () => {
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
+      setAssignSearchErrors((prev) => ({ ...prev, employeeNo: undefined }));
     }
     if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
+      setAssignSearchErrors((prev) => ({ ...prev, name: undefined }));
     }
   };
 
   const handleAssignEmployeeNoChange = (value: string) => {
-    if (value.trim()) {
+    const sanitizedValue = value.replace(/\D/g, '');
+
+    if (sanitizedValue.trim()) {
       activateAssignEmployeeSearch();
     }
-    setAssignEmployeeNoSearch(value);
+    setAssignEmployeeNoSearch(sanitizedValue);
+    setAssignSearchErrors((prev) => ({
+      ...prev,
+      employeeNo: value !== sanitizedValue ? 'Only numbers are allowed.' : undefined
+    }));
   };
 
   const handleAssignNameSearchChange = (value: string) => {
-    if (value.trim()) {
+    const lettersOnlyValue = value.replace(/[^A-Za-z\s]/g, '');
+    const sanitizedValue = lettersOnlyValue.replace(/\s+/g, ' ').replace(/^\s+/, '');
+    const hasInvalidCharacters = value !== lettersOnlyValue;
+    const hasExtraSpaces = lettersOnlyValue !== sanitizedValue;
+
+    if (sanitizedValue.trim()) {
       activateAssignNameSearch();
     }
-    setAssignSurnameSearch(value);
+    setAssignSurnameSearch(sanitizedValue);
+    setAssignSearchErrors((prev) => ({
+      ...prev,
+      name: hasInvalidCharacters
+        ? 'Only letters are allowed.'
+        : hasExtraSpaces
+          ? 'Use single spaces between names.'
+          : undefined
+    }));
   };
 
   const handleAssignDesignationChange = (value: string) => {
@@ -303,6 +327,26 @@ export function AdminDashboard() {
   };
 
   const handleAssignSearch = async () => {
+    const employeeNo = assignEmployeeNoSearch.trim();
+    const name = assignSurnameSearch.trim().replace(/\s+/g, ' ');
+    const nextErrors: { employeeNo?: string; name?: string } = {};
+
+    if (employeeNo && !/^\d+$/.test(employeeNo)) {
+      nextErrors.employeeNo = 'Only numbers are allowed.';
+    }
+    if (name && !/^[A-Za-z]+(?:\s[A-Za-z]+)*$/.test(name)) {
+      nextErrors.name = 'Only letters and single spaces are allowed.';
+    }
+
+    if (nextErrors.employeeNo || nextErrors.name) {
+      setAssignSearchErrors(nextErrors);
+      return;
+    }
+
+    setAssignSearchErrors({});
+    setAssignEmployeeNoSearch(employeeNo);
+    setAssignSurnameSearch(name);
+
     try {
       setAssignSearchLoading(true);
       const token = await getAccessToken();
@@ -312,8 +356,8 @@ export function AdminDashboard() {
       }
 
       const response = await learningApi.searchAssignableEmployees(token, {
-        employeeNo: assignEmployeeNoSearch,
-        surname: assignSurnameSearch,
+        employeeNo,
+        surname: name,
         designation: assignDesignationFilter,
         grade: assignGradeFilter,
         organizationName: assignOrganizationFilter,
@@ -465,6 +509,8 @@ export function AdminDashboard() {
               onFocus={activateAssignEmployeeSearch}
               onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
               placeholder="e.g. 011338"
+              inputMode="numeric"
+              error={assignSearchErrors.employeeNo}
             />
             <Input
               label="Search by Name"
@@ -472,6 +518,7 @@ export function AdminDashboard() {
               onFocus={activateAssignNameSearch}
               onChange={(event) => handleAssignNameSearchChange(event.target.value)}
               placeholder="e.g. Mohamed"
+              error={assignSearchErrors.name}
             />
             <Select
               label="Filter by Designation"
@@ -532,6 +579,7 @@ export function AdminDashboard() {
               onClick={handleAssignSearch}
               isLoading={assignSearchLoading}
               disabled={
+                Boolean(assignSearchErrors.employeeNo || assignSearchErrors.name) ||
                 !assignEmployeeNoSearch.trim() &&
                 !assignSurnameSearch.trim() &&
                 !assignDesignationFilter &&
