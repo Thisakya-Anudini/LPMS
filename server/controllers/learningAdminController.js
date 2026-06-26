@@ -114,6 +114,37 @@ const normalizeEmployeeRow = (row) => ({
   employeeSupervisorNumber: row?.employeeSupervisorNumber ? String(row.employeeSupervisorNumber).trim() : ''
 });
 
+const normalizeSearchText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const getNameSearchTerm = (name) => {
+  const tokens = normalizeSearchText(name).split(/\s+/).filter(Boolean);
+  return tokens[tokens.length - 1] || '';
+};
+
+const employeeMatchesNameSearch = (employee, name) => {
+  const queryTokens = normalizeSearchText(name).split(/\s+/).filter(Boolean);
+  if (queryTokens.length === 0) {
+    return true;
+  }
+
+  const searchableName = normalizeSearchText(
+    [
+      employee.employeeName,
+      employee.employeeInitials,
+      employee.employeeSurname
+    ].filter(Boolean).join(' ')
+  );
+  const searchableTokens = searchableName.split(/\s+/).filter(Boolean);
+
+  return queryTokens.every((token) =>
+    token.length === 1 ? searchableTokens.includes(token) : searchableName.includes(token)
+  );
+};
+
 const mergeEmployeeRows = (base = {}, incoming = {}) => {
   const merged = { ...base };
   for (const [key, value] of Object.entries(incoming)) {
@@ -1607,6 +1638,7 @@ export const getAssignableEmployeeSearchOptions = async (_req, res) => {
 export const searchAssignableEmployees = async (req, res) => {
   const employeeNo = String(req.body.employeeNo || '').trim();
   const surname = String(req.body.surname || '').trim();
+  const nameSearchTerm = getNameSearchTerm(surname);
   const designation = String(req.body.designation || '').trim();
   const grade = String(req.body.grade || '').trim();
   const organizationName = String(req.body.organizationName || req.body.organizationId || '').trim();
@@ -1621,7 +1653,7 @@ export const searchAssignableEmployees = async (req, res) => {
     calls.push(fetchEmployeeDetailsForServiceNo(employeeNo));
   }
   if (surname) {
-    calls.push(fetchEmployeesByPartialName(surname));
+    calls.push(fetchEmployeesByPartialName(nameSearchTerm || surname));
   }
   if (designation || grade || organizationName || payrollType) {
     const payroll =
@@ -1674,7 +1706,9 @@ export const searchAssignableEmployees = async (req, res) => {
       }
     }
 
-    const employees = Array.from(intersection.values()).sort((a, b) =>
+    const employees = Array.from(intersection.values()).filter((employee) =>
+      employeeMatchesNameSearch(employee, surname)
+    ).sort((a, b) =>
       a.employeeName.localeCompare(b.employeeName)
     );
     const learningAdminAssignments = await mapLearningAdminAssignments(employees);

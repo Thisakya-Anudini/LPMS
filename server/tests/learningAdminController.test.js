@@ -1738,6 +1738,45 @@ describe("SEARCH ASSIGNABLE EMPLOYEES", () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it("should find one learner when searching by initials and surname", async () => {
+    vi.mocked(fetchEmployeesByPartialName).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        {
+          employeeNumber: "EMP-001",
+          employeeInitials: "J A A A",
+          employeeSurname: "Jayasinghe",
+          designation: "Developer",
+          gradeName: "G5",
+          email: "jaaa.jayasinghe@example.com",
+        },
+        {
+          employeeNumber: "EMP-002",
+          employeeInitials: "B",
+          employeeSurname: "Jayasinghe",
+          designation: "Engineer",
+          gradeName: "G4",
+          email: "b.jayasinghe@example.com",
+        },
+      ],
+    });
+
+    const req = createMockReq({
+      body: { surname: "J A A A Jayasinghe" },
+    });
+    const res = createMockRes();
+    await learningAdminController.searchAssignableEmployees(req, res);
+
+    expect(fetchEmployeesByPartialName).toHaveBeenCalledWith("jayasinghe");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.employees).toHaveLength(1);
+    expect(res.body.employees[0]).toMatchObject({
+      employeeNumber: "EMP-001",
+      employeeName: "J A A A Jayasinghe",
+    });
+  });
+
   it("should handle search with no ERP matches", async () => {
     vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
       success: true,
