@@ -290,7 +290,11 @@ export const sendEmail = async ({ to, subject, html, text }) => {
 
     const message = createMessage({ to: effectiveRecipient, subject, html, text }).replace(/^\./gm, '..');
     socket.write(`${message}\r\n.\r\n`);
-    await readResponse(socket);
+    const dataResponse = await readResponse(socket);
+
+    if (dataResponse.code !== 250) {
+      throw new Error(`SMTP data transmission failed (${dataResponse.code}): ${dataResponse.message}`);
+    }
     await writeCommand(socket, 'QUIT', [221]);
 
     return { sent: true };
