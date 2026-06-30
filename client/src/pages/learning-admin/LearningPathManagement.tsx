@@ -370,6 +370,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       : { valid: false, message: 'Duration must be 2 years or less.' };
   };
 
+  const validateCoursesSelected = (stages: StageForm[]): { valid: true } | { valid: false; message: string } => {
+    const hasSelectedCourses = stages.some((stage) => stage.selectedCourseIds.length > 0);
+    if (!hasSelectedCourses) {
+      return { valid: false, message: 'You must select at least one course.' };
+    }
+    return { valid: true };
+  };
+
   const handleCreatePath = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPathFormLoading(true);
@@ -387,6 +395,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     if (!durationValidation.valid) {
       setPathDurationError(durationValidation.message);
       showToast(durationValidation.message, 'error');
+      setPathFormLoading(false);
+      return;
+    }
+    const coursesValidation = validateCoursesSelected([...pathForm.stages, pathForm.draftStage]);
+    if (!coursesValidation.valid) {
+      showToast(coursesValidation.message, 'error');
       setPathFormLoading(false);
       return;
     }
@@ -476,6 +490,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     if (!durationValidation.valid) {
       setEditDurationError(durationValidation.message);
       showToast(durationValidation.message, 'error');
+      setEditLoading(false);
+      return;
+    }
+    const coursesValidation = validateCoursesSelected(editForm.stages);
+    if (!coursesValidation.valid) {
+      showToast(coursesValidation.message, 'error');
       setEditLoading(false);
       return;
     }
