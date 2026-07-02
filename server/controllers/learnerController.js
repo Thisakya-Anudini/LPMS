@@ -58,6 +58,11 @@ const normalizeNameFromRow = (row, employeeNo) => {
   return merged || `Learner ${employeeNo}`;
 };
 
+const normalizeEmailFromEmployeeDetails = (row) => {
+  const rawEmail = row?.email || row?.employeeEmail || row?.Email || row?.mail || '';
+  return rawEmail && String(rawEmail).trim() ? String(rawEmail).trim().toLowerCase() : '';
+};
+
 const normalizeCourseDeliveryMode = (value) => {
   const normalized = String(value || '').trim().toUpperCase();
   if (normalized === 'PHYSICAL' || normalized === 'CLASSROOM') {
@@ -2082,12 +2087,24 @@ export const getLearnerCertificates = async (req, res) => {
 
   const useCourseReference = await usesCourseReferenceTable();
   let erpEnrollmentIndex = new Map();
+  let erpLearnerEmail = '';
   if (employeeNo) {
     try {
       const erpEnrollmentResponse = await fetchCourseEnrollmentDetails(employeeNo);
       erpEnrollmentIndex = buildErpEnrollmentIndex(extractErpRows(erpEnrollmentResponse));
     } catch (error) {
       console.warn('LPMS ERP certificate duration sync failed:', {
+        employeeNo,
+        message: error.message,
+        details: error.details
+      });
+    }
+
+    try {
+      const detailsResponse = await fetchEmployeeDetailsForServiceNo(employeeNo);
+      erpLearnerEmail = normalizeEmailFromEmployeeDetails(detailsResponse?.data?.[0]);
+    } catch (error) {
+      console.warn('LPMS ERP certificate learner email sync failed:', {
         employeeNo,
         message: error.message,
         details: error.details
@@ -2131,6 +2148,7 @@ export const getLearnerCertificates = async (req, res) => {
       });
       return {
         ...certificate,
+        learner_email: erpLearnerEmail || certificate.learner_email,
         learning_path_duration:
           durationSummary.totalDuration ||
           normalizeDisplayValue(certificate.learning_path_duration) ||
