@@ -147,6 +147,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     status: 'ACTIVE' as PathStatus,
     stages: [] as StageForm[]
   });
+  const [originalEditForm, setOriginalEditForm] = useState<typeof editForm | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [pendingDeletePath, setPendingDeletePath] = useState<LearningPathRow | null>(null);
 
@@ -418,14 +419,19 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
       setEditPathId(path.id);
       setEditCourseSearch('');
-      setEditForm({
+            
+      const initialForm = {
         title: path.title,
         description: path.description,
         category: path.category,
         totalDuration: path.total_duration,
         status: path.status,
         stages: mappedStages.length > 0 ? mappedStages : [createStageForm(0)]
-      });
+      };
+      
+      setEditForm(initialForm);
+      setOriginalEditForm(initialForm);
+
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load learning path details.', 'error');
     }
@@ -457,6 +463,23 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       showToast('All stages must have at least one selected course. Please select courses or remove empty stages.', 'error');
       setEditLoading(false);
       return;
+    }
+
+    if(originalEditForm){
+      const isUnchanged = originalEditForm.title === editForm.title &&
+      originalEditForm.description === editForm.description &&
+      originalEditForm.category === editForm.category &&
+      originalEditForm.totalDuration === editForm.totalDuration &&
+      originalEditForm.status === editForm.status &&
+      JSON.stringify(originalEditForm.stages) === JSON.stringify(editForm.stages);
+
+      if(isUnchanged){
+        showToast('No changes were made to the learning path.', 'info');
+        setEditLoading(false);
+        setEditPathId(null);
+
+        return;
+      }
     }
 
     try {
