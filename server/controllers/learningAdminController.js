@@ -1313,6 +1313,7 @@ export const previewLearningPathCertificate = async (req, res) => {
     ? await query(
         `
           SELECT
+            lps.title AS stage_title,
             course.title AS course_title,
             course.duration AS course_duration,
             lps.stage_order,
@@ -1328,6 +1329,7 @@ export const previewLearningPathCertificate = async (req, res) => {
     : await query(
         `
           SELECT
+            lps.title AS stage_title,
             sc.course_title AS course_title,
             sc.course_duration AS course_duration,
             lps.stage_order,
@@ -1350,7 +1352,10 @@ export const previewLearningPathCertificate = async (req, res) => {
   const filename = `certificate_preview_${safeTitle}.pdf`;
   const courses = coursesResult.rows.map((row) => ({
     title: String(row.course_title || '').trim(),
-    duration: String(row.course_duration || '').trim() || '-'
+    duration: String(row.course_duration || '').trim() || '-',
+    stageTitle: String(row.stage_title || '').trim(),
+    stageOrder: row.stage_order,
+    order: row.course_order
   }));
 
   try {

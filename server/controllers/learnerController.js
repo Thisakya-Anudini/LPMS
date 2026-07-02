@@ -2245,7 +2245,10 @@ export const downloadLearnerCertificate = async (req, res) => {
   const filename = `certificate_${safeTitle}_${certificate.id}.pdf`;
   const courses = durationSummary.courses.map((course) => ({
     title: String(course.title || '').trim(),
-    duration: course.duration || '-'
+    duration: course.duration || '-',
+    stageTitle: course.stageTitle || '',
+    stageOrder: course.stageOrder,
+    order: course.order
   }));
   const learningPathDuration =
     durationSummary.totalDuration ||
