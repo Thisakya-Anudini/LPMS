@@ -469,7 +469,8 @@ export const learningApi = {
       body: payload
     });
   },
-  getSummaryReport(token: string) {
+  getSummaryReport(token: string, learningPathId?: string) {
+    const query = learningPathId ? `?${new URLSearchParams({ learningPathId }).toString()}` : '';
     return request<{
       summary: {
         totalPaths: number;
@@ -479,7 +480,7 @@ export const learningApi = {
         completionRate: number;
         totalCertificates: number;
       };
-    }>('/reports/summary', { token });
+    }>(`/reports/summary${query}`, { token });
   },
   getCertificateSettings(token: string) {
     return request<{

@@ -2178,7 +2178,11 @@ export const upsertClassDetailReport = async (req, res) => {
   return res.status(200).json({ report: mapClassDetailReportRow(result.rows[0]) });
 };
 
-export const getLearningSummaryReport = async (_req, res) => {
+export const getLearningSummaryReport = async (req, res) => {
+  const learningPathId = String(req.query?.learningPathId || '').trim();
+  const scopedWhere = learningPathId ? 'WHERE learning_path_id = $1' : '';
+  const scopedParams = learningPathId ? [learningPathId] : [];
+
   const totals = await query(
     `
       SELECT
@@ -2194,14 +2198,18 @@ export const getLearningSummaryReport = async (_req, res) => {
         COUNT(*) AS total_enrollments,
         COUNT(*) FILTER (WHERE status = 'COMPLETED') AS completed_enrollments
       FROM enrollments
-    `
+      ${scopedWhere}
+    `,
+    scopedParams
   );
 
   const certificates = await query(
     `
       SELECT COUNT(*) AS total_certificates
       FROM certificates
-    `
+      ${scopedWhere}
+    `,
+    scopedParams
   );
 
   const totalEnrollments = Number(enrollments.rows[0].total_enrollments || 0);
