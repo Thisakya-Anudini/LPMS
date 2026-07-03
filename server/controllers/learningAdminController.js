@@ -42,6 +42,10 @@ const validateLearningPathTitle = (value) => {
     return { valid: false, message: 'title may only contain letters, spaces, and common punctuation.' };
   }
 
+  if (/\s{2,}/.test(normalized)) {
+    return { valid: false, message: 'title must use only one space between words.' };
+  }
+
   if (!/[A-Za-z]/.test(normalized)) {
     return { valid: false, message: 'title must include at least one letter.' };
   }

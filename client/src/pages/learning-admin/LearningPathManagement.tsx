@@ -89,6 +89,8 @@ const filterCoursesByQuery = (courses: CourseItem[], query: string) => {
   });
 };
 
+const normalizeTitleInputSpacing = (value: string) => value.replace(/\s{2,}/g, ' ');
+
 const initialPathForm = {
   title: '',
   description: '',
@@ -333,6 +335,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     const allowedTitleRegex = /^[A-Za-z\s\-_,.&()'"@:/]+$/;
     if (!allowedTitleRegex.test(normalized)) {
       return { valid: false, message: 'Title may only contain letters, spaces, and common punctuation.' };
+    }
+
+    if (/\s{2,}/.test(normalized)) {
+      return { valid: false, message: 'Title must use only one space between words.' };
     }
 
     if (!/[A-Za-z]/.test(normalized)) {
@@ -960,7 +966,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   value={pathForm.title}
                   error={pathTitleError ?? undefined}
                   onChange={(event) => {
-                    setPathForm((prev) => ({ ...prev, title: event.target.value }));
+                    setPathForm((prev) => ({ ...prev, title: normalizeTitleInputSpacing(event.target.value) }));
                     setPathTitleError(null);
                   }}
                   maxLength={50}
@@ -1404,7 +1410,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={editForm.title}
                     error={editTitleError ?? undefined}
                     onChange={(event) => {
-                      setEditForm((prev) => ({ ...prev, title: event.target.value }));
+                      setEditForm((prev) => ({ ...prev, title: normalizeTitleInputSpacing(event.target.value) }));
                       setEditTitleError(null);
                     }}
                     required
