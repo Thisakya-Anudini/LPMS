@@ -262,10 +262,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const handleAssignEmployeeNoChange = (value: string) => {
-    if (value.trim()) {
+    const numericValue = value.replace(/\D/g, '');
+    if (numericValue.trim()) {
       activateAssignEmployeeSearch();
     }
-    setAssignEmployeeNoSearch(value);
+    setAssignEmployeeNoSearch(numericValue);
   };
 
   const handleAssignNameSearchChange = (value: string) => {
