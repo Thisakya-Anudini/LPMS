@@ -1320,6 +1320,18 @@ export const createEnrollments = async (req, res) => {
         learningPathId,
         reason: 'Learner is already assigned to this learning path.'
       });
+      try {
+        // notify the learner that they are already enrolled in this learning path
+        await query(
+          `
+            INSERT INTO notifications (principal_id, title, message, type, is_read)
+            VALUES ($1, 'Enrollment Exists', $2, 'INFO', FALSE)
+          `,
+          [principalId, `You are already enrolled in "${learningPath.title}".`]
+        );
+      } catch (notifyErr) {
+        console.error('Failed to create duplicate-enrollment notification:', notifyErr);
+      }
     }
   }
 
