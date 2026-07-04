@@ -1236,6 +1236,7 @@ export const createEnrollments = async (req, res) => {
 
   const inserted = [];
   const insertedLearners = [];
+  const skippedLearners = [];
 
   const pathResult = await query(
     `
@@ -1320,6 +1321,12 @@ export const createEnrollments = async (req, res) => {
         learningPathId,
         reason: 'Learner is already assigned to this learning path.'
       });
+      skippedLearners.push({
+        principalId,
+        employeeNumber: String(learner.employeeNumber || '').trim(),
+        learnerName: normalizeEmployeeDisplayName(learner, learner.employeeNumber),
+        reason: 'Already enrolled in this learning path.'
+      });
       try {
         // notify the learner that they are already enrolled in this learning path
         await query(
@@ -1354,7 +1361,7 @@ export const createEnrollments = async (req, res) => {
     metadata: { learningPathId, inserted: inserted.length }
   });
 
-  return res.status(201).json({ enrollments: inserted });
+  return res.status(201).json({ enrollments: inserted, skipped: skippedLearners });
 };
 
 export const getAssignmentReports = async (_req, res) => {

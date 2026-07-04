@@ -219,6 +219,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [organizationOptions, setOrganizationOptions] = useState<
     Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
   >([]);
+  const [enrolledEmployeeNumbers, setEnrolledEmployeeNumbers] = useState<Set<string>>(new Set());
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
   const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
   const hasAssignFilterSearch =
@@ -928,14 +929,21 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         return;
       }
 
-      await learningApi.createEnrollments(token, {
+      const response = await learningApi.createEnrollments(token, {
         learningPathId: assignForm.learningPathId,
         selectedLearners: learners.filter((learner) =>
           assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)
         )
       });
 
-      showToast('Enrollments assigned successfully.', 'success');
+      const assignedCount = (response.enrollments || []).length;
+      const skipped = response.skipped || [];
+      if (skipped.length > 0) {
+        showToast(`${assignedCount} enrolled, ${skipped.length} skipped (already enrolled).`, 'info');
+        console.info('Skipped enrollments:', skipped);
+      } else {
+        showToast('Enrollments assigned successfully.', 'success');
+      }
       setAssignForm(initialAssignForm);
       setLearners([]);
     } catch (err) {
@@ -944,6 +952,37 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setAssignLoading(false);
     }
   };
+
+  useEffect(() => {
+    // fetch existing enrollments for the selected learning path so we can prevent re-adding
+    const fetchEnrolled = async () => {
+      setAssignOptionsLoading(true);
+      try {
+        const token = await getAccessToken();
+        if (!token) {
+          showToast('Session expired. Please login again.', 'error');
+          return;
+        }
+        if (!assignForm.learningPathId) {
+          setEnrolledEmployeeNumbers(new Set());
+          return;
+        }
+
+        const resp = await learningApi.getClassAssignmentOptions(token, assignForm.learningPathId);
+        const enrolled = new Set<string>();
+        (resp.learners || []).forEach((l) => {
+          if (l.employeeNumber) enrolled.add(String(l.employeeNumber));
+        });
+        setEnrolledEmployeeNumbers(enrolled);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Failed to load enrolled learners.', 'error');
+      } finally {
+        setAssignOptionsLoading(false);
+      }
+    };
+
+    fetchEnrolled();
+  }, [assignForm.learningPathId, getAccessToken, showToast]);
 
   const handleAssignSearch = async () => {
     try {
@@ -1325,25 +1364,35 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                         <span>Organization</span>
                         <span>Email</span>
                       </div>
-                      {learners.map((learner) => (
-                        <label
-                          key={learner.employeeNumber}
-                          className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)}
-                            onChange={() => toggleLearnerSelection(learner.employeeNumber)}
-                            className="shrink-0"
-                          />
-                          <span className="font-medium text-slate-900">{learner.employeeName}</span>
-                          <span>{learner.employeeNumber}</span>
-                          <span>{learner.designation || '-'}</span>
-                          <span>{learner.gradeName || '-'}</span>
-                          <span>{learner.organizationName || '-'}</span>
-                          <span>{learner.email || '-'}</span>
-                        </label>
-                      ))}
+                      {learners.map((learner) => {
+                        const empNo = String(learner.employeeNumber || '');
+                        const already = enrolledEmployeeNumbers.has(empNo);
+                        return (
+                          <label
+                            key={empNo || Math.random().toString(36).slice(2, 8)}
+                            className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={assignForm.selectedLearnerEmployeeNumbers.includes(empNo)}
+                              onChange={() => toggleLearnerSelection(empNo)}
+                              className="shrink-0"
+                              disabled={already}
+                            />
+                            <div>
+                              <div className="font-medium text-slate-900">{learner.employeeName}</div>
+                              {already ? (
+                                <div className="text-xs text-amber-700">Already enrolled</div>
+                              ) : null}
+                            </div>
+                            <span>{empNo}</span>
+                            <span>{learner.designation || '-'}</span>
+                            <span>{learner.gradeName || '-'}</span>
+                            <span>{learner.organizationName || '-'}</span>
+                            <span>{learner.email || '-'}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

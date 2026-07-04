@@ -288,7 +288,7 @@ export const learningApi = {
       }>;
     }
   ) {
-    return request<{ enrollments: Array<{ id: string }> }>('/enrollments', {
+    return request<{ enrollments: Array<{ id: string }>; skipped?: Array<{ principalId?: string; employeeNumber: string; learnerName?: string; reason?: string }> }>('/enrollments', {
       method: 'POST',
       token,
       body: payload
