@@ -18,6 +18,7 @@ import {
   ASSIGNMENT_REPORT_STATUS,
   createAssignmentReport
 } from '../utils/assignmentReports.js';
+import { parseTotalDurationValue } from '../utils/duration.js';
 import {
   sendClassAssignedEmail,
   sendLearningPathAssignedEmail
@@ -47,34 +48,6 @@ const validateLearningPathTitle = (value) => {
   }
 
   return { valid: true };
-};
-
-const parseTotalDurationValue = (value) => {
-  const normalized = String(value || '').trim();
-  if (normalized === '') {
-    return { valid: true };
-  }
-  if (normalized.startsWith('-')) {
-    return { valid: false, message: 'totalDuration must not be negative.' };
-  }
-
-  const durationMatch = normalized.match(/^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i);
-  if (!durationMatch) {
-    return { valid: false, message: 'totalDuration format is invalid. Use years or months.' };
-  }
-
-  const numericValue = Number(durationMatch[1]);
-  const unit = durationMatch[2]?.toLowerCase() ?? 'years';
-
-  if (unit === 'month' || unit === 'months') {
-    return numericValue <= 24
-      ? { valid: true }
-      : { valid: false, message: 'totalDuration must be 2 years or less.' };
-  }
-
-  return numericValue <= 2
-    ? { valid: true }
-    : { valid: false, message: 'totalDuration must be 2 years or less.' };
 };
 
 const isStructuredStagePayload = (stages) =>

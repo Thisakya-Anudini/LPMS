@@ -89,11 +89,62 @@ const filterCoursesByQuery = (courses: CourseItem[], query: string) => {
   });
 };
 
+const DURATION_UNIT_OPTIONS = [
+  { value: 'hours', label: 'Hours' },
+  { value: 'days', label: 'Days' },
+  { value: 'weeks', label: 'Weeks' },
+  { value: 'months', label: 'Months' },
+  { value: 'years', label: 'Years' }
+];
+
+const parseDurationParts = (value: string) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return { value: '', unit: 'months' };
+  }
+
+  const durationMatch = normalized.match(/^([0-9]+(?:\.[0-9]+)?)\s*(hours?|hrs?|days?|dates?|weeks?|months?|years?|yrs?)?\s*$/i);
+  if (!durationMatch) {
+    return { value: normalized, unit: 'months' };
+  }
+
+  const numberPart = durationMatch[1];
+  const unitPart = durationMatch[2]?.toLowerCase();
+  const normalizedUnit =
+    unitPart === 'hour' || unitPart === 'hours' || unitPart === 'hr' || unitPart === 'hrs'
+      ? 'hours'
+      : unitPart === 'day' || unitPart === 'days' || unitPart === 'date' || unitPart === 'dates'
+        ? 'days'
+        : unitPart === 'week' || unitPart === 'weeks'
+          ? 'weeks'
+          : unitPart === 'month' || unitPart === 'months'
+            ? 'months'
+            : unitPart === 'year' || unitPart === 'years' || unitPart === 'yr' || unitPart === 'yrs'
+              ? 'years'
+              : 'months';
+
+  return {
+    value: numberPart,
+    unit: normalizedUnit
+  };
+};
+
+const formatDurationValue = (value: string, unit: string) => {
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedValue) {
+    return '';
+  }
+
+  return `${normalizedValue} ${unit}`;
+};
+
 const initialPathForm = {
   title: '',
   description: '',
   category: 'PUBLIC' as Category,
   totalDuration: '',
+  durationValue: '',
+  durationUnit: 'months',
   stages: [] as StageForm[],
   draftStage: createStageForm(0) as StageForm
 };
@@ -145,6 +196,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     description: '',
     category: 'PUBLIC' as Category,
     totalDuration: '',
+    durationValue: '',
+    durationUnit: 'months',
     status: 'ACTIVE' as PathStatus,
     stages: [] as StageForm[]
   });
@@ -342,7 +395,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     return { valid: true };
   };
 
-  const validateDurationValue = (value: string): { valid: true } | { valid: false; message: string } => {
+  const validateDurationValue = (value: string, unit: string): { valid: true } | { valid: false; message: string } => {
     const normalized = String(value || '').trim();
     if (normalized === '') {
       return { valid: true };
@@ -351,23 +404,17 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       return { valid: false, message: 'Duration must not be negative.' };
     }
 
-    const durationMatch = normalized.match(/^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i);
-    if (!durationMatch) {
-      return { valid: false, message: 'Duration format is invalid. Use years or months.' };
+    if (!/^([0-9]+(?:\.[0-9]+)?)$/.test(normalized)) {
+      return { valid: false, message: 'Duration must be a valid number.' };
     }
 
-    const numericValue = Number(durationMatch[1]);
-    const unit = durationMatch[2]?.toLowerCase() ?? 'years';
-
-    if (unit === 'month' || unit === 'months') {
-      return numericValue <= 24
-        ? { valid: true }
-        : { valid: false, message: 'Duration must be 2 years or less.' };
+    const normalizedUnit = String(unit || '').trim().toLowerCase();
+    const allowedUnits = ['hours', 'days', 'weeks', 'months', 'years'];
+    if (!allowedUnits.includes(normalizedUnit)) {
+      return { valid: false, message: 'Please select a valid duration unit.' };
     }
 
-    return numericValue <= 2
-      ? { valid: true }
-      : { valid: false, message: 'Duration must be 2 years or less.' };
+    return { valid: true };
   };
 
   const validateCoursesSelected = (stages: StageForm[]): { valid: true } | { valid: false; message: string } => {
@@ -391,7 +438,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setPathFormLoading(false);
       return;
     }
-    const durationValidation = validateDurationValue(pathForm.totalDuration);
+    const durationValidation = validateDurationValue(pathForm.durationValue, pathForm.durationUnit);
     if (!durationValidation.valid) {
       setPathDurationError(durationValidation.message);
       showToast(durationValidation.message, 'error');
@@ -411,11 +458,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         return;
       }
 
+      const totalDuration = formatDurationValue(pathForm.durationValue, pathForm.durationUnit);
+
       await learningApi.createLearningPath(token, {
         title: pathForm.title,
         description: pathForm.description,
         category: pathForm.category,
-        totalDuration: pathForm.totalDuration,
+        totalDuration,
         stages: getCreateStagesPayload()
       });
       setPathForm(initialPathForm);
@@ -458,11 +507,15 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         }));
 
       setEditPathId(path.id);
+      const parsedDuration = parseDurationParts(path.total_duration);
+
       setEditForm({
         title: path.title,
         description: path.description,
         category: path.category,
         totalDuration: path.total_duration,
+        durationValue: parsedDuration.value,
+        durationUnit: parsedDuration.unit,
         status: path.status,
         stages: mappedStages.length > 0 ? mappedStages : [createStageForm(0)]
       });
@@ -486,7 +539,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setEditLoading(false);
       return;
     }
-    const durationValidation = validateDurationValue(editForm.totalDuration);
+    const durationValidation = validateDurationValue(editForm.durationValue, editForm.durationUnit);
     if (!durationValidation.valid) {
       setEditDurationError(durationValidation.message);
       showToast(durationValidation.message, 'error');
@@ -506,11 +559,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         return;
       }
 
+      const totalDuration = formatDurationValue(editForm.durationValue, editForm.durationUnit);
+
       await learningApi.updateLearningPath(token, editPathId, {
         title: editForm.title,
         description: editForm.description,
         category: editForm.category,
-        totalDuration: editForm.totalDuration,
+        totalDuration,
         status: editForm.status,
         stages: toStages(editForm.stages)
       });
@@ -978,17 +1033,43 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     { value: 'RESTRICTED', label: 'Restricted' }
                   ]}
                 />
-                <Input
-                  label="Total Duration"
-                  value={pathForm.totalDuration}
-                  error={pathDurationError ?? undefined}
-                  onChange={(event) => {
-                    setPathForm((prev) => ({ ...prev, totalDuration: event.target.value }));
-                    setPathDurationError(null);
-                  }}
-                  placeholder="e.g. 2yr"
-                  required
-                />
+                <div className="md:col-span-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px]">
+                    <Input
+                      label="Total Duration"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={pathForm.durationValue}
+                      error={pathDurationError ?? undefined}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setPathForm((prev) => ({
+                          ...prev,
+                          durationValue: nextValue,
+                          totalDuration: formatDurationValue(nextValue, prev.durationUnit)
+                        }));
+                        setPathDurationError(null);
+                      }}
+                      placeholder="e.g. 2"
+                      required
+                    />
+                    <Select
+                      label="Unit"
+                      value={pathForm.durationUnit}
+                      onChange={(event) => {
+                        const nextUnit = event.target.value;
+                        setPathForm((prev) => ({
+                          ...prev,
+                          durationUnit: nextUnit,
+                          totalDuration: formatDurationValue(prev.durationValue, nextUnit)
+                        }));
+                      }}
+                      options={DURATION_UNIT_OPTIONS}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">Examples: 8 hours, 3 days, 2 weeks, 6 months, 1 year.</p>
+                </div>
                 <Input
                   label="Description"
                   value={pathForm.description}
@@ -1017,7 +1098,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   {pathForm.description.trim() || 'Add a description to preview details.'}
                 </p>
                 <p className="text-xs text-slate-500 mt-2">
-                  {pathForm.category.replace('_', ' ')} | {pathForm.totalDuration || 'Duration not set'}
+                  {pathForm.category.replace('_', ' ')} | {formatDurationValue(pathForm.durationValue, pathForm.durationUnit) || 'Duration not set'}
                 </p>
               </div>
               <div>
@@ -1424,16 +1505,42 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       { value: 'RESTRICTED', label: 'Restricted' }
                     ]}
                   />
-                  <Input
-                    label="Total Duration"
-                    value={editForm.totalDuration}
-                    error={editDurationError ?? undefined}
-                    onChange={(event) => {
-                      setEditForm((prev) => ({ ...prev, totalDuration: event.target.value }));
-                      setEditDurationError(null);
-                    }}
-                    required
-                  />
+                  <div className="md:col-span-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px]">
+                      <Input
+                        label="Total Duration"
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={editForm.durationValue}
+                        error={editDurationError ?? undefined}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setEditForm((prev) => ({
+                            ...prev,
+                            durationValue: nextValue,
+                            totalDuration: formatDurationValue(nextValue, prev.durationUnit)
+                          }));
+                          setEditDurationError(null);
+                        }}
+                        required
+                      />
+                      <Select
+                        label="Unit"
+                        value={editForm.durationUnit}
+                        onChange={(event) => {
+                          const nextUnit = event.target.value;
+                          setEditForm((prev) => ({
+                            ...prev,
+                            durationUnit: nextUnit,
+                            totalDuration: formatDurationValue(prev.durationValue, nextUnit)
+                          }));
+                        }}
+                        options={DURATION_UNIT_OPTIONS}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">Examples: 8 hours, 3 days, 2 weeks, 6 months, 1 year.</p>
+                  </div>
                   <Select
                     label="Status"
                     value={editForm.status}
