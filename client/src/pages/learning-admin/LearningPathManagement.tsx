@@ -270,10 +270,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const handleAssignNameSearchChange = (value: string) => {
-    if (value.trim()) {
+    const sanitizedValue = value.replace(/[^A-Za-z\s!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/g, '');
+    if (sanitizedValue.trim()) {
       activateAssignNameSearch();
     }
-    setAssignSurnameSearch(value);
+    setAssignSurnameSearch(sanitizedValue);
   };
 
   const handleAssignDesignationChange = (value: string) => {
