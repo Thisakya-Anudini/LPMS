@@ -18,6 +18,7 @@ import {
   ASSIGNMENT_REPORT_STATUS,
   createAssignmentReport
 } from '../utils/assignmentReports.js';
+import { parseTotalDurationValue } from '../utils/duration.js';
 import {
   sendClassAssignedEmail,
   sendLearningPathAssignedEmail
@@ -51,34 +52,6 @@ const validateLearningPathTitle = (value) => {
   }
 
   return { valid: true };
-};
-
-const parseTotalDurationValue = (value) => {
-  const normalized = String(value || '').trim();
-  if (normalized === '') {
-    return { valid: true };
-  }
-  if (normalized.startsWith('-')) {
-    return { valid: false, message: 'totalDuration must not be negative.' };
-  }
-
-  const durationMatch = normalized.match(/^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i);
-  if (!durationMatch) {
-    return { valid: false, message: 'totalDuration format is invalid. Use years or months.' };
-  }
-
-  const numericValue = Number(durationMatch[1]);
-  const unit = durationMatch[2]?.toLowerCase() ?? 'years';
-
-  if (unit === 'month' || unit === 'months') {
-    return numericValue <= 24
-      ? { valid: true }
-      : { valid: false, message: 'totalDuration must be 2 years or less.' };
-  }
-
-  return numericValue <= 2
-    ? { valid: true }
-    : { valid: false, message: 'totalDuration must be 2 years or less.' };
 };
 
 const isStructuredStagePayload = (stages) =>
@@ -1421,6 +1394,7 @@ export const createEnrollments = async (req, res) => {
 
   const inserted = [];
   const insertedLearners = [];
+  const skippedLearners = [];
 
   const pathResult = await query(
     `
@@ -1505,6 +1479,24 @@ export const createEnrollments = async (req, res) => {
         learningPathId,
         reason: 'Learner is already assigned to this learning path.'
       });
+      skippedLearners.push({
+        principalId,
+        employeeNumber: String(learner.employeeNumber || '').trim(),
+        learnerName: normalizeEmployeeDisplayName(learner, learner.employeeNumber),
+        reason: 'Already enrolled in this learning path.'
+      });
+      try {
+        // notify the learner that they are already enrolled in this learning path
+        await query(
+          `
+            INSERT INTO notifications (principal_id, title, message, type, is_read)
+            VALUES ($1, 'Enrollment Exists', $2, 'INFO', FALSE)
+          `,
+          [principalId, `You are already enrolled in "${learningPath.title}".`]
+        );
+      } catch (notifyErr) {
+        console.error('Failed to create duplicate-enrollment notification:', notifyErr);
+      }
     }
   }
 
@@ -1527,7 +1519,7 @@ export const createEnrollments = async (req, res) => {
     metadata: { learningPathId, inserted: inserted.length }
   });
 
-  return res.status(201).json({ enrollments: inserted });
+  return res.status(201).json({ enrollments: inserted, skipped: skippedLearners });
 };
 
 export const getAssignmentReports = async (_req, res) => {
