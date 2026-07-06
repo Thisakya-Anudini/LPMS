@@ -6,6 +6,7 @@ import {
   enrollLearnerTeam,
   getLearnerCertificates,
   getLearnerDashboard,
+  getLearnerOtherCourses,
   getLearnerPathCourses,
   getPublicLearningPaths,
   getLearningPaths,
@@ -24,6 +25,7 @@ router.get('/dashboard', protect, requireRole([ROLES.EMPLOYEE]), getLearnerDashb
 router.get('/certificates', protect, requireRole([ROLES.EMPLOYEE]), getLearnerCertificates);
 router.get('/certificates/:certificateId/download', protect, requireRole([ROLES.EMPLOYEE]), downloadLearnerCertificate);
 router.get('/learning-paths', protect, requireRole([ROLES.EMPLOYEE]), getLearningPaths);
+router.get('/other-courses', protect, requireRole([ROLES.EMPLOYEE]), getLearnerOtherCourses);
 router.get('/my-paths/:enrollmentId/courses', protect, requireRole([ROLES.EMPLOYEE]), getLearnerPathCourses);
 router.put(
   '/my-paths/:enrollmentId/courses/:courseId',

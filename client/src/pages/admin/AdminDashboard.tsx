@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ShieldCheck, UserCheck, Users } from 'lucide-react';
+import { BriefcaseBusiness, ShieldCheck, UserCheck, Users } from 'lucide-react';
 import { learningApi, superAdminApi, userApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -56,9 +56,9 @@ const roleSections: {
   {
     key: 'SUPER_ADMIN',
     label: 'Super Admins',
-    panelClass: 'border-blue-200 bg-blue-50/40',
-    headingClass: 'text-blue-800',
-    headRowClass: 'bg-blue-100/80 text-blue-900'
+    panelClass: 'border-slate-200 bg-white',
+    headingClass: 'text-slate-900',
+    headRowClass: 'bg-slate-100 text-slate-700'
   }
 ];
 
@@ -79,11 +79,13 @@ export function AdminDashboard() {
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserRow | null>(null);
 
   const [userForm, setUserForm] = useState(initialUserForm);
+  const [userFormErrors, setUserFormErrors] = useState<{ name?: string }>({});
   const [userFormLoading, setUserFormLoading] = useState(false);
   const [assignOptionsLoading, setAssignOptionsLoading] = useState(true);
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
   const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
+  const [assignSearchErrors, setAssignSearchErrors] = useState<{ employeeNo?: string; name?: string }>({});
   const [assignDesignationFilter, setAssignDesignationFilter] = useState('');
   const [assignGradeFilter, setAssignGradeFilter] = useState('');
   const [assignOrganizationFilter, setAssignOrganizationFilter] = useState('');
@@ -112,6 +114,7 @@ export function AdminDashboard() {
   };
 
   const activateAssignEmployeeSearch = () => {
+    setAssignSearchErrors((prev) => ({ ...prev, name: undefined }));
     if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
     }
@@ -121,6 +124,7 @@ export function AdminDashboard() {
   };
 
   const activateAssignNameSearch = () => {
+    setAssignSearchErrors((prev) => ({ ...prev, employeeNo: undefined }));
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
     }
@@ -130,6 +134,7 @@ export function AdminDashboard() {
   };
 
   const activateAssignFilterSearch = () => {
+    setAssignSearchErrors({});
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
     }
@@ -139,17 +144,36 @@ export function AdminDashboard() {
   };
 
   const handleAssignEmployeeNoChange = (value: string) => {
-    if (value.trim()) {
+    const sanitizedValue = value.replace(/\D/g, '');
+
+    if (sanitizedValue.trim()) {
       activateAssignEmployeeSearch();
     }
-    setAssignEmployeeNoSearch(value);
+    setAssignEmployeeNoSearch(sanitizedValue);
+    setAssignSearchErrors((prev) => ({
+      ...prev,
+      employeeNo: value !== sanitizedValue ? 'Only numbers are allowed.' : undefined
+    }));
   };
 
   const handleAssignNameSearchChange = (value: string) => {
-    if (value.trim()) {
+    const lettersOnlyValue = value.replace(/[^A-Za-z\s]/g, '');
+    const sanitizedValue = lettersOnlyValue.replace(/\s+/g, ' ').replace(/^\s+/, '');
+    const hasInvalidCharacters = value !== lettersOnlyValue;
+    const hasExtraSpaces = lettersOnlyValue !== sanitizedValue;
+
+    if (sanitizedValue.trim()) {
       activateAssignNameSearch();
     }
-    setAssignSurnameSearch(value);
+    setAssignSurnameSearch(sanitizedValue);
+    setAssignSearchErrors((prev) => ({
+      ...prev,
+      name: hasInvalidCharacters
+        ? 'Only letters are allowed.'
+        : hasExtraSpaces
+          ? 'Use single spaces between names.'
+          : undefined
+    }));
   };
 
   const handleAssignDesignationChange = (value: string) => {
@@ -219,6 +243,29 @@ export function AdminDashboard() {
 
   const superAdminCount = users.filter((user) => user.role === 'SUPER_ADMIN').length;
   const learningAdminCount = assignedLearningAdmins.length;
+  const dashboardStats = [
+    {
+      label: 'Super Admins',
+      value: superAdminCount,
+      icon: UserCheck,
+      iconClass: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+      detail: 'Full platform access'
+    },
+    {
+      label: 'Learning Admins',
+      value: learningAdminCount,
+      icon: ShieldCheck,
+      iconClass: 'bg-amber-50 text-amber-700 ring-amber-100',
+      detail: 'Assigned from ERP employees'
+    },
+    {
+      label: 'Learners',
+      value: learnerTotal,
+      icon: Users,
+      iconClass: 'bg-sky-50 text-sky-700 ring-sky-100',
+      detail: 'Active learner records'
+    }
+  ];
   const usersByRole = useMemo(
     () =>
       roleSections.map((section) => ({
@@ -230,6 +277,18 @@ export function AdminDashboard() {
 
   const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const trimmedName = userForm.name.trim();
+    if (!trimmedName) {
+      setUserFormErrors({ name: 'Name cannot be blank.' });
+      return;
+    }
+    if (!/^[A-Za-z\s]+$/.test(trimmedName)) {
+      setUserFormErrors({ name: 'Only letters and spaces are allowed.' });
+      return;
+    }
+
+    setUserFormErrors({});
     setUserFormLoading(true);
     try {
       const token = await getAccessToken();
@@ -238,9 +297,10 @@ export function AdminDashboard() {
         return;
       }
 
-      await userApi.createUser(token, { ...userForm, role: 'SUPER_ADMIN' });
+      await userApi.createUser(token, { ...userForm, name: trimmedName, role: 'SUPER_ADMIN' });
       showToast('User account created successfully.', 'success');
       setUserForm(initialUserForm);
+      setUserFormErrors({});
       await loadUsers();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to create user.', 'error');
@@ -266,6 +326,26 @@ export function AdminDashboard() {
   };
 
   const handleAssignSearch = async () => {
+    const employeeNo = assignEmployeeNoSearch.trim();
+    const name = assignSurnameSearch.trim().replace(/\s+/g, ' ');
+    const nextErrors: { employeeNo?: string; name?: string } = {};
+
+    if (employeeNo && !/^\d+$/.test(employeeNo)) {
+      nextErrors.employeeNo = 'Only numbers are allowed.';
+    }
+    if (name && !/^[A-Za-z]+(?:\s[A-Za-z]+)*$/.test(name)) {
+      nextErrors.name = 'Only letters and single spaces are allowed.';
+    }
+
+    if (nextErrors.employeeNo || nextErrors.name) {
+      setAssignSearchErrors(nextErrors);
+      return;
+    }
+
+    setAssignSearchErrors({});
+    setAssignEmployeeNoSearch(employeeNo);
+    setAssignSurnameSearch(name);
+
     try {
       setAssignSearchLoading(true);
       const token = await getAccessToken();
@@ -275,8 +355,8 @@ export function AdminDashboard() {
       }
 
       const response = await learningApi.searchAssignableEmployees(token, {
-        employeeNo: assignEmployeeNoSearch,
-        surname: assignSurnameSearch,
+        employeeNo,
+        surname: name,
         designation: assignDesignationFilter,
         grade: assignGradeFilter,
         organizationName: assignOrganizationFilter,
@@ -321,61 +401,74 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">System Accounts</h1>
-        <p className="text-slate-500">Create and manage Super Admin and Learning Admin accounts.</p>
+      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm md:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Administration</p>
+            <h1 className="mt-2 text-2xl font-bold text-slate-950">System Accounts</h1>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              Create, review, and manage Super Admin and Learning Admin access from a single control panel.
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:w-auto sm:min-w-64">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <BriefcaseBusiness className="h-4 w-4 text-slate-500" />
+              Account Overview
+            </div>
+            <p className="text-xs text-slate-500">
+              {loading ? 'Refreshing admin records...' : `${superAdminCount + learningAdminCount} privileged accounts managed`}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <UserCheck className="h-5 w-5 text-green-600" />
-            <div>
-              <p className="text-sm text-slate-500">Super Admins</p>
-              {loading ? (
-                <Skeleton className="mt-2 h-8 w-16" />
-              ) : (
-                <p className="text-2xl font-bold text-slate-900">{superAdminCount}</p>
-              )}
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-amber-600" />
-            <div>
-              <p className="text-sm text-slate-500">Learning Admins</p>
-              {loading ? (
-                <Skeleton className="mt-2 h-8 w-16" />
-              ) : (
-                <p className="text-2xl font-bold text-slate-900">{learningAdminCount}</p>
-              )}
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <Users className="h-5 w-5 text-indigo-600" />
-            <div>
-              <p className="text-sm text-slate-500">Learners</p>
-              {loading ? (
-                <Skeleton className="mt-2 h-8 w-20" />
-              ) : (
-                <p className="text-2xl font-bold text-slate-900">{learnerTotal}</p>
-              )}
-            </div>
-          </div>
-        </Card>
+        {dashboardStats.map((stat) => {
+          const Icon = stat.icon;
+
+          return (
+            <Card key={stat.label} className="border-slate-200 shadow-sm" bodyClassName="p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+                  {loading ? (
+                    <Skeleton className="mt-3 h-9 w-20" />
+                  ) : (
+                    <p className="mt-2 text-3xl font-bold leading-none text-slate-950">{stat.value}</p>
+                  )}
+                  <p className="mt-3 text-xs font-medium text-slate-500">{stat.detail}</p>
+                </div>
+                <div className={`rounded-xl p-3 ring-1 ${stat.iconClass}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      <Card title="Create Super Admin Accounts ">
-        <form className="space-y-4" onSubmit={handleCreateUser}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <Card
+        title="Create Super Admin Account"
+        description="Register a trusted administrator with full access to system account management."
+        className="shadow-sm"
+      >
+        <form className="space-y-5" onSubmit={handleCreateUser}>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <Input
               label="Name"
               value={userForm.name}
-              onChange={(event) => setUserForm((prev) => ({ ...prev, name: event.target.value }))}
-              required
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setUserForm((prev) => ({ ...prev, name: nextValue }));
+                if (!nextValue.trim()) {
+                  setUserFormErrors((prev) => ({ ...prev, name: 'Name cannot be blank.' }));
+                } else if (!/^[A-Za-z\s]+$/.test(nextValue.trim())) {
+                  setUserFormErrors((prev) => ({ ...prev, name: 'Only letters and spaces are allowed.' }));
+                } else {
+                  setUserFormErrors((prev) => ({ ...prev, name: undefined }));
+                }
+              }}
+              error={userFormErrors.name}
             />
             <Input
               label="Email"
@@ -392,22 +485,31 @@ export function AdminDashboard() {
               required
             />
           </div>
-          
-          <Button type="submit" isLoading={userFormLoading}>
-            Create Super Admin
-          </Button>
+
+          <div className="flex justify-end">
+            <Button type="submit" isLoading={userFormLoading}>
+              Create Super Admin
+            </Button>
+          </div>
         </form>
       </Card>
 
-      <Card title="Assign Learning Admin Access">
-        <div className="border border-slate-200 rounded-md bg-white">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-3 border-b border-slate-200">
+      <Card
+        title="Assign Learning Admin Access"
+        description="Search ERP employees and grant or remove Learning Admin privileges."
+        className="shadow-sm"
+        bodyClassName="p-0"
+      >
+        <div className="bg-white">
+          <div className="grid grid-cols-1 gap-4 border-b border-slate-200 bg-slate-50/80 p-4 md:grid-cols-2 xl:grid-cols-3">
             <Input
               label="Search by Employee No"
               value={assignEmployeeNoSearch}
               onFocus={activateAssignEmployeeSearch}
               onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
               placeholder="e.g. 011338"
+              inputMode="numeric"
+              error={assignSearchErrors.employeeNo}
             />
             <Input
               label="Search by Name"
@@ -415,6 +517,7 @@ export function AdminDashboard() {
               onFocus={activateAssignNameSearch}
               onChange={(event) => handleAssignNameSearchChange(event.target.value)}
               placeholder="e.g. Mohamed"
+              error={assignSearchErrors.name}
             />
             <Select
               label="Filter by Designation"
@@ -468,12 +571,14 @@ export function AdminDashboard() {
             />
           </div>
 
-          <div className="flex justify-end px-3 py-2 border-b border-slate-200 bg-slate-50/70">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-medium text-slate-500">ERP results: {erpEmployees.length}</p>
             <Button
               type="button"
               onClick={handleAssignSearch}
               isLoading={assignSearchLoading}
               disabled={
+                Boolean(assignSearchErrors.employeeNo || assignSearchErrors.name) ||
                 !assignEmployeeNoSearch.trim() &&
                 !assignSurnameSearch.trim() &&
                 !assignDesignationFilter &&
@@ -486,14 +591,10 @@ export function AdminDashboard() {
             </Button>
           </div>
 
-          <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-200">
-            <p className="text-xs text-slate-500">ERP results: {erpEmployees.length}</p>
-          </div>
-
-          <div className="max-h-[26rem] overflow-y-auto">
+          <div className="max-h-[26rem] overflow-auto">
             {assignSearchLoading ? (
               <div className="min-w-[1080px]">
-                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <span>Name</span>
                   <span>Emp No</span>
                   <span>Designation</span>
@@ -505,7 +606,7 @@ export function AdminDashboard() {
                 {assignResultsSkeletonRows.map((row) => (
                   <div
                     key={`assign-skeleton-${row}`}
-                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-3 py-3"
+                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-4 py-3"
                   >
                     <Skeleton className="h-5 w-40" />
                     <Skeleton className="h-5 w-20" />
@@ -518,10 +619,10 @@ export function AdminDashboard() {
                 ))}
               </div>
             ) : erpEmployees.length === 0 ? (
-              <p className="text-sm text-slate-500 p-3">Search ERP to load employees for Learning Admin assignment.</p>
+              <p className="p-4 text-sm text-slate-500">Search ERP to load employees for Learning Admin assignment.</p>
             ) : (
               <div className="min-w-[1080px]">
-                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <span>Name</span>
                   <span>Emp No</span>
                   <span>Designation</span>
@@ -533,9 +634,9 @@ export function AdminDashboard() {
                 {erpEmployees.map((employee) => (
                   <div
                     key={employee.employeeNumber}
-                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50"
                   >
-                    <span className="font-medium text-slate-900">{employee.employeeName}</span>
+                    <span className="font-semibold text-slate-900">{employee.employeeName}</span>
                     <span>{employee.employeeNumber}</span>
                     <span>{employee.designation || '-'}</span>
                     <span>{employee.gradeName || '-'}</span>
@@ -569,47 +670,55 @@ export function AdminDashboard() {
         </div>
       </Card>
 
-      <Card >
-        <div className="space-y-8">
+      <Card className="shadow-sm" bodyClassName="p-5">
+        <div className="space-y-6">
           {usersByRole.map((section) => (
-            <div key={section.key} className={`rounded-lg border p-4 md:p-5 space-y-3 ${section.panelClass}`}>
-              <div className="flex items-center justify-between gap-3">
-                <h3 className={`text-base md:text-lg font-bold tracking-wide ${section.headingClass}`}>
+            <div key={section.key} className={`rounded-xl border ${section.panelClass}`}>
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                <h3 className={`text-base font-semibold ${section.headingClass}`}>
                   {section.label}
                 </h3>
-                <span className="text-xs md:text-sm font-medium text-slate-600">{section.users.length} users</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  {section.users.length} users
+                </span>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm table-fixed">
+                <table className="w-full table-fixed text-sm">
                   <thead>
                     <tr className={`text-left border-b border-slate-200 ${section.headRowClass}`}>
-                      <th className="py-2.5 px-3 w-1/4 font-semibold">Name</th>
-                      <th className="py-2.5 px-3 w-2/5 font-semibold">Email</th>
-                      <th className="py-2.5 px-3 w-1/5 font-semibold">Status</th>
-                      <th className="py-2.5 px-3 w-1/6 font-semibold">Actions</th>
+                      <th className="py-3 px-4 w-1/4 font-semibold">Name</th>
+                      <th className="py-3 px-4 w-2/5 font-semibold">Email</th>
+                      <th className="py-3 px-4 w-1/5 font-semibold">Status</th>
+                      <th className="py-3 px-4 w-1/6 font-semibold">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading ? (
                       recentUsersSkeletonRows.map((row) => (
                         <tr key={`${section.key}-skeleton-${row}`} className="border-b border-slate-100">
-                          <td className="py-2.5 px-3"><Skeleton className="h-5 w-28" /></td>
-                          <td className="py-2.5 px-3"><Skeleton className="h-5 w-40" /></td>
-                          <td className="py-2.5 px-3"><Skeleton className="h-5 w-16" /></td>
-                          <td className="py-2.5 px-3"><Skeleton className="h-8 w-20 rounded-lg" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-5 w-28" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-5 w-40" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-5 w-16" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-8 w-20 rounded-lg" /></td>
                         </tr>
                       ))
                     ) : section.users.length ? (
                       section.users.map((user) => (
-                        <tr key={user.id} className="border-b border-slate-100">
-                          <td className="py-2.5 px-3 font-medium text-slate-900">{user.name}</td>
-                          <td className="py-2.5 px-3 text-slate-700 break-words">{user.email}</td>
-                          <td className="py-2.5 px-3">
-                            <span className={user.is_active ? 'text-green-700' : 'text-red-700'}>
+                        <tr key={user.id} className="border-b border-slate-100 last:border-0">
+                          <td className="py-3 px-4 font-medium text-slate-900">{user.name}</td>
+                          <td className="py-3 px-4 text-slate-700 break-words">{user.email}</td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={
+                                user.is_active
+                                  ? 'rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700'
+                                  : 'rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700'
+                              }
+                            >
                               {user.is_active ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3">
+                          <td className="py-3 px-4">
                             {user.is_active ? (
                               <Button
                                 size="sm"
@@ -626,7 +735,7 @@ export function AdminDashboard() {
                       ))
                     ) : (
                       <tr>
-                        <td className="py-3 px-3 text-slate-500" colSpan={4}>
+                        <td className="py-4 px-4 text-slate-500" colSpan={4}>
                           No users found.
                         </td>
                       </tr>
@@ -636,52 +745,58 @@ export function AdminDashboard() {
               </div>
             </div>
           ))}
-          <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-4 md:p-5 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-base md:text-lg font-bold tracking-wide text-blue-800">
+          <div className="rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <h3 className="text-base font-semibold text-slate-900">
                 Learning Admins
               </h3>
-              <span className="text-xs md:text-sm font-medium text-slate-600">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                 {assignedLearningAdmins.length} users
               </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm table-fixed">
+              <table className="w-full table-fixed text-sm">
                 <thead>
-                  <tr className="text-left border-b border-slate-200 bg-blue-100/80 text-blue-900">
-                    <th className="py-2.5 px-3 w-1/4 font-semibold">Name</th>
-                    <th className="py-2.5 px-3 w-2/5 font-semibold">Email</th>
-                    <th className="py-2.5 px-3 w-1/5 font-semibold">Status</th>
-                    <th className="py-2.5 px-3 w-1/6 font-semibold">Actions</th>
+                  <tr className="text-left border-b border-slate-200 bg-slate-100 text-slate-700">
+                    <th className="py-3 px-4 w-1/4 font-semibold">Name</th>
+                    <th className="py-3 px-4 w-2/5 font-semibold">Email</th>
+                    <th className="py-3 px-4 w-1/5 font-semibold">Status</th>
+                    <th className="py-3 px-4 w-1/6 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     recentUsersSkeletonRows.map((row) => (
                       <tr key={`learning-admin-skeleton-${row}`} className="border-b border-slate-100">
-                        <td className="py-2.5 px-3">
+                        <td className="py-3 px-4">
                           <Skeleton className="mb-2 h-5 w-28" />
                           <Skeleton className="h-4 w-20" />
                         </td>
-                        <td className="py-2.5 px-3"><Skeleton className="h-5 w-40" /></td>
-                        <td className="py-2.5 px-3"><Skeleton className="h-5 w-16" /></td>
-                        <td className="py-2.5 px-3"><Skeleton className="h-8 w-20 rounded-lg" /></td>
+                        <td className="py-3 px-4"><Skeleton className="h-5 w-40" /></td>
+                        <td className="py-3 px-4"><Skeleton className="h-5 w-16" /></td>
+                        <td className="py-3 px-4"><Skeleton className="h-8 w-20 rounded-lg" /></td>
                       </tr>
                     ))
                   ) : assignedLearningAdmins.length ? (
                     assignedLearningAdmins.map((admin) => (
-                      <tr key={admin.employee_number} className="border-b border-slate-100">
-                        <td className="py-2.5 px-3">
+                      <tr key={admin.employee_number} className="border-b border-slate-100 last:border-0">
+                        <td className="py-3 px-4">
                           <p className="font-medium text-slate-900">{admin.name}</p>
                           <p className="text-xs text-slate-500">{admin.employee_number}</p>
                         </td>
-                        <td className="py-2.5 px-3 text-slate-700 break-words">{admin.email}</td>
-                        <td className="py-2.5 px-3">
-                          <span className={admin.is_active ? 'text-green-700' : 'text-red-700'}>
+                        <td className="py-3 px-4 text-slate-700 break-words">{admin.email}</td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={
+                              admin.is_active
+                                ? 'rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700'
+                                : 'rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700'
+                            }
+                          >
                             {admin.is_active ? 'Active' : 'Inactive'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-3 px-4">
                           <Button
                             size="sm"
                             variant="outline"
@@ -713,7 +828,7 @@ export function AdminDashboard() {
                     ))
                   ) : (
                     <tr>
-                      <td className="py-3 px-3 text-slate-500" colSpan={4}>
+                      <td className="py-4 px-4 text-slate-500" colSpan={4}>
                         No learning admins assigned.
                       </td>
                     </tr>

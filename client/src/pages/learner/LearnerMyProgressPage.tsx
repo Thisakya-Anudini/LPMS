@@ -14,6 +14,7 @@ type AssignedLearningPath = {
   enrollmentId: string;
   learningPathId: string;
   title: string;
+  totalDuration: string | null;
   progress: number;
   status: string;
 };
@@ -21,13 +22,76 @@ type AssignedLearningPath = {
 type PathCourse = {
   courseId: string;
   title: string;
+  duration: string | null;
   order: number;
   stageTitle: string | null;
   stageOrder: number;
   isCompleted: boolean;
+  erpStatus: string | null;
   deliveryMode: 'ONLINE' | 'PHYSICAL';
   venue: string | null;
   videoUrl: string | null;
+};
+
+type LearningPathSummary = {
+  id: string;
+  title: string;
+  description: string;
+  category: 'PUBLIC' | 'RESTRICTED';
+  totalDuration: string;
+};
+
+type OtherCourse = {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  duration: string | null;
+  durationHours?: number | null;
+  deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+  videoUrl?: string | null;
+  venue?: string | null;
+  erpStatus: string | null;
+  isCompleted: boolean;
+  alreadyEnrolled: boolean;
+  learningPaths: LearningPathSummary[];
+};
+
+type AlreadyEnrolledCourse = {
+  id: string;
+  code: string;
+  title: string;
+  description: string | null;
+  duration: string | null;
+  erpStatus: string | null;
+  isCompleted: boolean;
+  deliveryMode: 'ONLINE' | 'PHYSICAL';
+  stageTitle: string | null;
+  stageOrder: number;
+  courseOrder: number;
+  enrollment: {
+    id: string;
+    status: string;
+    progress: number;
+  };
+  learningPath: LearningPathSummary;
+};
+
+const normalizeDisplayValue = (value: string | null | undefined) => {
+  const normalized = String(value ?? '').trim();
+  return normalized && !['-', 'n/a', 'na', 'null', 'undefined'].includes(normalized.toLowerCase())
+    ? normalized
+    : null;
+};
+
+const getCourseStatusClassName = (isCompleted: boolean, status: string | null | undefined) => {
+  if (isCompleted) {
+    return 'bg-success-100 text-success-700';
+  }
+  if (normalizeDisplayValue(status)) {
+    return 'bg-primary-50 text-primary-700';
+  }
+  return 'bg-secondary-100 text-secondary-700';
 };
 
 export function LearnerMyProgressPage() {
@@ -36,16 +100,22 @@ export function LearnerMyProgressPage() {
   const [loading, setLoading] = useState(true);
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
-  const [courseUpdateLoadingId, setCourseUpdateLoadingId] = useState<string | null>(null);
   const [activeLearningSection, setActiveLearningSection] = useState<'assigned' | 'self'>('assigned');
   const [activeSelfEnrollmentSection, setActiveSelfEnrollmentSection] = useState<'public' | 'other'>('public');
+  const [activeOtherCourseSection, setActiveOtherCourseSection] = useState<'enrolled' | 'preferred'>('enrolled');
+  const [otherCoursesLoading, setOtherCoursesLoading] = useState(false);
+  const [otherCoursesLoaded, setOtherCoursesLoaded] = useState(false);
+  const [courseSearch, setCourseSearch] = useState('');
   const [isSupervisor, setIsSupervisor] = useState(Boolean(user?.isSupervisor));
   const [learnerName, setLearnerName] = useState(user?.name || 'Learner');
   const [assignedLearningPaths, setAssignedLearningPaths] = useState<AssignedLearningPath[]>([]);
   const [selectedPathCourses, setSelectedPathCourses] = useState<PathCourse[]>([]);
+  const [alreadyEnrolledCourses, setAlreadyEnrolledCourses] = useState<AlreadyEnrolledCourse[]>([]);
+  const [preferredCourses, setPreferredCourses] = useState<OtherCourse[]>([]);
   const [selectedPathMeta, setSelectedPathMeta] = useState<{
     enrollmentId: string;
     learningPathTitle: string;
+    totalDuration: string | null;
     progress: number;
     status: string;
     totalCourses: number;
@@ -89,6 +159,33 @@ export function LearnerMyProgressPage() {
     load();
   }, [load]);
 
+  const loadOtherCourses = useCallback(async () => {
+    try {
+      setOtherCoursesLoading(true);
+      const token = await getAccessToken();
+      if (!token) {
+        showToast('Session expired. Please login again.', 'error');
+        return;
+      }
+
+      const response = await learnerApi.getOtherCourses(token);
+      setAlreadyEnrolledCourses(response.alreadyEnrolledCourses);
+      setPreferredCourses(response.preferredCourses);
+      // Note: 'All Courses' list removed per UI change
+      setOtherCoursesLoaded(true);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to load other courses.', 'error');
+    } finally {
+      setOtherCoursesLoading(false);
+    }
+  }, [getAccessToken, showToast]);
+
+  useEffect(() => {
+    if (activeLearningSection === 'self' && activeSelfEnrollmentSection === 'other' && !otherCoursesLoaded) {
+      loadOtherCourses();
+    }
+  }, [activeLearningSection, activeSelfEnrollmentSection, loadOtherCourses, otherCoursesLoaded]);
+
   const summary = useMemo(() => {
     const totalLearningPaths = assignedLearningPaths.length;
     const completedLearningPaths = assignedLearningPaths.filter((row) => row.status === 'COMPLETED').length;
@@ -127,6 +224,21 @@ export function LearnerMyProgressPage() {
       }));
   }, [selectedPathCourses]);
 
+  const normalizedCourseSearch = courseSearch.trim().toLowerCase();
+  const filteredPreferredCourses = useMemo(() => {
+    if (!normalizedCourseSearch) {
+      return preferredCourses;
+    }
+    return preferredCourses.filter((course) =>
+      [course.title, course.code, course.description]
+        .some((value) => String(value || '').toLowerCase().includes(normalizedCourseSearch))
+    );
+  }, [normalizedCourseSearch, preferredCourses]);
+
+  const selectedPathDuration = normalizeDisplayValue(selectedPathMeta?.totalDuration);
+
+  // 'All Courses' list and filtering removed
+
   const openLearningPathModal = async (enrollmentId: string) => {
     try {
       setModalLoading(true);
@@ -141,48 +253,7 @@ export function LearnerMyProgressPage() {
       setSelectedPathMeta({
         enrollmentId: response.enrollment.id,
         learningPathTitle: response.enrollment.learningPathTitle,
-        progress: response.enrollment.progress,
-        status: response.enrollment.status,
-        totalCourses: response.enrollment.totalCourses,
-        completedCourses: response.enrollment.completedCourses
-      });
-      setSelectedPathCourses(response.courses);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to load learning path courses.', 'error');
-    } finally {
-      setModalLoading(false);
-    }
-  };
-
-  const closeModal = () => {
-    setSelectedEnrollmentId(null);
-    setSelectedPathCourses([]);
-    setSelectedPathMeta(null);
-  };
-
-  const handleToggleCourse = async (course: PathCourse, completed: boolean) => {
-    if (!selectedEnrollmentId) {
-      return;
-    }
-
-    try {
-      setCourseUpdateLoadingId(course.courseId);
-      const token = await getAccessToken();
-      if (!token) {
-        showToast('Session expired. Please login again.', 'error');
-        return;
-      }
-
-      const response = await learnerApi.updateCourseCompletion(
-        token,
-        selectedEnrollmentId,
-        course.courseId,
-        completed
-      );
-
-      setSelectedPathMeta({
-        enrollmentId: response.enrollment.id,
-        learningPathTitle: response.enrollment.learningPathTitle,
+        totalDuration: response.enrollment.totalDuration,
         progress: response.enrollment.progress,
         status: response.enrollment.status,
         totalCourses: response.enrollment.totalCourses,
@@ -196,15 +267,17 @@ export function LearnerMyProgressPage() {
             : path
         )
       );
-      if (response.enrollment.progress >= 100) {
-        window.dispatchEvent(new Event('notifications:updated'));
-        showToast('Learning path completed. Certificate generated.', 'success');
-      }
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update course completion.', 'error');
+      showToast(err instanceof Error ? err.message : 'Failed to load learning path courses.', 'error');
     } finally {
-      setCourseUpdateLoadingId(null);
+      setModalLoading(false);
     }
+  };
+
+  const closeModal = () => {
+    setSelectedEnrollmentId(null);
+    setSelectedPathCourses([]);
+    setSelectedPathMeta(null);
   };
 
   return (
@@ -260,14 +333,14 @@ export function LearnerMyProgressPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {statSkeletons.map((index) => (
-              <Card key={`progress-stat-${index}`} className="p-6">
-                <p className="text-sm font-medium text-secondary-600">
+              <Card key={`progress-stat-${index}`} className="px-4 py-1.5">
+                <p className="text-lg font-medium text-secondary-600">
                   {index === 0 ? 'Assigned Learning Paths' : index === 1 ? 'Completed Learning Paths' : 'Pending Learning Paths'}
                 </p>
                 {loading ? (
                   <Skeleton className="mt-2 h-9 w-16" />
                 ) : (
-                  <p className={`text-3xl font-bold ${index === 1 ? 'text-success-600' : index === 2 ? 'text-warning-600' : 'text-secondary-900'}`}>
+                  <p className={`text-2xl font-bold ${index === 1 ? 'text-success-600' : index === 2 ? 'text-warning-600' : 'text-secondary-900'}`}>
                     {index === 0 ? summary.totalLearningPaths : index === 1 ? summary.completedLearningPaths : summary.remainingLearningPaths}
                   </p>
                 )}
@@ -287,28 +360,36 @@ export function LearnerMyProgressPage() {
                     <Skeleton className="h-3 w-full" />
                   </div>
                 ))
-              ) : assignedLearningPaths.map((path) => (
-                <button
-                  key={path.enrollmentId}
-                  type="button"
-                  onClick={() => openLearningPathModal(path.enrollmentId)}
-                  className="w-full text-left p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200 group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="font-semibold text-secondary-900 group-hover:text-primary-700">{path.title}</p>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      path.status === 'COMPLETED'
-                        ? 'bg-success-100 text-success-700'
-                        : path.status === 'IN_PROGRESS'
-                        ? 'bg-warning-100 text-warning-700'
-                        : 'bg-secondary-100 text-secondary-700'
-                    }`}>
-                      {path.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <ProgressBar progress={path.progress} showLabel size="sm" />
-                </button>
-              ))}
+              ) : assignedLearningPaths.map((path) => {
+                const pathDuration = normalizeDisplayValue(path.totalDuration);
+                return (
+                  <button
+                    key={path.enrollmentId}
+                    type="button"
+                    onClick={() => openLearningPathModal(path.enrollmentId)}
+                    className="w-full text-left p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200 group"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="font-semibold text-secondary-900 group-hover:text-primary-700">{path.title}</p>
+                        {pathDuration ? (
+                          <p className="mt-1 text-xs text-secondary-600">Total Duration: {pathDuration}</p>
+                        ) : null}
+                      </div>
+                      <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${
+                        path.status === 'COMPLETED'
+                          ? 'bg-success-100 text-success-700'
+                          : path.status === 'IN_PROGRESS'
+                          ? 'bg-warning-100 text-warning-700'
+                          : 'bg-secondary-100 text-secondary-700'
+                      }`}>
+                        {path.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <ProgressBar progress={path.progress} showLabel size="sm" />
+                  </button>
+                );
+              })}
               {!loading && assignedLearningPaths.length === 0 ? (
                 <p className="text-sm text-secondary-500 text-center py-8">No assigned learning paths yet.</p>
               ) : null}
@@ -317,45 +398,192 @@ export function LearnerMyProgressPage() {
         </>
       ) : (
         <div className="space-y-4">
-          <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-2">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setActiveSelfEnrollmentSection('public')}
-                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                  activeSelfEnrollmentSection === 'public'
-                    ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
-                    : 'text-secondary-600 hover:bg-white/70'
-                }`}
-              >
-                <Sparkles className="h-4 w-4" />
-                Public LPs
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSelfEnrollmentSection('other')}
-                className={`flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-all ${
-                  activeSelfEnrollmentSection === 'other'
-                    ? 'bg-white text-primary-700 shadow-sm ring-1 ring-primary-100'
-                    : 'text-secondary-600 hover:bg-white/70'
-                }`}
-              >
-                <LibraryBig className="h-4 w-4" />
-                Other Courses
-              </button>
+          <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3">
+            <div className="relative w-full max-w-3xl mx-auto">
+              <div className="relative rounded-full bg-white/10 p-1">
+                <div
+                  aria-hidden
+                  className={`absolute top-1 bottom-1 left-1 w-1/2 rounded-full bg-gradient-to-r from-primary-600 to-primary-500 shadow-md transition-transform duration-300 ${
+                    activeSelfEnrollmentSection === 'other' ? 'translate-x-full' : 'translate-x-0'
+                  }`}
+                />
+
+                <div className="relative z-10 grid grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSelfEnrollmentSection('public')}
+                    className={`flex items-center justify-center gap-3 px-6 py-3 rounded-full text-sm font-semibold transition-colors duration-200 ${
+                      activeSelfEnrollmentSection === 'public' ? 'text-white' : 'text-secondary-700'
+                    }`}
+                  >
+                    <Sparkles className={`h-4 w-4 ${activeSelfEnrollmentSection === 'public' ? 'text-white' : 'text-secondary-400'}`} />
+                    <span>Public LPs</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveSelfEnrollmentSection('other')}
+                    className={`flex items-center justify-center gap-3 px-6 py-3 rounded-full text-sm font-semibold transition-colors duration-200 ${
+                      activeSelfEnrollmentSection === 'other' ? 'text-white' : 'text-secondary-700'
+                    }`}
+                  >
+                    <LibraryBig className={`h-4 w-4 ${activeSelfEnrollmentSection === 'other' ? 'text-white' : 'text-secondary-400'}`} />
+                    <span>Other Courses</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
           {activeSelfEnrollmentSection === 'public' ? (
             <LearnerPublicPathsPanel showHeader={false} cardTitle="Public LPs" />
           ) : (
-            <Card title="Other Courses">
-              <div className="rounded-xl border border-dashed border-secondary-300 bg-secondary-50 px-4 py-10 text-center">
-                <LibraryBig className="mx-auto h-8 w-8 text-secondary-400" />
-                <p className="mt-3 text-sm font-semibold text-secondary-800">Other Courses</p>
-                <p className="mt-1 text-sm text-secondary-500">This section is ready for the next integration.</p>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3">
+                <div className="relative w-full max-w-3xl mx-auto">
+                  <div className="relative rounded-full bg-white/10 p-1">
+                    <div
+                      aria-hidden
+                      className={`absolute top-1 bottom-1 left-1 w-1/2 rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                        activeOtherCourseSection === 'preferred' ? 'translate-x-full' : 'translate-x-0'
+                      }`}
+                    />
+
+                    <div className="relative z-10 grid grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveOtherCourseSection('enrolled')}
+                        className={`px-6 py-3 text-sm font-medium rounded-full transition-colors duration-200 ${
+                          activeOtherCourseSection === 'enrolled' ? 'text-primary-700' : 'text-secondary-600'
+                        }`}
+                      >
+                        Already Enrolled Courses ({alreadyEnrolledCourses.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveOtherCourseSection('preferred')}
+                        className={`px-6 py-3 text-sm font-medium rounded-full transition-colors duration-200 ${
+                          activeOtherCourseSection === 'preferred' ? 'text-primary-700' : 'text-secondary-600'
+                        }`}
+                      >
+                        Preferred Courses ({preferredCourses.length})
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </Card>
+
+              {activeOtherCourseSection === 'enrolled' ? (
+                <Card title="Already Enrolled Courses">
+                  {otherCoursesLoading ? (
+                    <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                      {listSkeletons.map((index) => (
+                        <div key={`enrolled-course-skeleton-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
+                          <Skeleton className="mb-2 h-5 w-56" />
+                          <Skeleton className="mb-2 h-4 w-40" />
+                          <Skeleton className="h-4 w-full" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : alreadyEnrolledCourses.length === 0 ? (
+                    <p className="text-sm text-secondary-500">No already enrolled courses found.</p>
+                  ) : (
+                    <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                      {alreadyEnrolledCourses.map((course, index) => {
+                        const courseDuration = normalizeDisplayValue(course.duration);
+                        const courseStatus = normalizeDisplayValue(course.erpStatus) || 'Already Enrolled';
+                        return (
+                        <div
+                          key={`${course.learningPath.id}-${course.code || course.id}-${index}`}
+                          className="rounded-lg border border-secondary-200 bg-white p-3"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold text-secondary-900">
+                              {course.title}{' '}
+                              {course.deliveryMode === 'ONLINE' ? 'Online' : course.deliveryMode === 'PHYSICAL' ? 'Physical' : ''}
+                            </p>
+
+                            <p className="mt-2 text-xs font-medium tracking-wide text-secondary-500">{course.code}</p>
+                            {courseDuration ? (
+                              <p className="mt-1 text-xs text-secondary-600">Duration: {courseDuration}</p>
+                            ) : null}
+
+                            <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-secondary-700">
+                              {course.learningPath.category}
+                            </p>
+
+                            <p className="mt-1 text-xs text-secondary-700">
+                              Learning Path - {course.learningPath.title}
+                            </p>
+
+                            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getCourseStatusClassName(course.isCompleted, course.erpStatus)}`}>
+                              {courseStatus}
+                            </span>
+                          </div>
+                        </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </Card>
+              ) : (
+                <Card title="Preferred Courses">
+                <div className="mb-4">
+                  <input
+                    type="search"
+                    value={courseSearch}
+                    onChange={(event) => setCourseSearch(event.target.value)}
+                    placeholder="Search by course name or ID"
+                    className="w-full rounded-lg border border-secondary-300 px-3 py-2 text-sm text-secondary-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
+                  />
+                </div>
+                {otherCoursesLoading ? (
+                  <div className="max-h-80 space-y-2 overflow-y-auto pr-2">
+                    {listSkeletons.map((index) => (
+                      <div key={`preferred-course-skeleton-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
+                        <Skeleton className="mb-2 h-5 w-56" />
+                        <Skeleton className="mb-2 h-4 w-40" />
+                        <Skeleton className="h-4 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredPreferredCourses.length === 0 ? (
+                  <p className="text-sm text-secondary-500">No preferred courses found.</p>
+                ) : (
+                  <div className="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-2 lg:grid-cols-2">
+                    {filteredPreferredCourses.map((course, index) => {
+                      const courseDuration = normalizeDisplayValue(course.duration);
+                      const courseStatus = normalizeDisplayValue(course.erpStatus);
+                      return (
+                      <div key={`${course.code || course.id}-preferred-${index}`} className="rounded-lg border border-secondary-200 bg-white p-3">
+                        <div className="flex h-full flex-col gap-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-secondary-900">{course.title}</p>
+                            <p className="mt-1 text-xs text-secondary-500">{course.code}</p>
+                            {courseDuration ? (
+                              <p className="mt-1 text-xs text-secondary-600">Duration: {courseDuration}</p>
+                            ) : null}
+                            {course.description ? (
+                              <p className="mt-1 text-xs text-secondary-600">{course.description}</p>
+                            ) : null}
+                            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${getCourseStatusClassName(course.isCompleted, course.erpStatus)}`}>
+                              {courseStatus || 'Preferred'}
+                            </span>
+                          </div>
+                          <Button type="button" size="sm" className="w-full" disabled>
+                            Enroll
+                          </Button>
+                        </div>
+                      </div>
+                      );
+                    })}
+                  </div>
+                )}
+                </Card>
+              )}
+
+              {/* 'All Courses' section removed per request */}
+            </div>
           )}
         </div>
       )}
@@ -396,6 +624,7 @@ export function LearnerMyProgressPage() {
                     <p className="font-semibold text-secondary-900 text-lg">{selectedPathMeta.learningPathTitle}</p>
                     <p className="text-sm text-secondary-600 mt-1">
                       {selectedPathMeta.completedCourses}/{selectedPathMeta.totalCourses} courses completed
+                      {selectedPathDuration ? ` | Duration: ${selectedPathDuration}` : ''}
                       {' | '}
                       <span className={`font-medium ${
                         selectedPathMeta.status === 'COMPLETED'
@@ -418,7 +647,9 @@ export function LearnerMyProgressPage() {
                         <p className="text-sm font-semibold text-secondary-800 mb-3">
                           Stage {stage.stageOrder}: {stage.stageTitle}
                         </p>
-                        {stage.courses.map((course) => (
+                        {stage.courses.map((course) => {
+                          const courseDuration = normalizeDisplayValue(course.duration);
+                          return (
                           <div
                             key={course.courseId}
                             className="flex items-start gap-4 p-4 rounded-xl border border-secondary-200 bg-white hover:border-primary-300 hover:shadow-soft transition-all duration-200"
@@ -426,8 +657,8 @@ export function LearnerMyProgressPage() {
                             <input
                               type="checkbox"
                               checked={course.isCompleted}
-                              disabled={courseUpdateLoadingId === course.courseId}
-                              onChange={(event) => handleToggleCourse(course, event.target.checked)}
+                              disabled
+                              readOnly
                               className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
                             />
                             <div className="flex-1">
@@ -439,12 +670,13 @@ export function LearnerMyProgressPage() {
                                   ? 'bg-success-100 text-success-700'
                                   : 'bg-secondary-100 text-secondary-700'
                               }`}>
-                                {course.isCompleted ? 'Completed' : 'Pending'}
+                                {course.erpStatus || (course.isCompleted ? 'Completed' : 'Not Enrolled')}
                               </span>
                               <span className="block text-xs text-secondary-500 mt-2">
                                 {course.deliveryMode === 'ONLINE'
                                   ? 'Mode: Online'
                                   : `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`}
+                                {courseDuration ? ` | Duration: ${courseDuration}` : ''}
                               </span>
                             </div>
                             {course.deliveryMode === 'ONLINE' ? (
@@ -465,7 +697,8 @@ export function LearnerMyProgressPage() {
                               </span>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ))}
                     {selectedPathCourses.length === 0 ? (

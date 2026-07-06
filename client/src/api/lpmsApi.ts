@@ -42,13 +42,17 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
     try {
       const payload = await response.json();
       if (response.status === 409 && payload?.error?.code === 'DUPLICATE_LEARNING_PATH') {
-        const error = new Error(payload.error.message || 'Conflict');
-        (error as any).status = response.status;
-        (error as any).payload = payload;
-        throw error;
+        type ApiErrorPayload = { error?: { code?: string; message?: string; details?: unknown } };
+        const apiError = new Error(payload.error?.message || 'Conflict') as Error & {
+          status?: number;
+          payload?: ApiErrorPayload;
+        };
+        apiError.status = response.status;
+        apiError.payload = payload as ApiErrorPayload;
+        throw apiError;
       }
       throw new Error(await parseApiError(response));
-    } catch (err) {
+    } catch {
       throw new Error(await parseApiError(response));
     }
   }
@@ -421,7 +425,52 @@ export const learningApi = {
       body: payload
     });
   },
-  getSummaryReport(token: string) {
+  getClassDetailReport(
+    token: string,
+    params: { learningPathId: string; courseCode: string; classId: string }
+  ) {
+    const searchParams = new URLSearchParams({
+      learningPathId: params.learningPathId,
+      courseCode: params.courseCode,
+      classId: params.classId
+    });
+    return request<{
+      report: null | {
+        id: string;
+        learningPathId: string;
+        courseCode: string;
+        classId: string;
+        values: Record<string, string>;
+        updatedAt: string;
+      };
+    }>(`/class-detail-reports?${searchParams.toString()}`, { token });
+  },
+  saveClassDetailReport(
+    token: string,
+    payload: {
+      learningPathId: string;
+      courseCode: string;
+      classId: string;
+      values: Record<string, string>;
+    }
+  ) {
+    return request<{
+      report: {
+        id: string;
+        learningPathId: string;
+        courseCode: string;
+        classId: string;
+        values: Record<string, string>;
+        updatedAt: string;
+      };
+    }>('/class-detail-reports', {
+      method: 'PUT',
+      token,
+      body: payload
+    });
+  },
+  getSummaryReport(token: string, learningPathId?: string) {
+    const query = learningPathId ? `?${new URLSearchParams({ learningPathId }).toString()}` : '';
     return request<{
       summary: {
         totalPaths: number;
@@ -431,7 +480,7 @@ export const learningApi = {
         completionRate: number;
         totalCertificates: number;
       };
-    }>('/reports/summary', { token });
+    }>(`/reports/summary${query}`, { token });
   },
   getCertificateSettings(token: string) {
     return request<{
@@ -658,6 +707,7 @@ export const learnerApi = {
         enrollmentId: string;
         learningPathId: string;
         title: string;
+        totalDuration: string | null;
         progress: number;
         status: string;
       }>;
@@ -671,6 +721,7 @@ export const learnerApi = {
         id: string;
         learningPathId: string;
         learningPathTitle: string;
+        totalDuration: string | null;
         progress: number;
         status: string;
         totalCourses: number;
@@ -679,10 +730,12 @@ export const learnerApi = {
       courses: Array<{
         courseId: string;
         title: string;
+        duration: string | null;
         order: number;
         stageTitle: string | null;
         stageOrder: number;
         isCompleted: boolean;
+        erpStatus: string | null;
         deliveryMode: 'ONLINE' | 'PHYSICAL';
         venue: string | null;
         videoUrl: string | null;
@@ -700,6 +753,7 @@ export const learnerApi = {
         id: string;
         learningPathId: string;
         learningPathTitle: string;
+        totalDuration?: string | null;
         progress: number;
         status: string;
         totalCourses: number;
@@ -708,10 +762,12 @@ export const learnerApi = {
       courses: Array<{
         courseId: string;
         title: string;
+        duration?: string | null;
         order: number;
         stageTitle: string | null;
         stageOrder: number;
         isCompleted: boolean;
+        erpStatus: string | null;
         deliveryMode: 'ONLINE' | 'PHYSICAL';
         venue: string | null;
         videoUrl: string | null;
@@ -793,6 +849,77 @@ export const learnerApi = {
         }>;
       };
     }>(`/learner/public-paths/${id}`, { token });
+  },
+  getOtherCourses(token: string) {
+    return request<{
+      alreadyEnrolledCourses: Array<{
+        id: string;
+        code: string;
+        title: string;
+        description: string | null;
+        duration: string | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
+        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        stageTitle: string | null;
+        stageOrder: number;
+        courseOrder: number;
+        enrollment: {
+          id: string;
+          status: string;
+          progress: number;
+        };
+        learningPath: {
+          id: string;
+          title: string;
+          description: string;
+          category: 'PUBLIC' | 'RESTRICTED';
+          totalDuration: string;
+        };
+      }>;
+      preferredCourses: Array<{
+        id: string;
+        code: string;
+        title: string;
+        description: string | null;
+        duration: string | null;
+        durationHours: number | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
+        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+        videoUrl: string | null;
+        venue: string | null;
+        alreadyEnrolled: boolean;
+        learningPaths: Array<{
+          id: string;
+          title: string;
+          description: string;
+          category: 'PUBLIC' | 'RESTRICTED';
+          totalDuration: string;
+        }>;
+      }>;
+      courses: Array<{
+        id: string;
+        code: string;
+        title: string;
+        description: string | null;
+        duration: string | null;
+        durationHours: number | null;
+        erpStatus: string | null;
+        isCompleted: boolean;
+        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+        videoUrl: string | null;
+        venue: string | null;
+        alreadyEnrolled: boolean;
+        learningPaths: Array<{
+          id: string;
+          title: string;
+          description: string;
+          category: 'PUBLIC' | 'RESTRICTED';
+          totalDuration: string;
+        }>;
+      }>;
+    }>('/learner/other-courses', { token });
   },
   selfEnroll(token: string, learningPathId: string) {
     return request<{ enrollment: { id: string } }>('/learner/self-enroll', {

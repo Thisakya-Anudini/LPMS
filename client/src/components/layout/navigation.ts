@@ -8,7 +8,6 @@ import {
   LineChart,
   School,
   Shield,
-  Sparkles,
   UserCog,
   Users
 } from 'lucide-react';
@@ -41,11 +40,6 @@ const learnerLinks: NavigationLink[] = [
     label: 'My Learning',
     to: '/learner/my-progress',
     icon: GraduationCap
-  },
-  {
-    label: 'Public Paths',
-    to: '/learner/public-paths',
-    icon: Sparkles
   },
   {
     label: 'Certificates',
@@ -157,9 +151,7 @@ export function getNavigationModel(user: User): NavigationModel {
   }
 
   const groups: NavigationGroup[] = [];
-  const primaryLinks = user.isLearningAdmin
-    ? learnerLinks.filter((link) => link.label !== 'Public Paths')
-    : [...learnerLinks];
+  const primaryLinks = [...learnerLinks];
 
   if (user.isLearningAdmin) {
     groups.push({
