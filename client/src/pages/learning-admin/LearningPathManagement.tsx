@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from 'lucide-react';
-import { courseApi, learningApi } from '../../api/lpmsApi';
+import { ApiRequestError, courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -46,6 +46,28 @@ type CourseItem = {
   deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
   venue: string | null;
   videoUrl: string | null;
+};
+
+type DuplicateLearningPathCourse = {
+  title?: string;
+  code?: string;
+};
+
+type DuplicateLearningPathSummary = {
+  id: string;
+  title?: string;
+  overlappingCourses?: DuplicateLearningPathCourse[];
+};
+
+type DuplicateLearningPathPayload = {
+  error?: {
+    code?: string;
+    message?: string;
+    details?: {
+      existing?: DuplicateLearningPathSummary[];
+    };
+  };
+  existing?: DuplicateLearningPathSummary[];
 };
 
 type StageForm = {
@@ -139,6 +161,15 @@ const formatDurationValue = (value: string, unit: string) => {
 };
 const normalizeTitleInputSpacing = (value: string) => value.replace(/\s{2,}/g, ' ');
 
+const isDuplicateLearningPathPayload = (payload: unknown): payload is DuplicateLearningPathPayload => {
+  if (typeof payload !== 'object' || payload === null || !('error' in payload)) {
+    return false;
+  }
+
+  const error = (payload as { error?: { code?: unknown } }).error;
+  return error?.code === 'DUPLICATE_LEARNING_PATH';
+};
+
 const initialPathForm = {
   title: '',
   description: '',
@@ -183,10 +214,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [query, setQuery] = useState('');
 
   const [pathForm, setPathForm] = useState(initialPathForm);
-  type DuplicateExisting = { id?: string; title?: string; overlappingCourses?: Array<{ title?: string; code?: string }> };
-  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<DuplicateExisting> }>(null);
+  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: DuplicateLearningPathSummary[] }>(null);
   const [pathTitleError, setPathTitleError] = useState<string | null>(null);
+  const [pathDurationError, setPathDurationError] = useState<string | null>(null);
   const [editTitleError, setEditTitleError] = useState<string | null>(null);
+  const [editDurationError, setEditDurationError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
   const [createCourseSearch, setCreateCourseSearch] = useState('');
   const [editCourseSearch, setEditCourseSearch] = useState('');
@@ -487,13 +519,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       showToast('Learning path created successfully.', 'success');
       await loadData();
     } catch (err) {
-      // If server returned structured DUPLICATE_LEARNING_PATH details, show inline warning
-      type ApiErrorPayload = { error?: { code?: string; message?: string; details?: { existing?: Array<DuplicateExisting> } }; existing?: Array<DuplicateExisting> };
-      const maybePayload = (err as unknown as { payload?: ApiErrorPayload }).payload;
-      if (err instanceof Error && maybePayload && (maybePayload.error?.code === 'DUPLICATE_LEARNING_PATH' || maybePayload.existing)) {
-        const existing = maybePayload.error?.details?.existing || maybePayload.existing || [];
-        setPathDuplicateWarning({ message: maybePayload.error?.message || 'Duplicate learning path detected.', existing });
-        showToast(maybePayload.error?.message || 'Duplicate learning path detected.', 'info');
+      if (err instanceof ApiRequestError && isDuplicateLearningPathPayload(err.payload)) {
+        const payload = err.payload;
+        const message = payload.error?.message || 'Duplicate learning path detected.';
+        setPathDuplicateWarning({
+          message,
+          existing: payload.error?.details?.existing || payload.existing || []
+        });
+        showToast(message, 'info');
       } else {
         showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
       }
@@ -1125,7 +1158,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   value={pathForm.title}
                   error={pathTitleError ?? undefined}
                   onChange={(event) => {
-                    const sanitized = event.target.value.replace(/[^A-Za-z\s]/g, '');
+                    const sanitized = normalizeTitleInputSpacing(event.target.value.replace(/[^A-Za-z\s]/g, ''));
                     setPathForm((prev) => ({ ...prev, title: sanitized }));
                     setPathTitleError(null);
                   }}
@@ -1138,7 +1171,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     <p className="font-medium">{pathDuplicateWarning.message}</p>
                     <ul className="list-disc list-inside">
                       {pathDuplicateWarning.existing.map((e) => (
-                        <li key={e.id ?? String(e.title)}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}</li>
+                        <li key={e.id || e.title || 'duplicate-path'}>
+                          {e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `- overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -1617,7 +1652,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={editForm.title}
                     error={editTitleError ?? undefined}
                     onChange={(event) => {
-                      const sanitized = event.target.value.replace(/[^A-Za-z\s]/g, '');
+                      const sanitized = normalizeTitleInputSpacing(event.target.value.replace(/[^A-Za-z\s]/g, ''));
                       setEditForm((prev) => ({ ...prev, title: sanitized }));
                       setEditTitleError(null);
                     }}
