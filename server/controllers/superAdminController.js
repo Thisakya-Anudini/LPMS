@@ -556,9 +556,28 @@ export const getAllLearners = async (req, res) => {
   ]);
 
   const total = countResult.rows[0]?.total || 0;
+  const learners = learnersResult.rows;
+
+  const enrichedLearners = await Promise.all(
+    learners.map(async (learner) => {
+      try {
+        if(learner.employee_number){
+          const erpResponse = await fetchEmployeeDetailsForServiceNo(learner.employee_number);
+          const erpData = erpResponse?.data?.[0];
+
+          if(erpData && erpData.email && String(erpData.email).trim()){
+            learner.email = String(erpData.email).trim().toLowerCase();
+          }
+        }
+      } catch(err){
+        // Silently fallback to the Local DB email if the ERP API request fails
+      }
+      return learner;
+    })
+  );
 
   return res.status(200).json({
-    learners: learnersResult.rows,
+    learners: enrichedLearners,
     designationOptions: designationResult.rows.map((row) => row.designation),
     pagination: {
       page,

@@ -1350,6 +1350,85 @@ describe("GET ALL LEARNERS", () => {
     expect(res.body.pagination.page).toBe(100);
     expect(res.body.pagination.totalPages).toBe(1);
   });
+
+    it("should enrich learner email with data from ERP API", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "old@fallback.local",
+            is_active: true,
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            is_learning_admin: false,
+            total_learning_paths: 0,
+            completed_learning_paths: 0,
+            average_progress: "0.00",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Developer" }],
+        rowCount: 1,
+      });
+
+   
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      data: [{ email: "john.real@slt.com.lk" }],
+    });
+
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.body.learners[0].email).toBe("john.real@slt.com.lk"); 
+  });
+
+  it("should silently fallback to local DB email if ERP API fails", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "old@fallback.local",
+            is_active: true,
+            employee_number: "EMP-001",
+            designation: "Developer",
+            grade_name: "G5",
+            is_learning_admin: false,
+            total_learning_paths: 0,
+            completed_learning_paths: 0,
+            average_progress: "0.00",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ designation: "Developer" }],
+        rowCount: 1,
+      });
+
+    
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
+      new Error("ERP Network Error")
+    );
+
+    const req = createMockReq({ query: {} });
+    const res = createMockRes();
+    await superAdminController.getAllLearners(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.body.learners[0].email).toBe("old@fallback.local"); 
+  });
+
 });
 
 // getLearnerLearningPaths testing
