@@ -233,7 +233,7 @@ export const learningApi = {
       title: string;
       description: string;
       category: 'RESTRICTED' | 'PUBLIC';
-      totalDuration: string;
+      totalDuration?: string;
       stages?: Array<{
         title: string;
         order: number;
@@ -254,7 +254,7 @@ export const learningApi = {
       title: string;
       description: string;
       category: 'RESTRICTED' | 'PUBLIC';
-      totalDuration: string;
+      totalDuration?: string;
       status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
       stages?: Array<{
         title: string;
