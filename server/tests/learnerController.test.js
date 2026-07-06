@@ -790,6 +790,64 @@ describe("GET LEARNER OTHER COURSES", () => {
     expect(res.body.courses[0].alreadyEnrolled).toBe(false);
   });
 
+  it("should include ERP completed courses in already enrolled courses", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ present: true }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ present: true }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ present: true }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [],
+        rowCount: 0,
+      });
+    vi.mocked(fetchCourseEnrollmentDetails).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        {
+          courseCode: "C-100",
+          courseName: "Completed ERP Course",
+          status: "Completed",
+          duration: "2 hours",
+        },
+      ],
+    });
+    vi.mocked(fetchAllCourses).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        { courseCode: "C-100", courseName: "Completed ERP Course" },
+        { courseCode: "C-200", courseName: "Available Course" },
+      ],
+    });
+
+    const req = createMockReq({ user: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await learnerController.getLearnerOtherCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.alreadyEnrolledCourses).toHaveLength(1);
+    expect(res.body.alreadyEnrolledCourses[0]).toMatchObject({
+      code: "C-100",
+      title: "Completed ERP Course",
+      erpStatus: "Completed",
+      isCompleted: true,
+      enrollment: {
+        status: "COMPLETED",
+        progress: 100,
+      },
+    });
+    expect(res.body.preferredCourses.map((course) => course.code)).toEqual(["C-200"]);
+  });
+
   it("should mark alreadyEnrolled=true for enrolled courses", async () => {
     const enrolledCourses = new Set(["COURSE-001"]);
     const allCourses = [
