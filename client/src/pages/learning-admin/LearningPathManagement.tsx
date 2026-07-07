@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -774,9 +774,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             </div>
           </div>
         ))}
-        <div className="md:col-span-2">
-          <Button type="button" variant="outline" onClick={() => addStage(mode)}>
-            Add Stage
+        <div className="md:col-span-2 pt-2">
+          <Button type="button" variant="secondary" className="w-full" onClick={() => addStage(mode)}>
+            <Plus className="h-4 w-4" />
+            Add Another Stage
           </Button>
         </div>
       </div>
@@ -799,11 +800,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
               />
               <Button
                 type="button"
-                variant="outline"
-                size="md"
+                variant="secondary"
                 onClick={() => addStage('create')}
-                className="self-end border-slate-400 text-slate-900 hover:bg-slate-200"
+                className="h-11"
               >
+                <Plus className="h-5 w-5" />
                 Add Stage
               </Button>
             </div>
@@ -954,7 +955,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         <div className="grid grid-cols-1 xl:grid-cols-9 gap-6">
           <Card title="Create Learning Path" className="xl:col-span-5">
             <form className="space-y-4" onSubmit={handleCreatePath}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                 <Input
                   label="Title"
                   value={pathForm.title}
@@ -967,16 +968,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   helperText={`${pathForm.title.length}/50 characters entered, ${50 - pathForm.title.length} remaining`}
                   required
                 />
-                {pathDuplicateWarning ? (
-                  <div className="col-span-2 mt-1 text-sm text-amber-700">
-                    <p className="font-medium">{pathDuplicateWarning.message}</p>
-                    <ul className="list-disc list-inside">
-                      {pathDuplicateWarning.existing.map((e) => (
-                        <li key={e.id ?? String(e.title)}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
                 <Select
                   label="Category"
                   value={pathForm.category}
@@ -988,6 +979,17 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     { value: 'RESTRICTED', label: 'Restricted' }
                   ]}
                 />
+                {pathDuplicateWarning ? (
+                  <div className="md:col-span-2 mt-1 text-sm text-amber-700">
+                    <p className="font-medium">{pathDuplicateWarning.message}</p>
+                    <ul className="list-disc list-inside">
+                      {pathDuplicateWarning.existing.map((e) => (
+                        <li key={e.id ?? String(e.title)}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                
                 <Input
                   label="Description"
                   value={pathForm.description}
