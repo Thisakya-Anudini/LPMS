@@ -188,7 +188,10 @@ export function SupervisorDashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {statSkeletons.map((index) => (
-          <Card key={`supervisor-stat-${index}`} className="p-4">
+          <Card
+            key={`supervisor-stat-${index}`}
+            bodyClassName="h-24 px-6 py-4 flex flex-col justify-center"
+          >
             <p className="text-sm text-slate-500">
               {index === 0 ? 'Team Learners' : 'Available Learning Paths'}
             </p>
@@ -203,7 +206,7 @@ export function SupervisorDashboard() {
         ))}
       </div>
 
-      <Card title="Assign Learning Paths">
+      <Card title="Assign Learning Paths" bodyClassName="p-4">
         <div className="space-y-4">
           {loading ? (
             <div>
