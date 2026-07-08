@@ -65,14 +65,19 @@ const normalizeEmailFromEmployeeDetails = (row) => {
 
 const normalizeCourseDeliveryMode = (value) => {
   const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'N/A') return 'N/A';
+  
   if (normalized === 'PHYSICAL' || normalized === 'CLASSROOM') {
     return 'PHYSICAL';
   }
-  if (normalized === 'HYBRID') {
+  if (normalized === 'HYBRID' || normalized === 'ONLINE') {
     return 'ONLINE';
   }
-  return 'ONLINE';
+  
+  // Change the default fallback to N/A 
+  return 'N/A';
 };
+
 
 const normalizeErpCourse = (row, index = 0) => {
   const courseCode = String(row?.courseCode || '').trim();
@@ -1706,8 +1711,10 @@ export const getPublicLearningPathById = async (req, res) => {
             course.title AS course_title,
             sc.course_order,
             CASE
-              WHEN course.type = 'ONLINE' THEN 'ONLINE'
-              ELSE 'PHYSICAL'
+              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(course.title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
             END AS delivery_mode
           FROM learning_path_stages lps
           JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -1721,7 +1728,12 @@ export const getPublicLearningPathById = async (req, res) => {
             COALESCE(sc.course_code, sc.course_title) AS course_id,
             sc.course_title AS course_title,
             sc.course_order,
-            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode
+            CASE
+              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode
           FROM learning_path_stages lps
           JOIN stage_courses sc ON sc.stage_id = lps.id
           WHERE lps.learning_path_id = $1
