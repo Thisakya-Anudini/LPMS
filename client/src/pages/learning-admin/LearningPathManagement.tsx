@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { ApiRequestError, courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -722,27 +722,26 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {stages.map((stage, stageIndex) => (
           <div key={`${mode}-${stage.stageId}`} className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-end gap-2">
               <Input
                 label={`Stage ${stageIndex + 1} Name`}
                 value={stage.title}
                 onChange={(event) => updateStageTitle(mode, stageIndex, event.target.value)}
                 required
               />
-              <Button type="button" variant="outline" size="sm" onClick={() => removeStage(mode, stageIndex)}>
+              <Button type="button" variant="outline" className='h-11' onClick={() => removeStage(mode, stageIndex)}>
                 Remove Stage
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <p className="text-sm font-medium text-slate-700">Select Courses</p>
                   {mode === 'edit' ? (
                     <div className="w-full md:w-80">
                       <Input
-                        id={`edit-course-search-${stage.stageId}`}
-                        label="Search Courses"
+                        id={`edit-course-search-${stage.stageId}`}                       
                         placeholder="Search by course name or ID"
                         value={editCourseSearch}
                         onChange={(event) => setEditCourseSearch(event.target.value)}
@@ -781,7 +780,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                             <span className="block text-xs text-slate-600">
                               {course.deliveryMode === 'ONLINE'
                                 ? `Online${course.videoUrl ? ' | Video available' : ''}`
-                                : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
+                                : course.deliveryMode === 'PHYSICAL'
+                                  ? `Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`
+                                  : 'N/A'}
                             </span>
                           ) : null}
                         </span>
@@ -830,9 +831,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             </div>
           </div>
         ))}
-        <div className="md:col-span-2">
-          <Button type="button" variant="outline" onClick={() => addStage(mode)}>
-            Add Stage
+        <div className="md:col-span-2 pt-2">
+          <Button type="button" variant="secondary" className="w-full" onClick={() => addStage(mode)}>
+            <Plus className="h-4 w-4" />
+            Add Another Stage
           </Button>
         </div>
       </div>
@@ -855,23 +857,22 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
               />
               <Button
                 type="button"
-                variant="outline"
-                size="md"
+                variant="secondary"
                 onClick={() => addStage('create')}
-                className="self-end border-slate-400 text-slate-900 hover:bg-slate-200"
+                className="h-11"
               >
+                <Plus className="h-5 w-5" />
                 Add Stage
               </Button>
             </div>
 
             <div>
-              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <p className="text-sm font-medium text-slate-700">Select Courses</p>
                 <div className="w-full md:w-80">
                   <Input
                     id="create-course-search"
                     key="create-course-search"
-                    label="Search Courses"
                     placeholder="Search by course name or ID"
                     value={createCourseSearch}
                     onChange={(event) => setCreateCourseSearch(event.target.value)}
@@ -1048,7 +1049,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         <div className="grid grid-cols-1 xl:grid-cols-9 gap-6">
           <Card title="Create Learning Path" className="xl:col-span-5">
             <form className="space-y-4" onSubmit={handleCreatePath}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                 <Input
                   label="Title"
                   value={pathForm.title}
@@ -1085,6 +1086,17 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     { value: 'RESTRICTED', label: 'Restricted' }
                   ]}
                 />
+                {pathDuplicateWarning ? (
+                  <div className="md:col-span-2 mt-1 text-sm text-amber-700">
+                    <p className="font-medium">{pathDuplicateWarning.message}</p>
+                    <ul className="list-disc list-inside">
+                      {pathDuplicateWarning.existing.map((e) => (
+                        <li key={e.id ?? String(e.title)}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                
                 <Input
                   label="Description"
                   value={pathForm.description}
@@ -1497,13 +1509,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       {section === 'manage' && editPathId ? (
         <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-7 py-5">
               <h2 className="text-lg font-semibold text-slate-900">Edit Learning Path</h2>
               <Button type="button" variant="outline" size="sm" onClick={() => setEditPathId(null)}>
                 Close
               </Button>
             </div>
-            <div className="p-4">
+            <div className="p-7">
               <form className="space-y-4" onSubmit={handleUpdatePath}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
