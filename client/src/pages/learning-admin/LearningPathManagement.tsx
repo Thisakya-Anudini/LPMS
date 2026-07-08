@@ -666,27 +666,26 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {stages.map((stage, stageIndex) => (
           <div key={`${mode}-${stage.stageId}`} className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-end gap-2">
               <Input
                 label={`Stage ${stageIndex + 1} Name`}
                 value={stage.title}
                 onChange={(event) => updateStageTitle(mode, stageIndex, event.target.value)}
                 required
               />
-              <Button type="button" variant="outline" size="sm" onClick={() => removeStage(mode, stageIndex)}>
+              <Button type="button" variant="outline" className='h-11' onClick={() => removeStage(mode, stageIndex)}>
                 Remove Stage
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <p className="text-sm font-medium text-slate-700">Select Courses</p>
                   {mode === 'edit' ? (
                     <div className="w-full md:w-80">
                       <Input
-                        id={`edit-course-search-${stage.stageId}`}
-                        label="Search Courses"
+                        id={`edit-course-search-${stage.stageId}`}                       
                         placeholder="Search by course name or ID"
                         value={editCourseSearch}
                         onChange={(event) => setEditCourseSearch(event.target.value)}
@@ -810,13 +809,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             </div>
 
             <div>
-              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <p className="text-sm font-medium text-slate-700">Select Courses</p>
                 <div className="w-full md:w-80">
                   <Input
                     id="create-course-search"
                     key="create-course-search"
-                    label="Search Courses"
                     placeholder="Search by course name or ID"
                     value={createCourseSearch}
                     onChange={(event) => setCreateCourseSearch(event.target.value)}
@@ -1392,13 +1390,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       {section === 'manage' && editPathId ? (
         <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-7 py-5">
               <h2 className="text-lg font-semibold text-slate-900">Edit Learning Path</h2>
               <Button type="button" variant="outline" size="sm" onClick={() => setEditPathId(null)}>
                 Close
               </Button>
             </div>
-            <div className="p-4">
+            <div className="p-7">
               <form className="space-y-4" onSubmit={handleUpdatePath}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
