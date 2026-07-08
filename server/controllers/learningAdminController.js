@@ -18,6 +18,7 @@ import {
   ASSIGNMENT_REPORT_STATUS,
   createAssignmentReport
 } from '../utils/assignmentReports.js';
+import { parseTotalDurationValue } from '../utils/duration.js';
 import {
   sendClassAssignedEmail,
   sendLearningPathAssignedEmail
@@ -42,39 +43,15 @@ const validateLearningPathTitle = (value) => {
     return { valid: false, message: 'title may only contain letters, spaces, and common punctuation.' };
   }
 
+  if (/\s{2,}/.test(normalized)) {
+    return { valid: false, message: 'title must use only one space between words.' };
+  }
+
   if (!/[A-Za-z]/.test(normalized)) {
     return { valid: false, message: 'title must include at least one letter.' };
   }
 
   return { valid: true };
-};
-
-const parseTotalDurationValue = (value) => {
-  const normalized = String(value || '').trim();
-  if (normalized === '') {
-    return { valid: true };
-  }
-  if (normalized.startsWith('-')) {
-    return { valid: false, message: 'totalDuration must not be negative.' };
-  }
-
-  const durationMatch = normalized.match(/^[+-]?\s*([0-9]+(?:\.[0-9]+)?)\s*(month|months|year|years|yr|yrs)?\s*$/i);
-  if (!durationMatch) {
-    return { valid: false, message: 'totalDuration format is invalid. Use years or months.' };
-  }
-
-  const numericValue = Number(durationMatch[1]);
-  const unit = durationMatch[2]?.toLowerCase() ?? 'years';
-
-  if (unit === 'month' || unit === 'months') {
-    return numericValue <= 24
-      ? { valid: true }
-      : { valid: false, message: 'totalDuration must be 2 years or less.' };
-  }
-
-  return numericValue <= 2
-    ? { valid: true }
-    : { valid: false, message: 'totalDuration must be 2 years or less.' };
 };
 
 const isStructuredStagePayload = (stages) =>
@@ -1313,6 +1290,7 @@ export const previewLearningPathCertificate = async (req, res) => {
     ? await query(
         `
           SELECT
+            lps.title AS stage_title,
             course.title AS course_title,
             course.duration AS course_duration,
             lps.stage_order,
@@ -1328,6 +1306,7 @@ export const previewLearningPathCertificate = async (req, res) => {
     : await query(
         `
           SELECT
+            lps.title AS stage_title,
             sc.course_title AS course_title,
             sc.course_duration AS course_duration,
             lps.stage_order,
@@ -1350,7 +1329,10 @@ export const previewLearningPathCertificate = async (req, res) => {
   const filename = `certificate_preview_${safeTitle}.pdf`;
   const courses = coursesResult.rows.map((row) => ({
     title: String(row.course_title || '').trim(),
-    duration: String(row.course_duration || '').trim() || '-'
+    duration: String(row.course_duration || '').trim() || '-',
+    stageTitle: String(row.stage_title || '').trim(),
+    stageOrder: row.stage_order,
+    order: row.course_order
   }));
 
   try {
@@ -1412,6 +1394,7 @@ export const createEnrollments = async (req, res) => {
 
   const inserted = [];
   const insertedLearners = [];
+  const skippedLearners = [];
 
   const pathResult = await query(
     `
@@ -1496,6 +1479,24 @@ export const createEnrollments = async (req, res) => {
         learningPathId,
         reason: 'Learner is already assigned to this learning path.'
       });
+      skippedLearners.push({
+        principalId,
+        employeeNumber: String(learner.employeeNumber || '').trim(),
+        learnerName: normalizeEmployeeDisplayName(learner, learner.employeeNumber),
+        reason: 'Already enrolled in this learning path.'
+      });
+      try {
+        // notify the learner that they are already enrolled in this learning path
+        await query(
+          `
+            INSERT INTO notifications (principal_id, title, message, type, is_read)
+            VALUES ($1, 'Enrollment Exists', $2, 'INFO', FALSE)
+          `,
+          [principalId, `You are already enrolled in "${learningPath.title}".`]
+        );
+      } catch (notifyErr) {
+        console.error('Failed to create duplicate-enrollment notification:', notifyErr);
+      }
     }
   }
 
@@ -1518,7 +1519,7 @@ export const createEnrollments = async (req, res) => {
     metadata: { learningPathId, inserted: inserted.length }
   });
 
-  return res.status(201).json({ enrollments: inserted });
+  return res.status(201).json({ enrollments: inserted, skipped: skippedLearners });
 };
 
 export const getAssignmentReports = async (_req, res) => {
@@ -2169,7 +2170,11 @@ export const upsertClassDetailReport = async (req, res) => {
   return res.status(200).json({ report: mapClassDetailReportRow(result.rows[0]) });
 };
 
-export const getLearningSummaryReport = async (_req, res) => {
+export const getLearningSummaryReport = async (req, res) => {
+  const learningPathId = String(req.query?.learningPathId || '').trim();
+  const scopedWhere = learningPathId ? 'WHERE learning_path_id = $1' : '';
+  const scopedParams = learningPathId ? [learningPathId] : [];
+
   const totals = await query(
     `
       SELECT
@@ -2185,14 +2190,18 @@ export const getLearningSummaryReport = async (_req, res) => {
         COUNT(*) AS total_enrollments,
         COUNT(*) FILTER (WHERE status = 'COMPLETED') AS completed_enrollments
       FROM enrollments
-    `
+      ${scopedWhere}
+    `,
+    scopedParams
   );
 
   const certificates = await query(
     `
       SELECT COUNT(*) AS total_certificates
       FROM certificates
-    `
+      ${scopedWhere}
+    `,
+    scopedParams
   );
 
   const totalEnrollments = Number(enrollments.rows[0].total_enrollments || 0);

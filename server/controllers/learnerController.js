@@ -58,6 +58,11 @@ const normalizeNameFromRow = (row, employeeNo) => {
   return merged || `Learner ${employeeNo}`;
 };
 
+const normalizeEmailFromEmployeeDetails = (row) => {
+  const rawEmail = row?.email || row?.employeeEmail || row?.Email || row?.mail || '';
+  return rawEmail && String(rawEmail).trim() ? String(rawEmail).trim().toLowerCase() : '';
+};
+
 const normalizeCourseDeliveryMode = (value) => {
   const normalized = String(value || '').trim().toUpperCase();
   if (normalized === 'PHYSICAL' || normalized === 'CLASSROOM') {
@@ -295,6 +300,77 @@ const buildErpEnrollmentIndex = (rows) => {
   }
 
   return index;
+};
+
+const buildCompletedErpOnlyCourses = ({
+  rows,
+  erpCourses,
+  alreadyEnrolledCourses
+}) => {
+  const existingKeys = new Set(
+    alreadyEnrolledCourses
+      .flatMap((course) => [course.code, course.title])
+      .map(normalizeCourseKey)
+      .filter(Boolean)
+  );
+  const erpCoursesByKey = new Map();
+
+  for (const course of erpCourses) {
+    for (const key of [course.code, course.title].map(normalizeCourseKey).filter(Boolean)) {
+      if (!erpCoursesByKey.has(key)) {
+        erpCoursesByKey.set(key, course);
+      }
+    }
+  }
+
+  const completedCourses = [];
+  for (const enrollment of rows.map(normalizeErpEnrollmentRow)) {
+    if (!enrollment.isCompleted) {
+      continue;
+    }
+
+    const keys = [enrollment.courseCode, enrollment.courseTitle].map(normalizeCourseKey).filter(Boolean);
+    if (keys.length === 0 || keys.some((key) => existingKeys.has(key))) {
+      continue;
+    }
+
+    const erpCourse = keys.map((key) => erpCoursesByKey.get(key)).find(Boolean);
+    const code = enrollment.courseCode || erpCourse?.code || enrollment.courseTitle;
+    const title = enrollment.courseTitle || erpCourse?.title || code || 'Course';
+
+    completedCourses.push({
+      id: erpCourse?.id || code || title,
+      code: code || title,
+      title,
+      description: erpCourse?.description || null,
+      durationHours: erpCourse?.durationHours || null,
+      duration: enrollment.duration || normalizeDisplayValue(erpCourse?.duration),
+      erpStatus: enrollment.statusLabel,
+      isCompleted: true,
+      deliveryMode: normalizeCourseDeliveryMode(erpCourse?.deliveryMode),
+      stageTitle: null,
+      stageOrder: 0,
+      courseOrder: 0,
+      enrollment: {
+        id: `erp-${normalizeLooseKey(code || title)}`,
+        status: 'COMPLETED',
+        progress: 100
+      },
+      learningPath: {
+        id: 'erp-course-enrollments',
+        title: 'ERP Course Enrollment',
+        description: 'Completed course from ERP enrollment details.',
+        category: 'RESTRICTED',
+        totalDuration: enrollment.duration || normalizeDisplayValue(erpCourse?.duration) || ''
+      }
+    });
+
+    for (const key of keys) {
+      existingKeys.add(key);
+    }
+  }
+
+  return completedCourses;
 };
 
 const findErpEnrollmentForCourse = (index, course) => {
@@ -1311,11 +1387,13 @@ export const getLearnerOtherCourses = async (req, res) => {
   const principalId = await resolvePrincipalForLearner(req.user);
 
   try {
+    let erpEnrollmentRows = [];
     let erpEnrollmentIndex = new Map();
     if (employeeNo) {
       try {
         const erpEnrollmentResponse = await fetchCourseEnrollmentDetails(employeeNo);
-        erpEnrollmentIndex = buildErpEnrollmentIndex(extractErpRows(erpEnrollmentResponse));
+        erpEnrollmentRows = extractErpRows(erpEnrollmentResponse);
+        erpEnrollmentIndex = buildErpEnrollmentIndex(erpEnrollmentRows);
       } catch (error) {
         console.warn('LPMS ERP other-course enrollment sync failed:', {
           employeeNo,
@@ -1462,15 +1540,25 @@ export const getLearnerOtherCourses = async (req, res) => {
       };
     });
 
-    const enrolledKeys = new Set(
+    const erpOnlyCompletedCourses = buildCompletedErpOnlyCourses({
+      rows: erpEnrollmentRows,
+      erpCourses,
       alreadyEnrolledCourses
+    });
+    const enrolledAndCompletedCourses = [
+      ...alreadyEnrolledCourses,
+      ...erpOnlyCompletedCourses
+    ];
+
+    const enrolledKeys = new Set(
+      enrolledAndCompletedCourses
         .flatMap((course) => [course.code, course.title])
         .map(normalizeCourseKey)
         .filter(Boolean)
     );
 
     const learningPathsByCourseKey = new Map();
-    for (const course of alreadyEnrolledCourses) {
+    for (const course of enrolledAndCompletedCourses) {
       for (const key of [course.code, course.title].map(normalizeCourseKey).filter(Boolean)) {
         if (!learningPathsByCourseKey.has(key)) {
           learningPathsByCourseKey.set(key, []);
@@ -1498,7 +1586,7 @@ export const getLearnerOtherCourses = async (req, res) => {
     });
 
     return res.status(200).json({
-      alreadyEnrolledCourses,
+      alreadyEnrolledCourses: enrolledAndCompletedCourses,
       preferredCourses: courses.filter((course) => !course.alreadyEnrolled),
       courses
     });
@@ -2082,12 +2170,24 @@ export const getLearnerCertificates = async (req, res) => {
 
   const useCourseReference = await usesCourseReferenceTable();
   let erpEnrollmentIndex = new Map();
+  let erpLearnerEmail = '';
   if (employeeNo) {
     try {
       const erpEnrollmentResponse = await fetchCourseEnrollmentDetails(employeeNo);
       erpEnrollmentIndex = buildErpEnrollmentIndex(extractErpRows(erpEnrollmentResponse));
     } catch (error) {
       console.warn('LPMS ERP certificate duration sync failed:', {
+        employeeNo,
+        message: error.message,
+        details: error.details
+      });
+    }
+
+    try {
+      const detailsResponse = await fetchEmployeeDetailsForServiceNo(employeeNo);
+      erpLearnerEmail = normalizeEmailFromEmployeeDetails(detailsResponse?.data?.[0]);
+    } catch (error) {
+      console.warn('LPMS ERP certificate learner email sync failed:', {
         employeeNo,
         message: error.message,
         details: error.details
@@ -2131,6 +2231,7 @@ export const getLearnerCertificates = async (req, res) => {
       });
       return {
         ...certificate,
+        learner_email: erpLearnerEmail || certificate.learner_email,
         learning_path_duration:
           durationSummary.totalDuration ||
           normalizeDisplayValue(certificate.learning_path_duration) ||
@@ -2227,7 +2328,10 @@ export const downloadLearnerCertificate = async (req, res) => {
   const filename = `certificate_${safeTitle}_${certificate.id}.pdf`;
   const courses = durationSummary.courses.map((course) => ({
     title: String(course.title || '').trim(),
-    duration: course.duration || '-'
+    duration: course.duration || '-',
+    stageTitle: course.stageTitle || '',
+    stageOrder: course.stageOrder,
+    order: course.order
   }));
   const learningPathDuration =
     durationSummary.totalDuration ||

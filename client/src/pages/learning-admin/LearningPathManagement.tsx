@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
-import { courseApi, learningApi } from '../../api/lpmsApi';
+import { ApiRequestError, courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -48,6 +48,28 @@ type CourseItem = {
   videoUrl: string | null;
 };
 
+type DuplicateLearningPathCourse = {
+  title?: string;
+  code?: string;
+};
+
+type DuplicateLearningPathSummary = {
+  id: string;
+  title?: string;
+  overlappingCourses?: DuplicateLearningPathCourse[];
+};
+
+type DuplicateLearningPathPayload = {
+  error?: {
+    code?: string;
+    message?: string;
+    details?: {
+      existing?: DuplicateLearningPathSummary[];
+    };
+  };
+  existing?: DuplicateLearningPathSummary[];
+};
+
 type StageForm = {
   stageId: string;
   title: string;
@@ -87,6 +109,17 @@ const filterCoursesByQuery = (courses: CourseItem[], query: string) => {
 
     return queryTokens.every((token) => searchHaystack.includes(token));
   });
+};
+
+const normalizeTitleInputSpacing = (value: string) => value.replace(/\s{2,}/g, ' ');
+
+const isDuplicateLearningPathPayload = (payload: unknown): payload is DuplicateLearningPathPayload => {
+  if (typeof payload !== 'object' || payload === null || !('error' in payload)) {
+    return false;
+  }
+
+  const error = (payload as { error?: { code?: unknown } }).error;
+  return error?.code === 'DUPLICATE_LEARNING_PATH';
 };
 
 const initialPathForm = {
@@ -130,8 +163,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [query, setQuery] = useState('');
 
   const [pathForm, setPathForm] = useState(initialPathForm);
-  type DuplicateExisting = { id?: string; title?: string; overlappingCourses?: Array<{ title?: string; code?: string }> };
-  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<DuplicateExisting> }>(null);
+  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: DuplicateLearningPathSummary[] }>(null);
   const [pathTitleError, setPathTitleError] = useState<string | null>(null);
   const [editTitleError, setEditTitleError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
@@ -143,7 +175,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     title: '',
     description: '',
     category: 'PUBLIC' as Category,
-    totalDuration: '',
     status: 'ACTIVE' as PathStatus,
     stages: [] as StageForm[]
   });
@@ -166,6 +197,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [organizationOptions, setOrganizationOptions] = useState<
     Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
   >([]);
+  const [enrolledEmployeeNumbers, setEnrolledEmployeeNumbers] = useState<Set<string>>(new Set());
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
   const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
   const hasAssignFilterSearch =
@@ -209,17 +241,19 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const handleAssignEmployeeNoChange = (value: string) => {
-    if (value.trim()) {
+    const numericValue = value.replace(/\D/g, '');
+    if (numericValue.trim()) {
       activateAssignEmployeeSearch();
     }
-    setAssignEmployeeNoSearch(value);
+    setAssignEmployeeNoSearch(numericValue);
   };
 
   const handleAssignNameSearchChange = (value: string) => {
-    if (value.trim()) {
+    const sanitizedValue = value.replace(/[^A-Za-z\s!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/g, '');
+    if (sanitizedValue.trim()) {
       activateAssignNameSearch();
     }
-    setAssignSurnameSearch(value);
+    setAssignSurnameSearch(sanitizedValue);
   };
 
   const handleAssignDesignationChange = (value: string) => {
@@ -330,15 +364,27 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       return { valid: false, message: 'Title is required.' };
     }
 
-    const allowedTitleRegex = /^[A-Za-z\s\-_,.&()'"@:/]+$/;
+    const allowedTitleRegex = /^[A-Za-z\s]+$/;
     if (!allowedTitleRegex.test(normalized)) {
-      return { valid: false, message: 'Title may only contain letters, spaces, and common punctuation.' };
+      return { valid: false, message: 'Title may only contain alphabetic characters and spaces.' };
+    }
+
+    if (/\s{2,}/.test(normalized)) {
+      return { valid: false, message: 'Title must use only one space between words.' };
     }
 
     if (!/[A-Za-z]/.test(normalized)) {
       return { valid: false, message: 'Title must include at least one letter.' };
     }
 
+    return { valid: true };
+  };
+
+  const validateCoursesSelected = (stages: StageForm[]): { valid: true } | { valid: false; message: string } => {
+    const hasSelectedCourses = stages.some((stage) => stage.selectedCourseIds.length > 0);
+    if (!hasSelectedCourses) {
+      return { valid: false, message: 'You must select at least one course.' };
+    }
     return { valid: true };
   };
 
@@ -351,6 +397,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     if (!titleValidation.valid) {
       setPathTitleError(titleValidation.message);
       showToast(titleValidation.message, 'error');
+      setPathFormLoading(false);
+      return;
+    }
+    const coursesValidation = validateCoursesSelected([...pathForm.stages, pathForm.draftStage]);
+    if (!coursesValidation.valid) {
+      showToast(coursesValidation.message, 'error');
       setPathFormLoading(false);
       return;
     }
@@ -380,13 +432,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       showToast('Learning path created successfully.', 'success');
       await loadData();
     } catch (err) {
-      // If server returned structured DUPLICATE_LEARNING_PATH details, show inline warning
-      type ApiErrorPayload = { error?: { code?: string; message?: string; details?: { existing?: Array<DuplicateExisting> } }; existing?: Array<DuplicateExisting> };
-      const maybePayload = (err as unknown as { payload?: ApiErrorPayload }).payload;
-      if (err instanceof Error && maybePayload && (maybePayload.error?.code === 'DUPLICATE_LEARNING_PATH' || maybePayload.existing)) {
-        const existing = maybePayload.error?.details?.existing || maybePayload.existing || [];
-        setPathDuplicateWarning({ message: maybePayload.error?.message || 'Duplicate learning path detected.', existing });
-        showToast(maybePayload.error?.message || 'Duplicate learning path detected.', 'info');
+      if (err instanceof ApiRequestError && isDuplicateLearningPathPayload(err.payload)) {
+        const payload = err.payload;
+        const message = payload.error?.message || 'Duplicate learning path detected.';
+        setPathDuplicateWarning({
+          message,
+          existing: payload.error?.details?.existing || payload.existing || []
+        });
+        showToast(message, 'info');
       } else {
         showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
       }
@@ -415,7 +468,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             .sort((a, b) => a.course_order - b.course_order)
             .map((course) => courses.find((catalogCourse) => catalogCourse.title === course.title)?.id)
             .filter((value): value is string => Boolean(value))
-        }));
+      }));
 
       setEditPathId(path.id);
       setEditCourseSearch('');
@@ -424,7 +477,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         title: path.title,
         description: path.description,
         category: path.category,
-        totalDuration: path.total_duration,
         status: path.status,
         stages: mappedStages.length > 0 ? mappedStages : [createStageForm(0)]
       };
@@ -451,6 +503,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setEditLoading(false);
       return;
     }
+    const coursesValidation = validateCoursesSelected(editForm.stages);
+    if (!coursesValidation.valid) {
+      showToast(coursesValidation.message, 'error');
+      setEditLoading(false);
+      return;
+    }
 
     if (editForm.stages.length === 0) {
       showToast('A learning path must have at least one stage.', 'error');
@@ -469,7 +527,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       const isUnchanged = originalEditForm.title === editForm.title &&
       originalEditForm.description === editForm.description &&
       originalEditForm.category === editForm.category &&
-      originalEditForm.totalDuration === editForm.totalDuration &&
       originalEditForm.status === editForm.status &&
       JSON.stringify(originalEditForm.stages) === JSON.stringify(editForm.stages);
 
@@ -493,7 +550,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         title: editForm.title,
         description: editForm.description,
         category: editForm.category,
-        totalDuration: editForm.totalDuration,
         status: editForm.status,
         stages: toStages(editForm.stages)
       });
@@ -881,14 +937,21 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         return;
       }
 
-      await learningApi.createEnrollments(token, {
+      const response = await learningApi.createEnrollments(token, {
         learningPathId: assignForm.learningPathId,
         selectedLearners: learners.filter((learner) =>
           assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)
         )
       });
 
-      showToast('Enrollments assigned successfully.', 'success');
+      const assignedCount = (response.enrollments || []).length;
+      const skipped = response.skipped || [];
+      if (skipped.length > 0) {
+        showToast(`${assignedCount} enrolled, ${skipped.length} skipped (already enrolled).`, 'info');
+        console.info('Skipped enrollments:', skipped);
+      } else {
+        showToast('Enrollments assigned successfully.', 'success');
+      }
       setAssignForm(initialAssignForm);
       setLearners([]);
     } catch (err) {
@@ -897,6 +960,37 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setAssignLoading(false);
     }
   };
+
+  useEffect(() => {
+    // fetch existing enrollments for the selected learning path so we can prevent re-adding
+    const fetchEnrolled = async () => {
+      setAssignOptionsLoading(true);
+      try {
+        const token = await getAccessToken();
+        if (!token) {
+          showToast('Session expired. Please login again.', 'error');
+          return;
+        }
+        if (!assignForm.learningPathId) {
+          setEnrolledEmployeeNumbers(new Set());
+          return;
+        }
+
+        const resp = await learningApi.getClassAssignmentOptions(token, assignForm.learningPathId);
+        const enrolled = new Set<string>();
+        (resp.learners || []).forEach((l) => {
+          if (l.employeeNumber) enrolled.add(String(l.employeeNumber));
+        });
+        setEnrolledEmployeeNumbers(enrolled);
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Failed to load enrolled learners.', 'error');
+      } finally {
+        setAssignOptionsLoading(false);
+      }
+    };
+
+    fetchEnrolled();
+  }, [assignForm.learningPathId, getAccessToken, showToast]);
 
   const handleAssignSearch = async () => {
     try {
@@ -959,13 +1053,26 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   value={pathForm.title}
                   error={pathTitleError ?? undefined}
                   onChange={(event) => {
-                    setPathForm((prev) => ({ ...prev, title: event.target.value }));
+                    const sanitized = normalizeTitleInputSpacing(event.target.value.replace(/[^A-Za-z\s]/g, ''));
+                    setPathForm((prev) => ({ ...prev, title: sanitized }));
                     setPathTitleError(null);
                   }}
                   maxLength={50}
                   helperText={`${pathForm.title.length}/50 characters entered, ${50 - pathForm.title.length} remaining`}
                   required
                 />
+                {pathDuplicateWarning ? (
+                  <div className="col-span-2 mt-1 text-sm text-amber-700">
+                    <p className="font-medium">{pathDuplicateWarning.message}</p>
+                    <ul className="list-disc list-inside">
+                      {pathDuplicateWarning.existing.map((e) => (
+                        <li key={e.id || e.title || 'duplicate-path'}>
+                          {e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `- overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <Select
                   label="Category"
                   value={pathForm.category}
@@ -1241,25 +1348,35 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                         <span>Organization</span>
                         <span>Email</span>
                       </div>
-                      {learners.map((learner) => (
-                        <label
-                          key={learner.employeeNumber}
-                          className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={assignForm.selectedLearnerEmployeeNumbers.includes(learner.employeeNumber)}
-                            onChange={() => toggleLearnerSelection(learner.employeeNumber)}
-                            className="shrink-0"
-                          />
-                          <span className="font-medium text-slate-900">{learner.employeeName}</span>
-                          <span>{learner.employeeNumber}</span>
-                          <span>{learner.designation || '-'}</span>
-                          <span>{learner.gradeName || '-'}</span>
-                          <span>{learner.organizationName || '-'}</span>
-                          <span>{learner.email || '-'}</span>
-                        </label>
-                      ))}
+                      {learners.map((learner) => {
+                        const empNo = String(learner.employeeNumber || '');
+                        const already = enrolledEmployeeNumbers.has(empNo);
+                        return (
+                          <label
+                            key={empNo || Math.random().toString(36).slice(2, 8)}
+                            className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={assignForm.selectedLearnerEmployeeNumbers.includes(empNo)}
+                              onChange={() => toggleLearnerSelection(empNo)}
+                              className="shrink-0"
+                              disabled={already}
+                            />
+                            <div>
+                              <div className="font-medium text-slate-900">{learner.employeeName}</div>
+                              {already ? (
+                                <div className="text-xs text-amber-700">Already enrolled</div>
+                              ) : null}
+                            </div>
+                            <span>{empNo}</span>
+                            <span>{learner.designation || '-'}</span>
+                            <span>{learner.gradeName || '-'}</span>
+                            <span>{learner.organizationName || '-'}</span>
+                            <span>{learner.email || '-'}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1404,9 +1521,12 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={editForm.title}
                     error={editTitleError ?? undefined}
                     onChange={(event) => {
-                      setEditForm((prev) => ({ ...prev, title: event.target.value }));
+                      const sanitized = normalizeTitleInputSpacing(event.target.value.replace(/[^A-Za-z\s]/g, ''));
+                      setEditForm((prev) => ({ ...prev, title: sanitized }));
                       setEditTitleError(null);
                     }}
+                    maxLength={50}
+                    helperText={`${editForm.title.length}/50 characters entered, ${50 - editForm.title.length} remaining`}
                     required
                   />
                   <Select

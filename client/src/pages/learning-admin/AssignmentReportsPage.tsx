@@ -80,6 +80,8 @@ export function AssignmentReportsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<AssignmentReport | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
   const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
   const rowSkeletons = Array.from({ length: 4 }, (_, index) => index);
 
@@ -104,6 +106,10 @@ export function AssignmentReportsPage() {
   useEffect(() => {
     loadReports();
   }, [loadReports]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [reports.length]);
 
   const stats = useMemo(() => {
     return {
@@ -141,6 +147,32 @@ export function AssignmentReportsPage() {
       setUpdatingReportId(null);
     }
   };
+
+  const paginatedReports = useMemo(() => {
+    const startIndex = (page - 1) * PAGE_SIZE;
+    return reports.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [page, PAGE_SIZE, reports]);
+
+  const totalPages = Math.max(1, Math.ceil(reports.length / PAGE_SIZE));
+  const pageStart = reports.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const pageEnd = reports.length === 0 ? 0 : Math.min(page * PAGE_SIZE, reports.length);
+  const canGoPrevious = page > 1;
+  const canGoNext = page < totalPages;
+  const visiblePages = useMemo(() => {
+    if (totalPages <= 1) {
+      return totalPages === 1 ? [1] : [];
+    }
+
+    const windowSize = 5;
+    const start = Math.max(1, page - Math.floor(windowSize / 2));
+    const end = Math.min(totalPages, start + windowSize - 1);
+    const normalizedStart = Math.max(1, end - windowSize + 1);
+
+    return Array.from(
+      { length: end - normalizedStart + 1 },
+      (_, index) => normalizedStart + index
+    );
+  }, [page, totalPages]);
 
   const downloadReport = (report: AssignmentReport) => {
     const rows = [
@@ -209,8 +241,29 @@ export function AssignmentReportsPage() {
       </div>
 
       <Card title="Assignment Report List">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            {loading ? (
+              <Skeleton className="h-5 w-52" />
+            ) : (
+              <p className="text-sm font-semibold text-slate-900">
+                Showing {pageStart}-{pageEnd} of {reports.length} reports
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            {loading ? (
+              <Skeleton className="h-8 w-28 rounded-full" />
+            ) : (
+              <span className="rounded-full bg-white px-3 py-1 font-medium text-slate-700 shadow-sm ring-1 ring-slate-200">
+                Page {reports.length === 0 ? 0 : page} of {totalPages}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="max-h-[420px] overflow-y-auto overflow-x-auto pb-2">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">Learning Path</th>
@@ -240,7 +293,7 @@ export function AssignmentReportsPage() {
                   </td>
                 </tr>
               ) : (
-                reports.map((report) => (
+                paginatedReports.map((report) => (
                   <tr key={report.id} className="hover:bg-slate-50">
                     <td className="px-4 py-4 font-medium text-slate-900">{report.learning_path_title}</td>
                     <td className="px-4 py-4 text-slate-600">{report.learners.length}</td>
@@ -273,6 +326,72 @@ export function AssignmentReportsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {loading ? (
+              <>
+                <Skeleton className="h-8 w-12" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-8" />
+                <Skeleton className="h-8 w-12" />
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(1)}
+                  disabled={!canGoPrevious}
+                >
+                  First
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={!canGoPrevious}
+                >
+                  {'<'}
+                </Button>
+                {visiblePages.map((pageNumber) => (
+                  <Button
+                    key={pageNumber}
+                    type="button"
+                    variant={pageNumber === page ? 'primary' : 'outline'}
+                    size="sm"
+                    onClick={() => setPage(pageNumber)}
+                    className="min-w-9"
+                  >
+                    {pageNumber}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((prev) => prev + 1)}
+                  disabled={!canGoNext}
+                >
+                  {'>'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPage(totalPages)}
+                  disabled={!canGoNext}
+                >
+                  Last
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </Card>
 

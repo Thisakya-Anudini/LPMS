@@ -154,6 +154,12 @@ const validateLearningPathTitle = (value) => {
         "title may only contain letters, spaces, and common punctuation.",
     };
   }
+  if (/\s{2,}/.test(normalized)) {
+    return {
+      valid: false,
+      message: "title must use only one space between words.",
+    };
+  }
   if (!/[A-Za-z]/.test(normalized)) {
     return { valid: false, message: "title must include at least one letter." };
   }
@@ -2521,6 +2527,12 @@ describe("validateLearningPathTitle (private helper)", () => {
   it("should reject titles with special characters", () => {
     const result = validateLearningPathTitle("Hello @World");
     expect(result.valid).toBe(false);
+  });
+
+  it("should reject titles with multiple consecutive spaces", () => {
+    const result = validateLearningPathTitle("learning  path");
+    expect(result.valid).toBe(false);
+    expect(result.message).toBe("title must use only one space between words.");
   });
 
   it("should accept valid titles with common punctuation", () => {

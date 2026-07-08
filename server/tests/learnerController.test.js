@@ -790,6 +790,64 @@ describe("GET LEARNER OTHER COURSES", () => {
     expect(res.body.courses[0].alreadyEnrolled).toBe(false);
   });
 
+  it("should include ERP completed courses in already enrolled courses", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ present: true }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ present: true }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [{ present: true }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [],
+        rowCount: 0,
+      });
+    vi.mocked(fetchCourseEnrollmentDetails).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        {
+          courseCode: "C-100",
+          courseName: "Completed ERP Course",
+          status: "Completed",
+          duration: "2 hours",
+        },
+      ],
+    });
+    vi.mocked(fetchAllCourses).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        { courseCode: "C-100", courseName: "Completed ERP Course" },
+        { courseCode: "C-200", courseName: "Available Course" },
+      ],
+    });
+
+    const req = createMockReq({ user: { employeeNo: "EMP-001" } });
+    const res = createMockRes();
+    await learnerController.getLearnerOtherCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.alreadyEnrolledCourses).toHaveLength(1);
+    expect(res.body.alreadyEnrolledCourses[0]).toMatchObject({
+      code: "C-100",
+      title: "Completed ERP Course",
+      erpStatus: "Completed",
+      isCompleted: true,
+      enrollment: {
+        status: "COMPLETED",
+        progress: 100,
+      },
+    });
+    expect(res.body.preferredCourses.map((course) => course.code)).toEqual(["C-200"]);
+  });
+
   it("should mark alreadyEnrolled=true for enrolled courses", async () => {
     const enrolledCourses = new Set(["COURSE-001"]);
     const allCourses = [
@@ -1496,6 +1554,52 @@ describe("GET LEARNER CERTIFICATES", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.certificates).toHaveLength(1);
     expect(res.body.certificates[0].learning_path_title).toBe("Python Basics");
+  });
+
+  it("should prefer learner email from ERP employee details", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", email: " ERP.Email@SLT.COM.LK " }],
+    });
+
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("certificates") && sql.includes("cert")) {
+        return {
+          rows: [
+            {
+              id: "cert-1",
+              scope: "FULL",
+              issued_at: new Date("2026-06-01"),
+              learning_path_id: "lp-1",
+              learning_path_title: "Python Basics",
+              learning_path_description: "Learn Python",
+              learning_path_duration: 20,
+              enrollment_id: "en-1",
+              learner_name: "John Doe",
+              learner_email: "old@test.com",
+              completed_at: null,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+      if (sql && sql.includes("learning_path_stages")) {
+        return { rows: [], rowCount: 0 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerCertificates(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.certificates[0].learner_email).toBe("erp.email@slt.com.lk");
   });
 
   it("should order certificates by issued_at DESC", async () => {
