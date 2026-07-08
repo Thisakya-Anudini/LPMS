@@ -2107,9 +2107,10 @@ export const updateLearnerCourseCompletion = async (req, res) => {
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             CASE
-              WHEN course.type = 'CLASSROOM' THEN 'PHYSICAL'
-              WHEN course.type = 'HYBRID' THEN 'ONLINE'
-              ELSE 'ONLINE'
+              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(course.title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
             END AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
@@ -2131,7 +2132,12 @@ export const updateLearnerCourseCompletion = async (req, res) => {
             lps.title AS stage_title,
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
-            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+            CASE
+              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
