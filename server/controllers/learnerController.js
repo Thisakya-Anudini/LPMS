@@ -766,10 +766,11 @@ const listLearnerPathCourses = async ({ enrollmentId, learningPathId, useCourseR
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             course.duration AS course_duration,
             CASE
-              WHEN course.type = 'CLASSROOM' THEN 'PHYSICAL'
-              WHEN course.type = 'HYBRID' THEN 'ONLINE'
-              ELSE 'ONLINE'
-            END AS delivery_mode,
+              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR
+                   COALESCE(course.title, lps.title) ILIKE '%eleaning%'
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode,       
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -794,7 +795,12 @@ const listLearnerPathCourses = async ({ enrollmentId, learningPathId, useCourseR
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             sc.course_duration,
-            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+            CASE
+              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
