@@ -1459,9 +1459,10 @@ export const getLearnerOtherCourses = async (req, res) => {
               COALESCE(c.description, sc.course_title) AS course_description,
               COALESCE(c.duration, sc.course_duration) AS course_duration,
               CASE
-                WHEN c.type = 'CLASSROOM' THEN 'PHYSICAL'
-                WHEN c.type = 'HYBRID' THEN 'ONLINE'
-                ELSE COALESCE(sc.delivery_mode, 'ONLINE')
+                WHEN COALESCE(c.title, sc.course_title) ILIKE '%online%' OR 
+                     COALESCE(c.title, sc.course_title) ILIKE '%elearning%' 
+                THEN 'ONLINE'
+                ELSE 'N/A'
               END AS delivery_mode,
               lps.title AS stage_title,
               lps.stage_order,
@@ -1491,7 +1492,12 @@ export const getLearnerOtherCourses = async (req, res) => {
               sc.course_title,
               sc.course_title AS course_description,
               sc.course_duration,
-              COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+              CASE
+                WHEN sc.course_title ILIKE '%online%' OR 
+                     sc.course_title ILIKE '%elearning%' 
+                THEN 'ONLINE'
+                ELSE 'N/A'
+              END AS delivery_mode,
               lps.title AS stage_title,
               lps.stage_order,
               sc.course_order
