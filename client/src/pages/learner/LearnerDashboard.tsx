@@ -356,7 +356,9 @@ export function LearnerDashboard() {
                           <span className="block text-xs text-slate-500">
                             {course.deliveryMode === 'ONLINE'
                               ? 'Mode: Online'
-                              : `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`}
+                              : course.deliveryMode === 'PHYSICAL'
+                                ? `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`
+                                : 'Mode: N/A'}
                           </span>
                         </span>
                       </label>

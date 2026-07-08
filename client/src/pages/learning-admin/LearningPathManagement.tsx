@@ -780,7 +780,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                             <span className="block text-xs text-slate-600">
                               {course.deliveryMode === 'ONLINE'
                                 ? `Online${course.videoUrl ? ' | Video available' : ''}`
-                                : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
+                                : course.deliveryMode === 'PHYSICAL'
+                                  ? `Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`
+                                  : 'N/A'}
                             </span>
                           ) : null}
                         </span>
