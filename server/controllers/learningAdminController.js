@@ -91,6 +91,40 @@ const normalizeEmployeeRow = (row) => ({
   employeeSupervisorNumber: row?.employeeSupervisorNumber ? String(row.employeeSupervisorNumber).trim() : ''
 });
 
+const getErpEmailForEmployeeNumber = async (employeeNumber) => {
+  const normalizedEmployeeNumber = String(employeeNumber || '').trim();
+  if (!normalizedEmployeeNumber) {
+    return '';
+  }
+
+  try {
+    const detailsResponse = await fetchEmployeeDetailsForServiceNo(normalizedEmployeeNumber);
+    const employee = Array.isArray(detailsResponse?.data) ? detailsResponse.data[0] : null;
+    return employee?.email ? String(employee.email).trim().toLowerCase() : '';
+  } catch (error) {
+    console.warn('LPMS ERP learner email lookup failed:', {
+      employeeNumber: normalizedEmployeeNumber,
+      message: error.message
+    });
+    return '';
+  }
+};
+
+const getErpEmailsByEmployeeNumber = async (employeeNumbers) => {
+  const uniqueEmployeeNumbers = Array.from(
+    new Set(employeeNumbers.map((employeeNumber) => String(employeeNumber || '').trim()).filter(Boolean))
+  );
+
+  const entries = await Promise.all(
+    uniqueEmployeeNumbers.map(async (employeeNumber) => [
+      employeeNumber,
+      await getErpEmailForEmployeeNumber(employeeNumber)
+    ])
+  );
+
+  return new Map(entries.filter(([, email]) => Boolean(email)));
+};
+
 const normalizeSearchText = (value) =>
   String(value || '')
     .toLowerCase()
@@ -1847,6 +1881,9 @@ export const getClassAssignmentOptions = async (req, res) => {
     `,
     [id]
   );
+  const erpEmailsByEmployeeNumber = await getErpEmailsByEmployeeNumber(
+    learnerResult.rows.map((row) => row.employee_number)
+  );
 
   return res.status(200).json({
     learningPath,
@@ -1863,7 +1900,7 @@ export const getClassAssignmentOptions = async (req, res) => {
       principalId: row.principal_id,
       employeeNumber: row.employee_number,
       name: row.name,
-      email: row.email,
+      email: erpEmailsByEmployeeNumber.get(String(row.employee_number || '').trim()) || row.email,
       designation: row.designation,
       gradeName: row.grade_name,
       status: row.status,
@@ -1962,6 +1999,9 @@ export const assignClassEnrollments = async (req, res) => {
     return sendError(res, 400, 'VALIDATION_ERROR', 'No selected learners belong to this learning path.');
   }
 
+  const erpEmailsByEmployeeNumber = await getErpEmailsByEmployeeNumber(
+    validEnrollments.rows.map((row) => row.employee_number)
+  );
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
   const assigned = [];
   for (const row of validEnrollments.rows) {
@@ -2006,7 +2046,9 @@ export const assignClassEnrollments = async (req, res) => {
 
     sendClassAssignedEmail({
       employeeNumber: String(row.employee_number || '').trim(),
-      to: row.email ? String(row.email).trim().toLowerCase() : '',
+      to:
+        erpEmailsByEmployeeNumber.get(String(row.employee_number || '').trim()) ||
+        (row.email ? String(row.email).trim().toLowerCase() : ''),
       learnerName: row.name,
       learningPathTitle: learningPath.title,
       courseCode,
