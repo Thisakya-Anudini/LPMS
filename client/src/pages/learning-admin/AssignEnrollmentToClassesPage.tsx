@@ -72,6 +72,7 @@ type ClassReportGroup = {
   startDate: string;
   endDate: string;
   classPayload?: Record<string, unknown>;
+  hasClassAssignment: boolean;
   learners: Array<{ id: string; name: string }>;
 };
 
@@ -301,6 +302,7 @@ export function AssignEnrollmentToClassesPage() {
   const [learners, setLearners] = useState<EnrolledLearner[]>([]);
   const [selectedCourseCode, setSelectedCourseCode] = useState('');
   const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [courseClassCounts, setCourseClassCounts] = useState<Record<string, number>>({});
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<string[]>([]);
   const [assignmentMode, setAssignmentMode] = useState<'assign' | 'reassign'>('assign');
@@ -309,6 +311,7 @@ export function AssignEnrollmentToClassesPage() {
   const [pathsLoading, setPathsLoading] = useState(true);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [classesLoading, setClassesLoading] = useState(false);
+  const [classAvailabilityLoading, setClassAvailabilityLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [selectedReportGroupKey, setSelectedReportGroupKey] = useState('');
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'assign' | 'reports'>('assign');
@@ -457,11 +460,12 @@ export function AssignEnrollmentToClassesPage() {
     const groups = new Map<string, ClassReportGroup>();
 
     for (const row of reportRows) {
-      if (row.assignmentStatus !== 'Assigned' || !row.classCode) {
+      const hasClassAssignment = row.assignmentStatus === 'Assigned' && Boolean(row.classCode);
+      if (!hasClassAssignment && courseClassCounts[row.courseCode] !== 0) {
         continue;
       }
 
-      const key = `${row.courseCode}::${row.classCode}`;
+      const key = hasClassAssignment ? `${row.courseCode}::${row.classCode}` : `${row.courseCode}::NO_CLASS`;
       const existing = groups.get(key);
       const learner = {
         id: row.employeeNumber || '',
@@ -483,6 +487,7 @@ export function AssignEnrollmentToClassesPage() {
           startDate: row.startDate,
           endDate: row.endDate,
           classPayload: row.classPayload,
+          hasClassAssignment,
           learners: [learner]
         });
       }
@@ -494,7 +499,7 @@ export function AssignEnrollmentToClassesPage() {
         first.name.localeCompare(second.name) || first.id.localeCompare(second.id)
       )
     }));
-  }, [reportRows]);
+  }, [courseClassCounts, reportRows]);
 
   const selectedReportGroup = useMemo(
     () => classReportGroups.find((group) => group.key === selectedReportGroupKey) || classReportGroups[0] || null,
@@ -522,6 +527,7 @@ export function AssignEnrollmentToClassesPage() {
     if (!selectedPathId) {
       setCourses([]);
       setLearners([]);
+      setCourseClassCounts({});
       return;
     }
 
@@ -535,6 +541,7 @@ export function AssignEnrollmentToClassesPage() {
       const response = await learningApi.getClassAssignmentOptions(token, selectedPathId);
       setCourses(response.courses);
       setLearners(response.learners);
+      setCourseClassCounts({});
       setSelectedCourseCode((currentCourseCode) =>
         response.courses.some((course) => course.courseCode === currentCourseCode)
           ? currentCourseCode
@@ -564,6 +571,10 @@ export function AssignEnrollmentToClassesPage() {
       }
       const response = await learningApi.getClassesByCourseCode(token, selectedCourseCode);
       setClasses(response.classes);
+      setCourseClassCounts((currentCounts) => ({
+        ...currentCounts,
+        [selectedCourseCode]: response.classes.length
+      }));
       setSelectedClassId(response.classes[0]?.id || '');
       setSelectedEnrollmentIds([]);
     } catch (error) {
@@ -586,6 +597,52 @@ export function AssignEnrollmentToClassesPage() {
   useEffect(() => {
     loadClasses();
   }, [loadClasses]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCourseClassAvailability = async () => {
+      if (courses.length === 0) {
+        setCourseClassCounts({});
+        return;
+      }
+
+      try {
+        setClassAvailabilityLoading(true);
+        const token = await getAccessToken();
+        if (!token) {
+          showToast('Session expired. Please login again.', 'error');
+          return;
+        }
+
+        const classCounts = await Promise.all(
+          courses.map(async (course) => {
+            const response = await learningApi.getClassesByCourseCode(token, course.courseCode);
+            return [course.courseCode, response.classes.length] as const;
+          })
+        );
+
+        if (!cancelled) {
+          setCourseClassCounts(Object.fromEntries(classCounts));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : 'Failed to check ERP class availability.', 'error');
+          setCourseClassCounts({});
+        }
+      } finally {
+        if (!cancelled) {
+          setClassAvailabilityLoading(false);
+        }
+      }
+    };
+
+    loadCourseClassAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [courses, getAccessToken, showToast]);
 
   useEffect(() => {
     if (classReportGroups.length === 0) {
@@ -684,7 +741,11 @@ export function AssignEnrollmentToClassesPage() {
               </tr>
               <tr>
                 <th>Class</th>
-                <td>${escapeHtml(reportGroup.classCode)} - ${escapeHtml(reportGroup.classTitle)}</td>
+                <td>${escapeHtml(
+                  reportGroup.hasClassAssignment
+                    ? `${reportGroup.classCode} - ${reportGroup.classTitle}`
+                    : 'No class assigned'
+                )}</td>
               </tr>
               <tr>
                 <td></td>
@@ -706,12 +767,17 @@ export function AssignEnrollmentToClassesPage() {
       `${safeFilenamePart(reportGroup.learningPathTitle, 'learning-path')}_${safeFilenamePart(
         reportGroup.courseCode,
         'course'
-      )}_${safeFilenamePart(reportGroup.classCode, 'class')}_learners.xls`
+      )}_${safeFilenamePart(reportGroup.classCode, 'no-class')}_learners.xls`
     );
     showToast('Excel report downloaded.', 'success');
   };
 
   const openClassDetailModal = async (reportGroup: ClassReportGroup) => {
+    if (!reportGroup.hasClassAssignment || !reportGroup.classId) {
+      showToast('Class details are only available after a course is assigned to an ERP class.', 'info');
+      return;
+    }
+
     setClassDetailGroup(reportGroup);
     setClassDetailForm(buildDefaultClassDetailValues(reportGroup));
     setClassDetailLoading(true);
@@ -1121,9 +1187,13 @@ export function AssignEnrollmentToClassesPage() {
           <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
             Select a learning path to generate the report.
           </p>
+        ) : classAvailabilityLoading ? (
+          <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
+            Checking ERP class availability for these courses...
+          </p>
         ) : classReportGroups.length === 0 ? (
           <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
-            No course classes have assigned learners yet.
+            No report-ready learners found. Assign learners to available ERP classes, or use courses with no ERP classes.
           </p>
         ) : (
           <div className="space-y-5">
@@ -1156,8 +1226,12 @@ export function AssignEnrollmentToClassesPage() {
                         <p className="text-xs text-secondary-500">{group.courseTitle}</p>
                       </div>
                       <div>
-                        <p className="font-semibold text-secondary-900">Class No: {group.classCode}</p>
-                        <p className="text-xs text-secondary-500">{group.classTitle || '-'}</p>
+                        <p className="font-semibold text-secondary-900">
+                          {group.hasClassAssignment ? `Class No: ${group.classCode}` : 'No class assigned'}
+                        </p>
+                        <p className="text-xs text-secondary-500">
+                          {group.hasClassAssignment ? group.classTitle || '-' : 'Report generated from LP enrollment'}
+                        </p>
                       </div>
                     </div>
                     <p className="mt-3 text-sm font-semibold text-primary-700">{group.learners.length} learner(s)</p>
@@ -1186,6 +1260,7 @@ export function AssignEnrollmentToClassesPage() {
                           setSelectedReportGroupKey(group.key);
                           openClassDetailModal(group);
                         }}
+                        disabled={!group.hasClassAssignment}
                       >
                         <Download className="h-4 w-4 shrink-0" />
                         <span>Download class details</span>
@@ -1210,8 +1285,16 @@ export function AssignEnrollmentToClassesPage() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Class</p>
-                    <p className="font-semibold text-secondary-900">Class No: {selectedReportGroup.classCode}</p>
-                    <p className="text-xs text-secondary-500">{selectedReportGroup.classTitle || '-'}</p>
+                    <p className="font-semibold text-secondary-900">
+                      {selectedReportGroup.hasClassAssignment
+                        ? `Class No: ${selectedReportGroup.classCode}`
+                        : 'No class assigned'}
+                    </p>
+                    <p className="text-xs text-secondary-500">
+                      {selectedReportGroup.hasClassAssignment
+                        ? selectedReportGroup.classTitle || '-'
+                        : 'Report generated from LP enrollment'}
+                    </p>
                   </div>
                   <span className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
                     {selectedReportGroup.learners.length} learner(s)
