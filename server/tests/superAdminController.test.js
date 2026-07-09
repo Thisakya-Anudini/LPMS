@@ -213,7 +213,9 @@ describe("CREATE USER", () => {
     await superAdminController.createUser(req, res);
 
     expect(res.statusCode).toBe(400);
-    expect(res.body.error.message).toBe("Only letters and spaces are allowed for name.");
+    expect(res.body.error.message).toBe(
+      "Only letters and spaces are allowed for name.",
+    );
     expect(vi.mocked(query)).not.toHaveBeenCalled();
   });
 
@@ -230,7 +232,9 @@ describe("CREATE USER", () => {
     await superAdminController.createUser(req, res);
 
     expect(res.statusCode).toBe(400);
-    expect(res.body.error.message).toBe("Only letters and spaces are allowed for name.");
+    expect(res.body.error.message).toBe(
+      "Only letters and spaces are allowed for name.",
+    );
     expect(vi.mocked(query)).not.toHaveBeenCalled();
   });
 
@@ -618,6 +622,67 @@ describe("GET ASSIGNED LEARNING ADMINS", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.learningAdmins).toEqual([]);
   });
+
+  it("should enrich assigned learning admin email with data from ERP API", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          employee_number: "EMP-001",
+          assigned_by_principal_id: "super-1",
+          created_at: new Date(),
+          updated_at: new Date(),
+          principal_id: "employee-1",
+          designation: "Developer",
+          grade_name: "G5",
+          name: "John Doe",
+          email: "old@fallback.local",
+          is_active: true,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      data: [{ email: "john.real@slt.com.lk" }],
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAssignedLearningAdmins(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.body.learningAdmins[0].email).toBe("john.real@slt.com.lk");
+  });
+
+  it("should silently fallback to local DB email if ERP API fails for assigned admin", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          employee_number: "EMP-001",
+          assigned_by_principal_id: "super-1",
+          created_at: new Date(),
+          updated_at: new Date(),
+          principal_id: "employee-1",
+          designation: "Developer",
+          grade_name: "G5",
+          name: "John Doe",
+          email: "old@fallback.local",
+          is_active: true,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
+      new Error("ERP Network Error"),
+    );
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await superAdminController.getAssignedLearningAdmins(req, res);
+
+    expect(res.body.learningAdmins[0].email).toBe("old@fallback.local");
+  });
 });
 
 // deleteUser testing
@@ -974,6 +1039,34 @@ describe("ASSIGN LEARNING ADMIN", () => {
         expect(call[1][0]).toBe("EMP-001");
       }
     }
+  });
+
+  it("should enrich email with data from ERP API on successful assignment", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            employee_number: "EMP-001",
+            principal_id: "employee-1",
+            name: "John Doe",
+            email: "old@fallback.local",
+            is_active: true,
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      data: [{ email: "john.real@slt.com.lk" }],
+    });
+
+    const req = createMockReq({ body: { employeeNumber: "EMP-001" } });
+    const res = createMockRes();
+    await superAdminController.assignLearningAdmin(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.body.assignment.email).toBe("john.real@slt.com.lk");
   });
 });
 
@@ -1351,7 +1444,7 @@ describe("GET ALL LEARNERS", () => {
     expect(res.body.pagination.totalPages).toBe(1);
   });
 
-    it("should enrich learner email with data from ERP API", async () => {
+  it("should enrich learner email with data from ERP API", async () => {
     vi.mocked(query)
       .mockResolvedValueOnce({ rows: [{ total: 1 }], rowCount: 1 })
       .mockResolvedValueOnce({
@@ -1377,7 +1470,6 @@ describe("GET ALL LEARNERS", () => {
         rowCount: 1,
       });
 
-   
     vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
       data: [{ email: "john.real@slt.com.lk" }],
     });
@@ -1387,7 +1479,7 @@ describe("GET ALL LEARNERS", () => {
     await superAdminController.getAllLearners(req, res);
 
     expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
-    expect(res.body.learners[0].email).toBe("john.real@slt.com.lk"); 
+    expect(res.body.learners[0].email).toBe("john.real@slt.com.lk");
   });
 
   it("should silently fallback to local DB email if ERP API fails", async () => {
@@ -1416,9 +1508,8 @@ describe("GET ALL LEARNERS", () => {
         rowCount: 1,
       });
 
-    
     vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
-      new Error("ERP Network Error")
+      new Error("ERP Network Error"),
     );
 
     const req = createMockReq({ query: {} });
@@ -1426,9 +1517,8 @@ describe("GET ALL LEARNERS", () => {
     await superAdminController.getAllLearners(req, res);
 
     expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
-    expect(res.body.learners[0].email).toBe("old@fallback.local"); 
+    expect(res.body.learners[0].email).toBe("old@fallback.local");
   });
-
 });
 
 // getLearnerLearningPaths testing
