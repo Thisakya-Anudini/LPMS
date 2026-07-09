@@ -153,7 +153,7 @@ const sectionMeta: Record<LearningPathManagementSection, { title: string; descri
 };
 
 export function LearningPathManagement({ section }: { section: LearningPathManagementSection }) {
-  const { getAccessToken } = useAuth();
+  const { getAccessToken, user } = useAuth();
   const { showToast } = useToast();
 
   const [paths, setPaths] = useState<LearningPathRow[]>([]);
@@ -205,6 +205,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     Boolean(assignGradeFilter) ||
     Boolean(assignOrganizationFilter) ||
     Boolean(assignPayrollFilter);
+  const assignEmployeeNoPlaceholder = `e.g. ${user?.employeeNo?.trim() || 'employee number'}`;
+  const assignNamePlaceholder = `e.g. ${user?.name?.trim() || 'name'}`;
 
   const clearAssignFilters = () => {
     setAssignDesignationFilter('');
@@ -1231,14 +1233,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={assignEmployeeNoSearch}
                     onFocus={activateAssignEmployeeSearch}
                     onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
-                    placeholder="e.g. 011338"
+                    placeholder={assignEmployeeNoPlaceholder}
                   />
                   <Input
                     label="Search by Name"
                     value={assignSurnameSearch}
                     onFocus={activateAssignNameSearch}
                     onChange={(event) => handleAssignNameSearchChange(event.target.value)}
-                    placeholder="e.g. Mohamed"
+                    placeholder={assignNamePlaceholder}
                   />
                   <Select
                     label="Filter by Designation"
