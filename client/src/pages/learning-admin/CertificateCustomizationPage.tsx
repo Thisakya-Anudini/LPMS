@@ -175,11 +175,12 @@ export function CertificateCustomizationPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Certificate Customization</h1>
-        <p className="text-slate-500">Set signature name and designation per learning path.</p>
-      </div>
+    <div className="max-h-[calc(100vh-8rem)] overflow-y-auto pr-2">
+      <div className="space-y-6 pb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Certificate Customization</h1>
+          <p className="text-slate-500">Set signature name and designation per learning path.</p>
+        </div>
 
       <Card>
         <div className="overflow-x-auto">
@@ -342,6 +343,7 @@ export function CertificateCustomizationPage() {
           </Card>
         </ModalOverlay>
       ) : null}
+      </div>
     </div>
   );
 }
