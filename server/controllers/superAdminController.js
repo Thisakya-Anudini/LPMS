@@ -830,9 +830,29 @@ export const getLearningPathEnrollments = async (req, res) => {
     [learningPathId],
   );
 
+  const enrichedEnrollments = await Promise.all(
+    enrollmentsResult.rows.map(async (enrollment) => {
+      try {
+        if (enrollment.employee_number) {
+          const erpResponse = await fetchEmployeeDetailsForServiceNo(
+            enrollment.employee_number,
+          );
+          const erpData = erpResponse?.data?.[0];
+
+          if (erpData && erpData.email && String(erpData.email).trim()) {
+            enrollment.email = String(erpData.email).trim().toLowerCase();
+          }
+        }
+      } catch (err) {
+        // Silently fallback to the Local DB email if the ERP API request fails
+      }
+      return enrollment;
+    }),
+  );
+
   return res.status(200).json({
     learningPath: learningPathResult.rows[0],
-    enrollments: enrollmentsResult.rows,
+    enrollments: enrichedEnrollments,
   });
 };
 

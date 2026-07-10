@@ -1752,7 +1752,7 @@ describe("GET LEARNING PATH ENROLLMENTS", () => {
     expect(res.body.learningPath.title).toBe("Python Basics");
   });
 
-  it("should return enrollments for learning path with principal/employee details", async () => {
+  it("should return enrollments for learning path with principal/employee details and enriched email", async () => {
     vi.mocked(query)
       .mockResolvedValueOnce({
         rows: [
@@ -1777,7 +1777,7 @@ describe("GET LEARNING PATH ENROLLMENTS", () => {
             completed_at: null,
             principal_id: "employee-1",
             name: "John Doe",
-            email: "john@example.com",
+            email: "john@erp.local",
             employee_number: "EMP-001",
             designation: "Developer",
             grade_name: "G5",
@@ -1786,14 +1786,22 @@ describe("GET LEARNING PATH ENROLLMENTS", () => {
         rowCount: 1,
       });
 
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      data: [{ email: "john.real@slt.com.lk" }],
+    });
+
     const req = createMockReq({ params: { learningPathId: "lp-1" } });
     const res = createMockRes();
     await superAdminController.getLearningPathEnrollments(req, res);
 
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
     expect(res.body.enrollments).toHaveLength(1);
+
     const enrollment = res.body.enrollments[0];
     expect(enrollment.employee_number).toBe("EMP-001");
     expect(enrollment.name).toBe("John Doe");
+
+    expect(enrollment.email).toBe("john.real@slt.com.lk");
   });
 
   it("should order enrollments by enrolled_at DESC", async () => {
