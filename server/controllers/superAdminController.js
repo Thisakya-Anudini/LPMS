@@ -214,6 +214,15 @@ const getOrCreateEmployeePrincipal = async (employee) => {
 
 export const createUser = async (req, res) => {
   const { email, password, role, name } = req.body;
+  const normalizedName = String(name || '').trim();
+
+  if (!normalizedName) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Name cannot be blank.');
+  }
+
+  if (!/^[A-Za-z\s]+$/.test(normalizedName)) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'Only letters and spaces are allowed for name.');
+  }
 
   if (!ALL_ROLES.includes(role)) {
     return sendError(res, 400, 'VALIDATION_ERROR', 'Invalid role.', {
@@ -234,7 +243,7 @@ export const createUser = async (req, res) => {
     email,
     password,
     role,
-    name: name || email.split('@')[0]
+    name: normalizedName
   });
 
   await logAudit({

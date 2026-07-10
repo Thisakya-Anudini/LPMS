@@ -28,7 +28,9 @@ export function AdminLearnersPage() {
   const [learners, setLearners] = useState<LearnerRow[]>([]);
   const [designationOptions, setDesignationOptions] = useState<string[]>([]);
   const [employeeNoSearch, setEmployeeNoSearch] = useState('');
+  const [employeeNoSearchError, setEmployeeNoSearchError] = useState('');
   const [nameSearch, setNameSearch] = useState('');
+  const [nameSearchError, setNameSearchError] = useState('');
   const [designationFilter, setDesignationFilter] = useState('ALL');
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({
@@ -75,6 +77,34 @@ export function AdminLearnersPage() {
     navigate(`/admin/learners/${learner.principal_id}`);
   };
 
+  const handleEmployeeNoSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    const sanitizedValue = nextValue.replace(/\D/g, '');
+
+    if (nextValue !== sanitizedValue) {
+      setEmployeeNoSearchError('Only numbers are allowed.');
+      setEmployeeNoSearch(sanitizedValue);
+      return;
+    }
+
+    setEmployeeNoSearchError('');
+    setEmployeeNoSearch(nextValue);
+  };
+
+  const handleNameSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value;
+    const sanitizedValue = nextValue.replace(/[^A-Za-z\s]/g, '');
+
+    if (nextValue !== sanitizedValue) {
+      setNameSearchError('Only letters and spaces are allowed.');
+      setNameSearch(sanitizedValue);
+      return;
+    }
+
+    setNameSearchError('');
+    setNameSearch(nextValue);
+  };
+
   const pageStart = pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.pageSize + 1;
   const pageEnd = pagination.total === 0
     ? 0
@@ -114,20 +144,39 @@ export function AdminLearnersPage() {
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Search by Employee No</label>
             <input
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className={`w-full rounded-md border px-3 py-2 text-sm ${
+                employeeNoSearchError ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-slate-300'
+              }`}
               placeholder="e.g. 011338"
+              inputMode="numeric"
               value={employeeNoSearch}
-              onChange={(event) => setEmployeeNoSearch(event.target.value)}
+              onChange={handleEmployeeNoSearchChange}
+              aria-invalid={Boolean(employeeNoSearchError)}
+              aria-describedby={employeeNoSearchError ? 'learner-employee-no-search-error' : undefined}
             />
+            {employeeNoSearchError && (
+              <p id="learner-employee-no-search-error" className="mt-1 text-xs font-medium text-red-600">
+                {employeeNoSearchError}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Search by Name</label>
             <input
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className={`w-full rounded-md border px-3 py-2 text-sm ${
+                nameSearchError ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-slate-300'
+              }`}
               placeholder="e.g. Tennakoon"
               value={nameSearch}
-              onChange={(event) => setNameSearch(event.target.value)}
+              onChange={handleNameSearchChange}
+              aria-invalid={Boolean(nameSearchError)}
+              aria-describedby={nameSearchError ? 'learner-name-search-error' : undefined}
             />
+            {nameSearchError && (
+              <p id="learner-name-search-error" className="mt-1 text-xs font-medium text-red-600">
+                {nameSearchError}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Filter by Designation</label>

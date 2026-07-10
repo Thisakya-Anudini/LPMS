@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from 'lucide-react';
-import { courseApi, learningApi } from '../../api/lpmsApi';
+import { ApiRequestError, courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -46,6 +46,28 @@ type CourseItem = {
   deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
   venue: string | null;
   videoUrl: string | null;
+};
+
+type DuplicateLearningPathCourse = {
+  title?: string;
+  code?: string;
+};
+
+type DuplicateLearningPathSummary = {
+  id: string;
+  title?: string;
+  overlappingCourses?: DuplicateLearningPathCourse[];
+};
+
+type DuplicateLearningPathPayload = {
+  error?: {
+    code?: string;
+    message?: string;
+    details?: {
+      existing?: DuplicateLearningPathSummary[];
+    };
+  };
+  existing?: DuplicateLearningPathSummary[];
 };
 
 type StageForm = {
@@ -137,6 +159,16 @@ const formatDurationValue = (value: string, unit: string) => {
 
   return `${normalizedValue} ${unit}`;
 };
+const normalizeTitleInputSpacing = (value: string) => value.replace(/\s{2,}/g, ' ');
+
+const isDuplicateLearningPathPayload = (payload: unknown): payload is DuplicateLearningPathPayload => {
+  if (typeof payload !== 'object' || payload === null || !('error' in payload)) {
+    return false;
+  }
+
+  const error = (payload as { error?: { code?: unknown } }).error;
+  return error?.code === 'DUPLICATE_LEARNING_PATH';
+};
 
 const initialPathForm = {
   title: '',
@@ -182,13 +214,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [query, setQuery] = useState('');
 
   const [pathForm, setPathForm] = useState(initialPathForm);
-  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: Array<any> }>(null);
+  const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: DuplicateLearningPathSummary[] }>(null);
   const [pathTitleError, setPathTitleError] = useState<string | null>(null);
   const [pathDurationError, setPathDurationError] = useState<string | null>(null);
   const [editTitleError, setEditTitleError] = useState<string | null>(null);
   const [editDurationError, setEditDurationError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
   const [createCourseSearch, setCreateCourseSearch] = useState('');
+  const [editCourseSearch, setEditCourseSearch] = useState('');
 
   const [editPathId, setEditPathId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -201,6 +234,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     status: 'ACTIVE' as PathStatus,
     stages: [] as StageForm[]
   });
+  const [originalEditForm, setOriginalEditForm] = useState<typeof editForm | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [pendingDeletePath, setPendingDeletePath] = useState<LearningPathRow | null>(null);
 
@@ -391,6 +425,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       return { valid: false, message: 'Title may only contain alphabetic characters and spaces.' };
     }
 
+    if (/\s{2,}/.test(normalized)) {
+      return { valid: false, message: 'Title must use only one space between words.' };
+    }
+
     if (!/[A-Za-z]/.test(normalized)) {
       return { valid: false, message: 'Title must include at least one letter.' };
     }
@@ -433,7 +471,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     setPathFormLoading(true);
     setPathDuplicateWarning(null);
     setPathTitleError(null);
-    setPathDurationError(null);
     const titleValidation = validateTitleValue(pathForm.title);
     if (!titleValidation.valid) {
       setPathTitleError(titleValidation.message);
@@ -454,6 +491,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setPathFormLoading(false);
       return;
     }
+
+    const createStagesPayload = getCreateStagesPayload();
+    if (createStagesPayload.length === 0) {
+      showToast('A learning path must have at least one stage with selected courses.', 'error');
+      setPathFormLoading(false);
+      return;
+    }
+    
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -474,11 +519,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       showToast('Learning path created successfully.', 'success');
       await loadData();
     } catch (err) {
-      // If server returned structured DUPLICATE_LEARNING_PATH details, show inline warning
-      if (err instanceof Error && (err as any).payload?.error?.code === 'DUPLICATE_LEARNING_PATH') {
-        const payload = (err as any).payload;
-        setPathDuplicateWarning({ message: payload.error.message || 'Duplicate learning path detected.', existing: payload.error.details?.existing || payload.existing || [] });
-        showToast(payload.error.message || 'Duplicate learning path detected.', 'info');
+      if (err instanceof ApiRequestError && isDuplicateLearningPathPayload(err.payload)) {
+        const payload = err.payload;
+        const message = payload.error?.message || 'Duplicate learning path detected.';
+        setPathDuplicateWarning({
+          message,
+          existing: payload.error?.details?.existing || payload.existing || []
+        });
+        showToast(message, 'info');
       } else {
         showToast(err instanceof Error ? err.message : 'Failed to create learning path.', 'error');
       }
@@ -512,7 +560,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setEditPathId(path.id);
       const parsedDuration = parseDurationParts(path.total_duration);
 
-      setEditForm({
+      
+      setEditCourseSearch('');
+            
+      const initialForm = {
         title: path.title,
         description: path.description,
         category: path.category,
@@ -521,7 +572,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         durationUnit: parsedDuration.unit,
         status: path.status,
         stages: mappedStages.length > 0 ? mappedStages : [createStageForm(0)]
-      });
+      };
+      
+      setEditForm(initialForm);
+      setOriginalEditForm(initialForm);
+
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to load learning path details.', 'error');
     }
@@ -534,7 +589,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     }
     setEditLoading(true);
     setEditTitleError(null);
-    setEditDurationError(null);
     const titleValidation = validateTitleValue(editForm.title);
     if (!titleValidation.valid) {
       setEditTitleError(titleValidation.message);
@@ -555,6 +609,37 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       setEditLoading(false);
       return;
     }
+
+    if (editForm.stages.length === 0) {
+      showToast('A learning path must have at least one stage.', 'error');
+      setEditLoading(false);
+      return;
+    }
+
+    const hasEmptyStages = editForm.stages.some(stage => stage.selectedCourseIds.length === 0);
+    if(hasEmptyStages){
+      showToast('All stages must have at least one selected course. Please select courses or remove empty stages.', 'error');
+      setEditLoading(false);
+      return;
+    }
+
+    if(originalEditForm){
+      const isUnchanged = originalEditForm.title === editForm.title &&
+      originalEditForm.description === editForm.description &&
+      originalEditForm.category === editForm.category &&
+      originalEditForm.totalDuration === editForm.totalDuration &&
+      originalEditForm.status === editForm.status &&
+      JSON.stringify(originalEditForm.stages) === JSON.stringify(editForm.stages);
+
+      if(isUnchanged){
+        showToast('No changes were made to the learning path.', 'info');
+        setEditLoading(false);
+        setEditPathId(null);
+
+        return;
+      }
+    }
+
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -734,101 +819,129 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     });
   };
 
-  const renderCourseSelector = (stages: StageForm[], mode: 'create' | 'edit') => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {stages.map((stage, stageIndex) => (
-        <div key={`${mode}-${stage.stageId}`} className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
-          <div className="flex items-center gap-2">
-            <Input
-              label={`Stage ${stageIndex + 1} Name`}
-              value={stage.title}
-              onChange={(event) => updateStageTitle(mode, stageIndex, event.target.value)}
-              required
-            />
-            <Button type="button" variant="outline" size="sm" onClick={() => removeStage(mode, stageIndex)}>
-              Remove Stage
-            </Button>
-          </div>
+  const renderCourseSelector = (stages: StageForm[], mode: 'create' | 'edit') => {
+    const visibleCourses = mode === 'edit' ? filterCoursesByQuery(courses, editCourseSearch) : courses;
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Select Courses</p>
-              <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-              {courses.map((course, courseIndex) => (
-                <label
-                  key={getCourseRenderKey(course, courseIndex, `${mode}-${stage.stageId}`)}
-                  className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={stage.selectedCourseIds.includes(course.id)}
-                      onChange={() => toggleCourse(stageIndex, course.id, mode)}
-                    />
-                    <span className="text-sm">
-                      <span className="block font-medium text-slate-900">{course.title}</span>
-                      <span className="block text-xs text-slate-500">{course.code}</span>
-                      {course.description ? (
-                        <span className="block text-xs text-slate-500">{course.description}</span>
-                      ) : null}
-                      {course.deliveryMode ? (
-                        <span className="block text-xs text-slate-600">
-                          {course.deliveryMode === 'ONLINE'
-                            ? `Online${course.videoUrl ? ' | Video available' : ''}`
-                            : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                ))}
-              </div>
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {stages.map((stage, stageIndex) => (
+          <div key={`${mode}-${stage.stageId}`} className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Input
+                label={`Stage ${stageIndex + 1} Name`}
+                value={stage.title}
+                onChange={(event) => updateStageTitle(mode, stageIndex, event.target.value)}
+                required
+              />
+              <Button type="button" variant="outline" size="sm" onClick={() => removeStage(mode, stageIndex)}>
+                Remove Stage
+              </Button>
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">Course Order in Stage</p>
-              <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-                {stage.selectedCourseIds.length === 0 ? (
-                  <p className="text-sm text-slate-500 p-2">Select courses to define order for this stage.</p>
-                ) : (
-                  stage.selectedCourseIds.map((courseId, courseIndex) => {
-                    const course = courses.find((item) => item.id === courseId);
-                    return (
-                      <div key={`${courseId}-${mode}-${stage.stageId}-order`} className="p-2 rounded border border-slate-200 bg-white">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-slate-900">
-                            {courseIndex + 1}. {course?.title || courseId}
-                          </p>
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              className="p-1 rounded hover:bg-slate-100"
-                              onClick={() => moveCourse(stageIndex, courseIndex, 'up', mode)}
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              className="p-1 rounded hover:bg-slate-100"
-                              onClick={() => moveCourse(stageIndex, courseIndex, 'down', mode)}
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <p className="text-sm font-medium text-slate-700">Select Courses</p>
+                  {mode === 'edit' ? (
+                    <div className="w-full md:w-80">
+                      <Input
+                        id={`edit-course-search-${stage.stageId}`}
+                        label="Search Courses"
+                        placeholder="Search by course name or ID"
+                        value={editCourseSearch}
+                        onChange={(event) => setEditCourseSearch(event.target.value)}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+                {mode === 'edit' ? (
+                  <p className="mb-2 text-xs text-slate-500">
+                    Showing {visibleCourses.length} of {courses.length} courses
+                  </p>
+                ) : null}
+                <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+                  {visibleCourses.length === 0 ? (
+                    <p className="p-3 text-sm text-slate-500">
+                      No courses match "{editCourseSearch.trim()}".
+                    </p>
+                  ) : (
+                    visibleCourses.map((course, courseIndex) => (
+                      <label
+                        key={getCourseRenderKey(course, courseIndex, `${mode}-${stage.stageId}`)}
+                        className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={stage.selectedCourseIds.includes(course.id)}
+                          onChange={() => toggleCourse(stageIndex, course.id, mode)}
+                        />
+                        <span className="text-sm">
+                          <span className="block font-medium text-slate-900">{course.title}</span>
+                          <span className="block text-xs text-slate-500">{course.code}</span>
+                          {course.description ? (
+                            <span className="block text-xs text-slate-500">{course.description}</span>
+                          ) : null}
+                          {course.deliveryMode ? (
+                            <span className="block text-xs text-slate-600">
+                              {course.deliveryMode === 'ONLINE'
+                                ? `Online${course.videoUrl ? ' | Video available' : ''}`
+                                : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-700 mb-2">Course Order in Stage</p>
+                <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+                  {stage.selectedCourseIds.length === 0 ? (
+                    <p className="text-sm text-slate-500 p-2">Select courses to define order for this stage.</p>
+                  ) : (
+                    stage.selectedCourseIds.map((courseId, courseIndex) => {
+                      const course = courses.find((item) => item.id === courseId);
+                      return (
+                        <div key={`${courseId}-${mode}-${stage.stageId}-order`} className="p-2 rounded border border-slate-200 bg-white">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-slate-900">
+                              {courseIndex + 1}. {course?.title || courseId}
+                            </p>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                className="p-1 rounded hover:bg-slate-100"
+                                onClick={() => moveCourse(stageIndex, courseIndex, 'up', mode)}
+                              >
+                                <ArrowUp className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                className="p-1 rounded hover:bg-slate-100"
+                                onClick={() => moveCourse(stageIndex, courseIndex, 'down', mode)}
+                              >
+                                <ArrowDown className="h-4 w-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>
+        ))}
+        <div className="md:col-span-2">
+          <Button type="button" variant="outline" onClick={() => addStage(mode)}>
+            Add Stage
+          </Button>
         </div>
-      ))}
-      <div className="md:col-span-2">
-        <Button type="button" variant="outline" onClick={() => addStage(mode)}>
-          Add Stage
-        </Button>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderCreateStageBuilder = () => (
     <div className="space-y-4">
@@ -836,84 +949,84 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         const liveFilteredCourses = filterCoursesByQuery(courses, createCourseSearch);
 
         return (
-      <div className="border border-slate-200 rounded-lg p-3 space-y-3">
-        <div className="flex items-end gap-2">
-          <Input
-            label="Stage Name"
-            value={pathForm.draftStage.title}
-            onChange={(event) => updateStageTitle('create', pathForm.stages.length, event.target.value)}
-            required
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="md"
-            onClick={() => addStage('create')}
-            className="self-end border-slate-400 text-slate-900 hover:bg-slate-200"
-          >
-            Add Stage
-          </Button>
-        </div>
-
-        <div>
-          <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <p className="text-sm font-medium text-slate-700">Select Courses</p>
-            <div className="w-full md:w-80">
+          <div className="border border-slate-200 rounded-lg p-3 space-y-3">
+            <div className="flex items-end gap-2">
               <Input
-                id="create-course-search"
-                key="create-course-search"
-                label="Search Courses"
-                placeholder="Search by course name or ID"
-                value={createCourseSearch}
-                onChange={(event) => setCreateCourseSearch(event.target.value)}
+                label="Stage Name"
+                value={pathForm.draftStage.title}
+                onChange={(event) => updateStageTitle('create', pathForm.stages.length, event.target.value)}
+                required
               />
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => addStage('create')}
+                className="self-end border-slate-400 text-slate-900 hover:bg-slate-200"
+              >
+                Add Stage
+              </Button>
+            </div>
+
+            <div>
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <p className="text-sm font-medium text-slate-700">Select Courses</p>
+                <div className="w-full md:w-80">
+                  <Input
+                    id="create-course-search"
+                    key="create-course-search"
+                    label="Search Courses"
+                    placeholder="Search by course name or ID"
+                    value={createCourseSearch}
+                    onChange={(event) => setCreateCourseSearch(event.target.value)}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Showing {liveFilteredCourses.length} of {courses.length} courses
+              </p>
+              <div className="max-h-[30rem] overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+                {loading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : liveFilteredCourses.length === 0 ? (
+                  <p className="p-3 text-sm text-slate-500">
+                    No courses match "{createCourseSearch.trim()}".
+                  </p>
+                ) : (
+                  liveFilteredCourses.map((course, courseIndex) => (
+                    <label
+                      key={getCourseRenderKey(course, courseIndex, `create-${pathForm.draftStage.stageId}`)}
+                      className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={pathForm.draftStage.selectedCourseIds.includes(course.id)}
+                        onChange={() => toggleCourse(pathForm.stages.length, course.id, 'create')}
+                      />
+                      <span className="text-sm">
+                        <span className="block font-medium text-slate-900">{course.title}</span>
+                        <span className="block text-xs text-slate-500">{course.code}</span>
+                        {course.description ? (
+                          <span className="block text-xs text-slate-500">{course.description}</span>
+                        ) : null}
+                        {course.deliveryMode ? (
+                          <span className="block text-xs text-slate-600">
+                            {course.deliveryMode === 'ONLINE'
+                              ? `Online${course.videoUrl ? ' | Video available' : ''}`
+                              : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
+                          </span>
+                        ) : null}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-          <p className="text-xs text-slate-500">
-            Showing {liveFilteredCourses.length} of {courses.length} courses
-          </p>
-          <div className="max-h-[30rem] overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-            {loading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            ) : liveFilteredCourses.length === 0 ? (
-              <p className="p-3 text-sm text-slate-500">
-                No courses match "{createCourseSearch.trim()}".
-              </p>
-            ) : (
-              liveFilteredCourses.map((course, courseIndex) => (
-                <label
-                  key={getCourseRenderKey(course, courseIndex, `create-${pathForm.draftStage.stageId}`)}
-                  className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={pathForm.draftStage.selectedCourseIds.includes(course.id)}
-                    onChange={() => toggleCourse(pathForm.stages.length, course.id, 'create')}
-                  />
-                  <span className="text-sm">
-                    <span className="block font-medium text-slate-900">{course.title}</span>
-                    <span className="block text-xs text-slate-500">{course.code}</span>
-                    {course.description ? (
-                      <span className="block text-xs text-slate-500">{course.description}</span>
-                    ) : null}
-                    {course.deliveryMode ? (
-                      <span className="block text-xs text-slate-600">
-                        {course.deliveryMode === 'ONLINE'
-                          ? `Online${course.videoUrl ? ' | Video available' : ''}`
-                          : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
-                      </span>
-                    ) : null}
-                  </span>
-                </label>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
         );
       })()}
     </div>
@@ -1045,7 +1158,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   value={pathForm.title}
                   error={pathTitleError ?? undefined}
                   onChange={(event) => {
-                    const sanitized = event.target.value.replace(/[^A-Za-z\s]/g, '');
+                    const sanitized = normalizeTitleInputSpacing(event.target.value.replace(/[^A-Za-z\s]/g, ''));
                     setPathForm((prev) => ({ ...prev, title: sanitized }));
                     setPathTitleError(null);
                   }}
@@ -1057,8 +1170,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   <div className="col-span-2 mt-1 text-sm text-amber-700">
                     <p className="font-medium">{pathDuplicateWarning.message}</p>
                     <ul className="list-disc list-inside">
-                      {pathDuplicateWarning.existing.map((e: any) => (
-                        <li key={e.id}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c: any) => c.title || c.code).join(', ')}` : ''}</li>
+                      {pathDuplicateWarning.existing.map((e) => (
+                        <li key={e.id || e.title || 'duplicate-path'}>
+                          {e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `- overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -1234,7 +1349,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 ...paths.map((path) => ({ value: path.id, label: `${path.title} (${path.status})` }))
               ]}
               required
-              />
+            />
 
             <div>
               <p className="text-sm font-medium text-slate-700 mb-2">Select Learners</p>
@@ -1430,7 +1545,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                 <tr>
                   <th className="px-6 py-3">Path Name</th>
                   <th className="px-6 py-3">Category</th>
-                  <th className="px-6 py-3">Duration</th>
                   <th className="px-6 py-3">Status</th>
                   <th className="px-6 py-3">Actions</th>
                 </tr>
@@ -1438,13 +1552,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
               <tbody className="divide-y divide-slate-200">
                 {loading ? (
                   <tr>
-                    <td className="px-6 py-4 text-slate-500" colSpan={5}>
+                    <td className="px-6 py-4 text-slate-500" colSpan={4}>
                       Loading learning paths...
                     </td>
                   </tr>
                 ) : filteredPaths.length === 0 ? (
                   <tr>
-                    <td className="px-6 py-4 text-slate-500" colSpan={5}>
+                    <td className="px-6 py-4 text-slate-500" colSpan={4}>
                       No learning paths found.
                     </td>
                   </tr>
@@ -1466,7 +1580,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                           {path.category.replace('_', ' ')}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">{path.total_duration}</td>
                       <td className="px-6 py-4 text-slate-600">{path.status}</td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
@@ -1539,7 +1652,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={editForm.title}
                     error={editTitleError ?? undefined}
                     onChange={(event) => {
-                      const sanitized = event.target.value.replace(/[^A-Za-z\s]/g, '');
+                      const sanitized = normalizeTitleInputSpacing(event.target.value.replace(/[^A-Za-z\s]/g, ''));
                       setEditForm((prev) => ({ ...prev, title: sanitized }));
                       setEditTitleError(null);
                     }}

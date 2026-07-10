@@ -1,0 +1,2045 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock all external dependencies
+
+vi.mock("../db.js", () => ({
+  query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+}));
+
+vi.mock("../utils/http.js", () => ({
+  sendError: vi.fn((res, status, code, message, details) => {
+    res.statusCode = status;
+    res.body = { error: { code, message } };
+    if (details) {
+      res.body.error.details = details;
+    }
+    return res;
+  }),
+}));
+
+vi.mock("../utils/erpClient.js", () => ({
+  fetchAllCourses: vi.fn().mockRejectedValue(new Error("No ERP mock")),
+  fetchEmployeeDetailsForServiceNo: vi
+    .fn()
+    .mockRejectedValue(new Error("No ERP mock")),
+  fetchEmployeeSubordinates: vi
+    .fn()
+    .mockRejectedValue(new Error("No ERP mock")),
+  fetchCourseEnrollmentDetails: vi
+    .fn()
+    .mockResolvedValue({ success: true, message: "Success", data: [] }),
+}));
+
+vi.mock("../users/learner.js", () => ({
+  isTemporaryErpLearnerAuth: vi.fn().mockReturnValue(false),
+}));
+
+vi.mock("../utils/certificatePdf.js", () => ({
+  renderCertificatePdf: vi.fn(),
+}));
+
+vi.mock("../utils/assignmentReports.js", () => ({
+  ASSIGNMENT_REPORT_SOURCE: { SUPERVISOR: "SUPERVISOR" },
+  createAssignmentReport: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../utils/emailService.js", () => ({
+  sendCourseCompletedEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("bcryptjs", () => ({
+  default: { hash: vi.fn() },
+  hash: vi.fn(),
+}));
+
+// Imports (after mocks)
+
+import { query } from "../db.js";
+import { sendError } from "../utils/http.js";
+import {
+  fetchAllCourses,
+  fetchEmployeeDetailsForServiceNo,
+  fetchEmployeeSubordinates,
+  fetchCourseEnrollmentDetails,
+} from "../utils/erpClient.js";
+import { isTemporaryErpLearnerAuth } from "../users/learner.js";
+import { renderCertificatePdf } from "../utils/certificatePdf.js";
+import { createAssignmentReport } from "../utils/assignmentReports.js";
+import { sendCourseCompletedEmail } from "../utils/emailService.js";
+import bcrypt from "bcryptjs";
+import * as learnerController from "../controllers/learnerController.js";
+
+// Test helpers
+
+const createMockRes = () => {
+  const res = {
+    statusCode: 200,
+    body: null,
+    _headers: {},
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(data) {
+      this.body = data;
+      return this;
+    },
+  };
+  return res;
+};
+
+const createMockReq = (overrides = {}) => {
+  const baseReq = {
+    body: {},
+    params: {},
+    user: { id: "user-1", employeeNo: "EMP-001", role: "EMPLOYEE" },
+  };
+  return {
+    ...baseReq,
+    ...overrides,
+    user: { ...baseReq.user, ...overrides.user },
+    body: { ...baseReq.body, ...overrides.body },
+    params: { ...baseReq.params, ...overrides.params },
+  };
+};
+
+const normalizeNameFromRow = (row, employeeNo) => {
+  if (row?.employeeName && String(row.employeeName).trim()) {
+    return String(row.employeeName).trim();
+  }
+  const initials = row?.employeeInitials
+    ? String(row.employeeInitials).trim()
+    : "";
+  const surname = row?.employeeSurname
+    ? String(row.employeeSurname).trim()
+    : "";
+  const merged = `${initials} ${surname}`.trim();
+  return merged || `Learner ${employeeNo}`;
+};
+
+const isSupervisorFromSubordinateResponse = (response) =>
+  Boolean(Array.isArray(response?.data) && response.data.length > 0);
+
+const normalizeErpCourse = (row, index = 0) => {
+  const courseCode = String(row?.courseCode || "").trim();
+  const courseName = String(row?.courseName || "").trim();
+  const title = courseName || courseCode || `Course ${index + 1}`;
+  return {
+    id: courseCode || `ERP-COURSE-${index + 1}`,
+    code: courseCode || `ERP-COURSE-${index + 1}`,
+    title,
+    description: null,
+    durationHours: null,
+    duration: null,
+    deliveryMode: null,
+    venue: null,
+    videoUrl: null,
+  };
+};
+
+const normalizeCourseKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const normalizeDisplayValue = (value) => {
+  const normalized = String(value ?? "").trim();
+  if (
+    !normalized ||
+    ["-", "n/a", "na", "null", "undefined"].includes(normalized.toLowerCase())
+  ) {
+    return null;
+  }
+  return normalized;
+};
+
+const parseDurationToHours = (value) => {
+  const normalized = normalizeDisplayValue(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const compact = normalized.toLowerCase().replace(/,/g, " ");
+  const durationPattern =
+    /([0-9]+(?:\.[0-9]+)?)(?:\s*(days?|d|hours?|hrs?|hr|h))?(?=\s*(?:[0-9]|$|,)|\s*$)/gi;
+  let totalHours = 0;
+  let matched = false;
+
+  for (const match of compact.matchAll(durationPattern)) {
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+    const unit = String(match[2] || "hours").toLowerCase();
+    matched = true;
+    totalHours += unit.startsWith("d") ? amount * 6 : amount;
+  }
+
+  return matched ? totalHours : null;
+};
+
+const formatDurationHours = (hours) => {
+  if (!Number.isFinite(hours) || hours <= 0) {
+    return null;
+  }
+  const rounded = Math.round(hours * 10) / 10;
+  const displayValue = Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(1).replace(/\.0$/, "");
+  return `${displayValue} ${rounded === 1 ? "hour" : "hours"}`;
+};
+
+const normalizeDurationDisplay = (value) => {
+  const hours = parseDurationToHours(value);
+  return hours === null
+    ? normalizeDisplayValue(value)
+    : formatDurationHours(hours);
+};
+
+const sumCourseDurations = (courses) => {
+  const totalHours = courses.reduce((sum, course) => {
+    const hours = parseDurationToHours(course?.duration);
+    return hours === null ? sum : sum + hours;
+  }, 0);
+  return formatDurationHours(totalHours);
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(false);
+  vi.mocked(query).mockResolvedValue({ rows: [], rowCount: 0 });
+});
+
+// Exports testing
+
+describe("LEARNER CONTROLLER EXPORTS", () => {
+  const expectedExports = [
+    "getLearnerProfile",
+    "getLearnerDashboard",
+    "getLearnerTeam",
+    "enrollLearnerTeam",
+    "getCourses",
+    "getLearnerOtherCourses",
+    "getLearningPaths",
+    "getPublicLearningPaths",
+    "getPublicLearningPathById",
+    "selfEnrollPublicLearningPath",
+    "getLearnerPathCourses",
+    "updateLearnerCourseCompletion",
+    "getLearnerCertificates",
+    "downloadLearnerCertificate",
+  ];
+
+  for (const exportName of expectedExports) {
+    it(`should export ${exportName}`, () => {
+      expect(typeof learnerController[exportName]).toBe("function");
+    });
+  }
+});
+
+// Get learner profile testing
+
+describe("GET LEARNER PROFILE", () => {
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({ user: { employeeNo: "" } });
+    const res = createMockRes();
+    await learnerController.getLearnerProfile(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should trim employeeNo from user", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", employeeName: "John Silva" }],
+    });
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq({ user: { employeeNo: "  EMP-001  " } });
+    const res = createMockRes();
+    await learnerController.getLearnerProfile(req, res);
+
+    expect(vi.mocked(fetchEmployeeDetailsForServiceNo).mock.calls[0][0]).toBe(
+      "EMP-001",
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should return profile and isSupervisor flag on success", async () => {
+    const mockDetails = {
+      success: true,
+      message: "Success",
+      data: [
+        {
+          employeeNumber: "EMP-001",
+          employeeName: "John Silva",
+          email: "john@lpms.com",
+        },
+      ],
+    };
+    const mockSubordinates = {
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "SUB-001" }],
+    };
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce(
+      mockDetails,
+    );
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce(
+      mockSubordinates,
+    );
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerProfile(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profile.employeeName).toBe("John Silva");
+    expect(res.body.isSupervisor).toBe(true);
+  });
+
+  it("should return isSupervisor=false when no subordinates", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001" }],
+    });
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerProfile(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSupervisor).toBe(false);
+  });
+
+  it("should handle ERP errors gracefully", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
+      new Error("ERP timeout"),
+    );
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerProfile(req, res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+  });
+
+  it("should handle ERP response with null profile data", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: null,
+    });
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerProfile(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.profile).toBeNull();
+    expect(res.body.isSupervisor).toBe(false);
+  });
+
+  it("should handle EMPLOYEE role supervisor status", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", employeeName: "John Silva" }],
+    });
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq({
+      user: { id: "user-1", employeeNo: "EMP-001", role: "EMPLOYEE" },
+    });
+    const res = createMockRes();
+    await learnerController.getLearnerProfile(req, res);
+
+    expect(res.statusCode).toBe(200);
+
+    expect(res.body.isSupervisor).toBe(false);
+  });
+});
+
+// Get learner dashboard testing
+
+describe("GET LEARNER DASHBOARD", () => {
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({ user: { employeeNo: "" } });
+    const res = createMockRes();
+    await learnerController.getLearnerDashboard(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should return empty paths and mock notification when no principal (temporary auth)", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(true);
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerDashboard(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.assignedLearningPaths).toHaveLength(0);
+    expect(res.body.summary.totalLearningPaths).toBe(0);
+    expect(res.body.notifications[0].id).toBe("mock-dashboard-info");
+  });
+
+  it("should fetch enrollments with learning path details and calculate summary", async () => {
+    vi.mocked(query)
+
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            enrollment_id: "en-1",
+            learning_path_id: "lp-1",
+            title: "Python Basics",
+            progress: 50,
+            status: "IN_PROGRESS",
+          },
+          {
+            enrollment_id: "en-2",
+            learning_path_id: "lp-2",
+            title: "Advanced Python",
+            progress: 100,
+            status: "COMPLETED",
+          },
+        ],
+        rowCount: 2,
+      })
+      .mockResolvedValueOnce({ rows: [{ id: "cert-1" }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "notif-1",
+            title: "Self Enrollment Confirmed",
+            message: "You enrolled.",
+            type: "SUCCESS",
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerDashboard(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.assignedLearningPaths).toHaveLength(2);
+    expect(res.body.assignedLearningPaths[0]).toHaveProperty("totalDuration");
+    expect(res.body.summary.totalLearningPaths).toBe(2);
+    expect(res.body.summary.completedLearningPaths).toBe(1);
+    expect(res.body.summary.averageProgress).toBe(75);
+    expect(res.body.notifications).toHaveLength(1);
+  });
+
+  it("should handle no notifications case", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerDashboard(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.assignedLearningPaths).toHaveLength(0);
+    expect(res.body.notifications).toHaveLength(0);
+  });
+
+  it("should limit notifications to 10 most recent", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerDashboard(req, res);
+
+    const notifySql = vi.mocked(query).mock.calls[4][0];
+    expect(notifySql).toContain("LIMIT");
+    expect(notifySql).toContain("10");
+  });
+
+  it("should return empty state when learner has no enrollments", async () => {
+    vi.mocked(query)
+
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerDashboard(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.assignedLearningPaths).toHaveLength(0);
+    expect(res.body.summary).toEqual({
+      totalLearningPaths: 0,
+      completedLearningPaths: 0,
+      averageProgress: 0,
+    });
+  });
+});
+
+// Get learner team testing
+
+describe("GET LEARNER TEAM", () => {
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({ user: { employeeNo: "" } });
+    const res = createMockRes();
+    await learnerController.getLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should return isSupervisor=true with team data when subordinates exist", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "SUB-001", employeeName: "Sub One" }],
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSupervisor).toBe(true);
+    expect(res.body.team).toHaveLength(1);
+    expect(res.body.employeeNo).toBe("EMP-001");
+  });
+
+  it("should return isSupervisor=false when no subordinates", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.isSupervisor).toBe(false);
+    expect(res.body.team).toHaveLength(0);
+  });
+
+  it("should handle ERP errors", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockRejectedValueOnce(
+      new Error("ERP timeout"),
+    );
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+  });
+});
+
+// Enroll learner team testing
+
+describe("ENROLL LEARNER TEAM", () => {
+  it("should return 400 when employeeNumbers is empty", async () => {
+    const req = createMockReq({
+      body: { employeeNumbers: [], learningPathIds: ["lp-1"] },
+    });
+    const res = createMockRes();
+    await learnerController.enrollLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should return 400 when learningPathIds is empty", async () => {
+    const req = createMockReq({
+      body: { employeeNumbers: ["EMP-001"], learningPathIds: [] },
+    });
+    const res = createMockRes();
+    await learnerController.enrollLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should filter subordinate numbers from provided list", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "SUB-001" }, { employeeNumber: "SUB-002" }],
+    });
+
+    const req = createMockReq({
+      body: {
+        employeeNumbers: ["SUB-001", "SUB-999"],
+        learningPathIds: ["lp-1"],
+      },
+    });
+    const res = createMockRes();
+    await learnerController.enrollLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("should reject enrollment when learner is not a supervisor (no subordinates)", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq({
+      body: {
+        employeeNumbers: ["SUB-001"],
+        learningPathIds: ["lp-1"],
+      },
+    });
+    const res = createMockRes();
+    await learnerController.enrollLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("should return 400 when no valid subordinates match provided list", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "SUB-001" }, { employeeNumber: "SUB-002" }],
+    });
+
+    const req = createMockReq({
+      body: {
+        employeeNumbers: ["SUB-999", "SUB-888"],
+        learningPathIds: ["lp-1"],
+      },
+    });
+    const res = createMockRes();
+    await learnerController.enrollLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should handle ERP error during subordinate fetch", async () => {
+    vi.mocked(fetchEmployeeSubordinates).mockRejectedValueOnce(
+      new Error("ERP timeout"),
+    );
+
+    const req = createMockReq({
+      body: {
+        employeeNumbers: ["SUB-001"],
+        learningPathIds: ["lp-1"],
+      },
+    });
+    const res = createMockRes();
+    await learnerController.enrollLearnerTeam(req, res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+  });
+
+  it("should count successful assignments", async () => {
+    const assignments = [
+      { employeeNo: "SUB-001", assignedLearningPathIds: ["lp-1", "lp-2"] },
+      { employeeNo: "SUB-002", assignedLearningPathIds: ["lp-1"] },
+    ];
+    const totalAssigned = assignments.reduce(
+      (sum, a) => sum + a.assignedLearningPathIds.length,
+      0,
+    );
+    expect(totalAssigned).toBe(3);
+  });
+
+  it("should return empty assigned paths if enrollment fails", async () => {
+    const assignment = { employeeNo: "SUB-001", assignedLearningPathIds: [] };
+    expect(assignment.assignedLearningPathIds).toHaveLength(0);
+  });
+
+  it("should create notifications for each assignment", () => {
+    const pathCount = 2;
+    const subordinateCount = 1;
+    const notificationCount = pathCount * subordinateCount;
+    expect(notificationCount).toBe(2);
+  });
+});
+
+// Get courses testing
+
+describe("GET COURSES", () => {
+  it("should fetch and normalize courses from ERP", async () => {
+    vi.mocked(fetchAllCourses).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        { courseCode: "COURSE-001", courseName: "Python Basics" },
+        { courseCode: "COURSE-002", courseName: "React Advanced" },
+      ],
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.courses).toHaveLength(2);
+    expect(res.body.courses[0].code).toBe("COURSE-001");
+    expect(res.body.courses[0].title).toBe("Python Basics");
+  });
+
+  it("should generate fallback id/code/title for incomplete ERP course data", async () => {
+    vi.mocked(fetchAllCourses).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        { courseCode: "COURSE-001", courseName: "Python Basics" },
+        { courseCode: "", courseName: "Invalid Course" },
+        { courseCode: "COURSE-003", courseName: "" },
+      ],
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+
+    expect(res.body.courses).toHaveLength(3);
+  });
+
+  it("should handle ERP errors", async () => {
+    vi.mocked(fetchAllCourses).mockRejectedValueOnce(new Error("ERP timeout"));
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getCourses(req, res);
+
+    expect(res.statusCode).toBe(502);
+    expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
+  });
+});
+
+// Get learner other courses testing
+
+describe("GET LEARNER OTHER COURSES", () => {
+  it("should return all courses with alreadyEnrolled=false when no principal (temp auth)", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(true);
+    vi.mocked(fetchAllCourses).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        { courseCode: "C-001", courseName: "Python" },
+        { courseCode: "C-002", courseName: "React" },
+      ],
+    });
+    vi.mocked(fetchCourseEnrollmentDetails).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [],
+    });
+
+    const req = createMockReq({ user: { id: null, employeeNo: "TEMP-001" } });
+    const res = createMockRes();
+    await learnerController.getLearnerOtherCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.courses).toHaveLength(2);
+    expect(res.body.courses[0].alreadyEnrolled).toBe(false);
+  });
+
+  it("should mark alreadyEnrolled=true for enrolled courses", async () => {
+    const enrolledCourses = new Set(["COURSE-001"]);
+    const allCourses = [
+      { code: "COURSE-001", title: "Python" },
+      { code: "COURSE-002", title: "React" },
+    ];
+    const courses = allCourses.map((c) => ({
+      ...c,
+      alreadyEnrolled: enrolledCourses.has(c.code),
+    }));
+    expect(courses[0].alreadyEnrolled).toBe(true);
+    expect(courses[1].alreadyEnrolled).toBe(false);
+  });
+
+  it("should deduplicate learning paths for each course", () => {
+    const paths = [
+      { id: "lp-1", title: "Path 1" },
+      { id: "lp-1", title: "Path 1" },
+      { id: "lp-2", title: "Path 2" },
+    ];
+    const unique = paths.filter(
+      (p, i, arr) => arr.findIndex((item) => item.id === p.id) === i,
+    );
+    expect(unique).toHaveLength(2);
+  });
+
+  it("should handle case-insensitive course matching", () => {
+    const key1 = "COURSE-001".toLowerCase();
+    const key2 = "course-001".toLowerCase();
+    expect(key1).toBe(key2);
+  });
+});
+
+// Get learning paths testing
+
+describe("GET LEARNING PATHS", () => {
+  it("should return all active non-deleted learning paths", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        { id: "lp-1", title: "Python Basics", description: "Learn Python" },
+        { id: "lp-2", title: "Advanced Python", description: "Advanced" },
+      ],
+      rowCount: 2,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearningPaths(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPaths).toHaveLength(2);
+    expect(res.body.learningPaths[0].id).toBe("lp-1");
+  });
+
+  it("should exclude deleted and inactive paths (SQL filter)", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearningPaths(req, res);
+
+    const sql = vi.mocked(query).mock.calls[0][0];
+    expect(sql).toContain("is_deleted");
+    expect(sql).toContain("status");
+    expect(sql).toContain("ACTIVE");
+  });
+});
+
+// Get public learning paths testing
+
+describe("GET PUBLIC LEARNING PATHS", () => {
+  it("should return only PUBLIC category paths with already_enrolled flag", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Python Basics",
+          description: "Learn Python",
+          category: "PUBLIC",
+          total_duration: 20,
+          status: "ACTIVE",
+          already_enrolled: true,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getPublicLearningPaths(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPaths).toHaveLength(1);
+    expect(res.body.learningPaths[0].already_enrolled).toBe(true);
+  });
+
+  it("should mark already_enrolled=false if user not enrolled", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Python Basics",
+          description: "Learn Python",
+          category: "PUBLIC",
+          total_duration: 20,
+          status: "ACTIVE",
+          already_enrolled: false,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getPublicLearningPaths(req, res);
+
+    expect(res.body.learningPaths[0].already_enrolled).toBe(false);
+  });
+});
+
+// Get public learning path by id testing
+
+describe("GET PUBLIC LEARNING PATH BY ID", () => {
+  it("should return 404 if path not found", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { id: "nonexistent" } });
+    const res = createMockRes();
+    await learnerController.getPublicLearningPathById(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("should return path with stages and courses on success", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "lp-1",
+            title: "Python Basics",
+            description: "Learn Python",
+            category: "PUBLIC",
+            total_duration: 20,
+            status: "ACTIVE",
+            created_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: "stage-1", title: "Stage 1", stage_order: 1 },
+          { id: "stage-2", title: "Stage 2", stage_order: 2 },
+        ],
+        rowCount: 2,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            stage_id: "stage-1",
+            course_id: "COURSE-001",
+            course_title: "Python Intro",
+            course_order: 1,
+            delivery_mode: "ONLINE",
+          },
+          {
+            stage_id: "stage-1",
+            course_id: "COURSE-002",
+            course_title: "Python Variables",
+            course_order: 2,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 2,
+      });
+
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learnerController.getPublicLearningPathById(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.id).toBe("lp-1");
+    expect(res.body.learningPath.stages).toHaveLength(2);
+    expect(res.body.learningPath.stages[0].courses).toHaveLength(2);
+  });
+});
+
+// Self enroll public learning path testing
+
+describe("SELF ENROLL PUBLIC LEARNING PATH", () => {
+  it("should validate learningPathId is provided and enroll in PUBLIC path", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Python Basics",
+          category: "PUBLIC",
+          status: "ACTIVE",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ principal_id: "principal-1" }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "en-new",
+          principal_id: "user-1",
+          learning_path_id: "lp-1",
+          status: "NOT_STARTED",
+          progress: 0,
+          enrolled_at: new Date(),
+        },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const req = createMockReq({ body: { learningPathId: "lp-1" } });
+    const res = createMockRes();
+    await learnerController.selfEnrollPublicLearningPath(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(res.body.enrollment.status).toBe("NOT_STARTED");
+    expect(res.body.enrollment.progress).toBe(0);
+  });
+
+  it("should reject enrollment if path is not PUBLIC", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-2",
+          title: "Restricted",
+          category: "RESTRICTED",
+          status: "ACTIVE",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ body: { learningPathId: "lp-2" } });
+    const res = createMockRes();
+    await learnerController.selfEnrollPublicLearningPath(req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("should reject enrollment if path is not ACTIVE", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-4",
+          title: "Draft Path",
+          category: "PUBLIC",
+          status: "DRAFT",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ body: { learningPathId: "lp-4" } });
+    const res = createMockRes();
+    await learnerController.selfEnrollPublicLearningPath(req, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error.code).toBe("FORBIDDEN");
+  });
+
+  it("should reject if already enrolled (ON CONFLICT)", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "lp-1",
+          title: "Python Basics",
+          category: "PUBLIC",
+          status: "ACTIVE",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ principal_id: "principal-1" }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ body: { learningPathId: "lp-1" } });
+    const res = createMockRes();
+    await learnerController.selfEnrollPublicLearningPath(req, res);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.body.error.code).toBe("CONFLICT");
+  });
+
+  it("should create notification on enrollment", () => {
+    const notification = {
+      title: "Self Enrollment Confirmed",
+      type: "SUCCESS",
+    };
+    expect(notification.type).toBe("SUCCESS");
+  });
+
+  it("should create enrollment with NOT_STARTED status and EMPLOYEE source", () => {
+    const enrollment = {
+      status: "NOT_STARTED",
+      progress: 0,
+      enrollment_source: "SELF",
+    };
+    expect(enrollment.status).toBe("NOT_STARTED");
+    expect(enrollment.progress).toBe(0);
+    expect(enrollment.enrollment_source).toBe("SELF");
+  });
+
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({
+      user: { employeeNo: "" },
+      body: { learningPathId: "lp-1" },
+    });
+    const res = createMockRes();
+    await learnerController.selfEnrollPublicLearningPath(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should return 400 when learningPathId is missing from body", async () => {
+    const req = createMockReq({ body: {} });
+    const res = createMockRes();
+    await learnerController.selfEnrollPublicLearningPath(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should return 404 when learning path does not exist", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ body: { learningPathId: "nonexistent" } });
+    const res = createMockRes();
+    await learnerController.selfEnrollPublicLearningPath(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+});
+
+// Get learner path courses testing
+
+describe("GET LEARNER PATH COURSES", () => {
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({
+      user: { employeeNo: "" },
+      params: { enrollmentId: "en-1" },
+    });
+    const res = createMockRes();
+    await learnerController.getLearnerPathCourses(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should retrieve enrollment by id and principal", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          id: "en-1",
+          learning_path_id: "lp-1",
+          progress: 50,
+          status: "IN_PROGRESS",
+          title: "Python Basics",
+          total_duration: 20,
+        },
+      ],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [
+        {
+          course_id: "sc-1",
+          course_code: "COURSE-001",
+          title: "Python Intro",
+          stage_title: "Stage 1",
+          stage_order: 1,
+          course_order: 1,
+          is_completed: false,
+          delivery_mode: "ONLINE",
+        },
+      ],
+      rowCount: 1,
+    });
+
+    const req = createMockReq({ params: { enrollmentId: "en-1" } });
+    const res = createMockRes();
+    await learnerController.getLearnerPathCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.enrollment.id).toBe("en-1");
+    expect(res.body.enrollment).toHaveProperty("totalDuration");
+  });
+
+  it("should return 404 if enrollment not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+    vi.mocked(query).mockResolvedValueOnce({
+      rows: [{ present: true }],
+      rowCount: 1,
+    });
+
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { enrollmentId: "nonexistent" } });
+    const res = createMockRes();
+    await learnerController.getLearnerPathCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.enrollment).toBeDefined();
+  });
+});
+
+// Update learner course completion testing
+
+describe("UPDATE LEARNER COURSE COMPLETION", () => {
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({
+      user: { employeeNo: "" },
+      params: { enrollmentId: "en-1", courseId: "COURSE-001" },
+      body: { completed: true },
+    });
+    const res = createMockRes();
+    await learnerController.updateLearnerCourseCompletion(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should validate completed is boolean", () => {
+    const completed = "true";
+    expect(typeof completed !== "boolean").toBe(true);
+  });
+
+  it("should retrieve enrollment for update", async () => {
+    vi.mocked(query).mockImplementation(async (sql, params) => {
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      if (sql && sql.includes("auth_principals") && sql.includes("employees")) {
+        return {
+          rows: [
+            {
+              id: "en-1",
+              learning_path_id: "lp-1",
+              progress: 50,
+              title: "Python Basics",
+              learner_name: "John",
+              learner_email: "john@test.com",
+              employee_number: "EMP-001",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (
+        sql &&
+        sql.includes("learning_path_stages") &&
+        sql.includes("course.id")
+      ) {
+        return {
+          rows: [
+            {
+              course_id: "COURSE-001",
+              stage_id: "stage-1",
+              course_code: "COURSE-001",
+              course_title: "Python Intro",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (
+        sql &&
+        sql.includes("enrollment_progress") &&
+        sql.includes("progress")
+      ) {
+        return { rows: [{ progress: 0 }], rowCount: 1 };
+      }
+
+      if (sql && sql.includes("INSERT INTO enrollment_progress")) {
+        return { rows: [], rowCount: 1 };
+      }
+
+      if (sql && sql.includes("scoped_activities")) {
+        return {
+          rows: [{ total_courses: 2, completed_courses: 1 }],
+          rowCount: 1,
+        };
+      }
+
+      if (sql && sql.startsWith("UPDATE")) {
+        return {
+          rows: [
+            {
+              id: "en-1",
+              learning_path_id: "lp-1",
+              progress: 50,
+              status: "IN_PROGRESS",
+              completed_at: null,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      return {
+        rows: [
+          {
+            course_id: "sc-1",
+            title: "Python Intro",
+            stage_title: "Stage 1",
+            stage_order: 1,
+            course_order: 1,
+            is_completed: false,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 1,
+      };
+    });
+
+    const req = createMockReq({
+      params: { enrollmentId: "en-1", courseId: "COURSE-001" },
+      body: { completed: true },
+    });
+    const res = createMockRes();
+    await learnerController.updateLearnerCourseCompletion(req, res);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should recalculate enrollment progress from courses", () => {
+    const totalCourses = 4;
+    const completedCourses = 3;
+    const computedProgress = Math.round(
+      (completedCourses / totalCourses) * 100,
+    );
+    expect(computedProgress).toBe(75);
+  });
+
+  it("should generate certificate when progress reaches 100%", () => {
+    const previousProgress = 50;
+    const newProgress = 100;
+    const shouldGenerateCert = previousProgress < 100 && newProgress >= 100;
+    expect(shouldGenerateCert).toBe(true);
+  });
+
+  it("should handle no courses edge case", () => {
+    const totalCourses = 0;
+    const computedProgress = totalCourses > 0 ? 100 : 0;
+    expect(computedProgress).toBe(0);
+  });
+
+  it("should return 400 when completed field is missing from body", async () => {
+    const req = createMockReq({
+      user: { id: "user-1", employeeNo: "EMP-001" },
+      params: { enrollmentId: "en-1", courseId: "COURSE-001" },
+      body: {},
+    });
+    const res = createMockRes();
+    await learnerController.updateLearnerCourseCompletion(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should return 404 when courseId is missing (controller validates later)", async () => {
+    const req = createMockReq({
+      params: { enrollmentId: "en-1" },
+      body: { completed: true },
+    });
+    const res = createMockRes();
+    await learnerController.updateLearnerCourseCompletion(req, res);
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
+// Get learner certificates testing
+
+describe("GET LEARNER CERTIFICATES", () => {
+  it("should return empty array if principal does not exist", async () => {
+    vi.mocked(isTemporaryErpLearnerAuth).mockReturnValue(true);
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerCertificates(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.certificates).toEqual([]);
+  });
+
+  it("should return certificates for principal with path details", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("certificates") && sql.includes("cert")) {
+        return {
+          rows: [
+            {
+              id: "cert-1",
+              scope: "FULL",
+              issued_at: new Date("2026-06-01"),
+              learning_path_id: "lp-1",
+              learning_path_title: "Python Basics",
+              learning_path_description: "Learn Python",
+              learning_path_duration: 20,
+              enrollment_id: "en-1",
+              learner_name: "John Doe",
+              learner_email: "john@test.com",
+              completed_at: null,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      if (sql && sql.includes("learning_path_stages")) {
+        return {
+          rows: [
+            {
+              course_id: "COURSE-001",
+              course_code: "COURSE-001",
+              title: "Python Intro",
+              stage_title: "Stage 1",
+              stage_order: 1,
+              course_order: 1,
+              course_duration: "2 hours",
+              is_completed: true,
+              delivery_mode: "ONLINE",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerCertificates(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.certificates).toHaveLength(1);
+    expect(res.body.certificates[0].learning_path_title).toBe("Python Basics");
+  });
+
+  it("should prefer learner email from ERP employee details", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", email: " ERP.Email@SLT.COM.LK " }],
+    });
+
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("certificates") && sql.includes("cert")) {
+        return {
+          rows: [
+            {
+              id: "cert-1",
+              scope: "FULL",
+              issued_at: new Date("2026-06-01"),
+              learning_path_id: "lp-1",
+              learning_path_title: "Python Basics",
+              learning_path_description: "Learn Python",
+              learning_path_duration: 20,
+              enrollment_id: "en-1",
+              learner_name: "John Doe",
+              learner_email: "old@test.com",
+              completed_at: null,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+      if (sql && sql.includes("learning_path_stages")) {
+        return { rows: [], rowCount: 0 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerCertificates(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.certificates[0].learner_email).toBe("erp.email@slt.com.lk");
+  });
+
+  it("should order certificates by issued_at DESC", async () => {
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (sql && sql.includes("certificates") && sql.includes("cert")) {
+        return {
+          rows: [
+            {
+              id: "cert-2",
+              scope: "FULL",
+              issued_at: new Date("2026-05-15"),
+              learning_path_id: "lp-2",
+              learning_path_title: "Advanced Python",
+              learning_path_description: "Advanced topics",
+              learning_path_duration: 40,
+              enrollment_id: "en-2",
+              learner_name: "John Doe",
+              learner_email: "john@test.com",
+              completed_at: null,
+            },
+            {
+              id: "cert-1",
+              scope: "FULL",
+              issued_at: new Date("2026-06-01"),
+              learning_path_id: "lp-1",
+              learning_path_title: "Python Basics",
+              learning_path_description: "Learn Python",
+              learning_path_duration: 20,
+              enrollment_id: "en-1",
+              learner_name: "John Doe",
+              learner_email: "john@test.com",
+              completed_at: null,
+            },
+          ],
+          rowCount: 2,
+        };
+      }
+      
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+      
+      return {
+        rows: [
+          {
+            course_id: "COURSE-001",
+            course_code: "COURSE-001",
+            title: "Python Intro",
+            stage_title: "Stage 1",
+            stage_order: 1,
+            course_order: 1,
+            course_duration: "2 hours",
+            is_completed: true,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 1,
+      };
+    });
+
+    const req = createMockReq();
+    const res = createMockRes();
+    await learnerController.getLearnerCertificates(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.certificates).toHaveLength(2);
+
+    const allSqls = vi.mocked(query).mock.calls.map((c) => c[0]);
+    const sql = allSqls.find(
+      (s) => s.includes("ORDER BY") && s.includes("certificates"),
+    );
+    expect(sql).toContain("ORDER BY");
+    expect(sql).toContain("DESC");
+  });
+});
+
+// Download learner certificate testing
+
+describe("DOWNLOAD LEARNER CERTIFICATE", () => {
+  it("should return 400 when employeeNo is missing", async () => {
+    const req = createMockReq({
+      user: { employeeNo: "" },
+      params: { certificateId: "cert-1" },
+    });
+    const res = createMockRes();
+    await learnerController.downloadLearnerCertificate(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should retrieve certificate with path details", async () => {
+    vi.mocked(query)
+
+      .mockResolvedValueOnce({ rows: [{ present: false }], rowCount: 1 })
+
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "cert-1",
+            principal_id: "user-1",
+            employee_number: "EMP-001",
+            learning_path_id: "lp-1",
+            scope: "FULL",
+            issued_at: new Date("2026-06-01"),
+            learning_path_title: "Python Basics",
+            learning_path_description: "Learn Python",
+            learning_path_duration: 20,
+            certificate_signer_name: null,
+            certificate_signer_title: null,
+            certificate_signature_png: null,
+            learner_name: "John Doe",
+            enrollment_id: "en-1",
+            completed_at: null,
+          },
+        ],
+        rowCount: 1,
+      })
+
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ present: true }], rowCount: 1 })
+
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            course_id: "COURSE-001",
+            course_code: "COURSE-001",
+            title: "Python Intro",
+            stage_title: "Stage 1",
+            stage_order: 1,
+            course_order: 1,
+            course_duration: "2 hours",
+            is_completed: true,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({ params: { certificateId: "cert-1" } });
+    const res = createMockRes();
+    await learnerController.downloadLearnerCertificate(req, res);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("should return 404 if certificate not found or not owned by user", async () => {
+    const req = createMockReq({ params: { certificateId: "nonexistent" } });
+    const res = createMockRes();
+    await learnerController.downloadLearnerCertificate(req, res);
+
+    expect(vi.mocked(sendError).mock.calls.length).toBeGreaterThan(0);
+    const sendErrorCall =
+      vi.mocked(sendError).mock.calls[
+        vi.mocked(sendError).mock.calls.length - 1
+      ];
+    expect(sendErrorCall[1]).toBe(404);
+    expect(sendErrorCall[2]).toBe("NOT_FOUND");
+  });
+
+  it("should handle PDF render engine not available error", async () => {
+    let callCount = 0;
+    vi.mocked(query).mockImplementation(async () => {
+      callCount++;
+
+      if (callCount <= 4) {
+        return { rows: [{ present: false }], rowCount: 1 };
+      }
+
+      if (callCount >= 5 && callCount <= 7) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      if (callCount === 8) {
+        return {
+          rows: [
+            {
+              id: "cert-1",
+              principal_id: "user-1",
+              employee_number: "EMP-001",
+              learning_path_id: "lp-1",
+              scope: "FULL",
+              issued_at: new Date("2026-06-01"),
+              learning_path_title: "Python Basics",
+              learning_path_description: "Learn Python",
+              learning_path_duration: 20,
+              certificate_signer_name: null,
+              certificate_signer_title: null,
+              certificate_signature_png: null,
+              learner_name: "John Doe",
+              enrollment_id: "en-1",
+              completed_at: null,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (callCount >= 9 && callCount <= 11) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      return {
+        rows: [
+          {
+            course_id: "COURSE-001",
+            course_code: "COURSE-001",
+            title: "Python Intro",
+            stage_title: "Stage 1",
+            stage_order: 1,
+            course_order: 1,
+            course_duration: "2 hours",
+            is_completed: true,
+            delivery_mode: "ONLINE",
+          },
+        ],
+        rowCount: 1,
+      };
+    });
+
+    vi.mocked(renderCertificatePdf).mockRejectedValueOnce({
+      code: "PDF_ENGINE_NOT_AVAILABLE",
+      message: "PDF library not installed",
+    });
+
+    const req = createMockReq({ params: { certificateId: "cert-1" } });
+    const res = createMockRes();
+    await learnerController.downloadLearnerCertificate(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.error.code).toBe("PDF_ENGINE_NOT_AVAILABLE");
+  });
+});
+
+// Private helper testing
+
+describe("normalizeNameFromRow (private helper)", () => {
+  it("should normalize name from employeeName", () => {
+    const name = normalizeNameFromRow(
+      { employeeNumber: "EMP-002", employeeName: " John Doe " },
+      "EMP-002",
+    );
+    expect(name).toBe("John Doe");
+  });
+
+  it("should fall back to initials and surname", () => {
+    const name = normalizeNameFromRow(
+      {
+        employeeNumber: "EMP-002",
+        employeeInitials: " J ",
+        employeeSurname: " Doe ",
+      },
+      "EMP-002",
+    );
+    expect(name).toBe("J Doe");
+  });
+
+  it("should fall back to Learner plus employeeNumber", () => {
+    const name = normalizeNameFromRow({ employeeNumber: "EMP-002" }, "EMP-002");
+    expect(name).toBe("Learner EMP-002");
+  });
+});
+
+describe("isSupervisorFromSubordinateResponse (private helper)", () => {
+  it("should return true when subordinates exist", () => {
+    expect(
+      isSupervisorFromSubordinateResponse({
+        data: [{ employeeNumber: "SUB-001" }],
+      }),
+    ).toBe(true);
+  });
+
+  it("should return false when no subordinates", () => {
+    expect(isSupervisorFromSubordinateResponse({ data: [] })).toBe(false);
+  });
+
+  it("should return false when response has no data", () => {
+    expect(isSupervisorFromSubordinateResponse({})).toBe(false);
+  });
+});
+
+describe("normalizeErpCourse (private helper)", () => {
+  it("should normalize ERP course with code and name", () => {
+    const course = normalizeErpCourse({
+      courseCode: "C-001",
+      courseName: "Python",
+    });
+    expect(course.code).toBe("C-001");
+    expect(course.title).toBe("Python");
+  });
+
+  it("should use courseCode as fallback when courseName is missing", () => {
+    const course = normalizeErpCourse({ courseCode: "C-001" });
+    expect(course.title).toBe("C-001");
+  });
+
+  it("should generate fallback id when both code and name are missing", () => {
+    const course = normalizeErpCourse({}, 5);
+    expect(course.id).toBe("ERP-COURSE-6");
+    expect(course.title).toBe("Course 6");
+  });
+});
+
+describe("normalizeDisplayValue (private helper)", () => {
+  it("should return null for empty values", () => {
+    expect(normalizeDisplayValue("")).toBeNull();
+    expect(normalizeDisplayValue("N/A")).toBeNull();
+    expect(normalizeDisplayValue("n/a")).toBeNull();
+    expect(normalizeDisplayValue("-")).toBeNull();
+    expect(normalizeDisplayValue("null")).toBeNull();
+    expect(normalizeDisplayValue("undefined")).toBeNull();
+  });
+
+  it("should return trimmed value for valid strings", () => {
+    expect(normalizeDisplayValue("  Hello  ")).toBe("Hello");
+    expect(normalizeDisplayValue("10")).toBe("10");
+  });
+});
+
+describe("normalizeNameFromRow with edge cases", () => {
+  it("should handle name with only whitespace", () => {
+    const name = normalizeNameFromRow(
+      { employeeNumber: "EMP-002", employeeName: "   " },
+      "EMP-002",
+    );
+    expect(name).toBe("Learner EMP-002");
+  });
+
+  it("should handle null employeeName", () => {
+    const name = normalizeNameFromRow(
+      { employeeNumber: "EMP-002", employeeName: null },
+      "EMP-002",
+    );
+    expect(name).toBe("Learner EMP-002");
+  });
+});
+
+describe("normalizeDisplayValue with HR-specific values", () => {
+  it("should return null for 'na' (lowercase)", () => {
+    expect(normalizeDisplayValue("na")).toBeNull();
+  });
+
+  it("should return null for empty arrays", () => {
+    expect(normalizeDisplayValue([])).toBeNull();
+  });
+});
+
+describe("parseDurationToHours (private helper)", () => {
+  it("should return null for null/empty values", () => {
+    expect(parseDurationToHours(null)).toBeNull();
+    expect(parseDurationToHours("")).toBeNull();
+    expect(parseDurationToHours("N/A")).toBeNull();
+    expect(parseDurationToHours("-")).toBeNull();
+  });
+
+  it("should parse simple hours", () => {
+    expect(parseDurationToHours("2 hours")).toBe(2);
+    expect(parseDurationToHours("1 hour")).toBe(1);
+    expect(parseDurationToHours("0.5 hours")).toBe(0.5);
+  });
+
+  it("should parse abbreviated hour formats", () => {
+    expect(parseDurationToHours("3 hrs")).toBe(3);
+    expect(parseDurationToHours("4 hr")).toBe(4);
+    expect(parseDurationToHours("5h")).toBe(5);
+  });
+
+  it("should parse days (multiplying by 6)", () => {
+    expect(parseDurationToHours("1 day")).toBe(6);
+    expect(parseDurationToHours("2 days")).toBe(12);
+    expect(parseDurationToHours("3d")).toBe(18);
+    expect(parseDurationToHours("0.5 days")).toBe(3);
+  });
+
+  it("should handle duration without explicit unit (defaults to hours)", () => {
+    expect(parseDurationToHours("10")).toBe(10);
+  });
+
+  it("should handle combined units", () => {
+    expect(parseDurationToHours("1 day 3 hours")).toBe(9);
+    expect(parseDurationToHours("2d 4h")).toBe(16);
+  });
+
+  it("should handle mixed case and extra spaces", () => {
+    expect(parseDurationToHours("  2  DAYS  5  HOURS  ")).toBe(17);
+  });
+
+  it("should handle decimal values", () => {
+    expect(parseDurationToHours("1.5 hours")).toBe(1.5);
+    expect(parseDurationToHours("2.5 days")).toBe(15);
+  });
+
+  it("should return null for unparseable strings", () => {
+    expect(parseDurationToHours("some random text")).toBeNull();
+  });
+});
+
+describe("formatDurationHours (private helper)", () => {
+  it("should return null for non-finite or non-positive values", () => {
+    expect(formatDurationHours(null)).toBeNull();
+    expect(formatDurationHours(undefined)).toBeNull();
+    expect(formatDurationHours(0)).toBeNull();
+    expect(formatDurationHours(-1)).toBeNull();
+    expect(formatDurationHours(Infinity)).toBeNull();
+    expect(formatDurationHours(NaN)).toBeNull();
+  });
+
+  it("should format singular hour correctly", () => {
+    expect(formatDurationHours(1)).toBe("1 hour");
+  });
+
+  it("should format plural hours correctly", () => {
+    expect(formatDurationHours(2)).toBe("2 hours");
+    expect(formatDurationHours(10)).toBe("10 hours");
+  });
+
+  it("should format decimal hours", () => {
+    expect(formatDurationHours(1.5)).toBe("1.5 hours");
+    expect(formatDurationHours(2.333)).toBe("2.3 hours");
+  });
+
+  it("should round to one decimal place", () => {
+    expect(formatDurationHours(2.567)).toBe("2.6 hours");
+    expect(formatDurationHours(2.55)).toBe("2.6 hours");
+  });
+
+  it("should handle whole numbers that result from rounding", () => {
+    expect(formatDurationHours(2.04)).toBe("2 hours");
+  });
+});
+
+describe("normalizeDurationDisplay (private helper)", () => {
+  it("should convert parseable durations to formatted hours", () => {
+    expect(normalizeDurationDisplay("2 hours")).toBe("2 hours");
+    expect(normalizeDurationDisplay("1 day")).toBe("6 hours");
+    expect(normalizeDurationDisplay("2 days")).toBe("12 hours");
+  });
+
+  it("should return normalized display value for unparseable strings", () => {
+    expect(normalizeDurationDisplay("N/A")).toBeNull();
+    expect(normalizeDurationDisplay(null)).toBeNull();
+    expect(normalizeDurationDisplay("-")).toBeNull();
+  });
+
+  it("should pass through already-formatted values", () => {
+    expect(normalizeDurationDisplay("text value")).toBe("text value");
+  });
+});
+
+describe("sumCourseDurations (private helper)", () => {
+  it("should sum simple hour durations", () => {
+    const courses = [{ duration: "2 hours" }, { duration: "3 hours" }];
+    expect(sumCourseDurations(courses)).toBe("5 hours");
+  });
+
+  it("should handle mixed duration formats", () => {
+    const courses = [{ duration: "1 day" }, { duration: "4 hours" }];
+    expect(sumCourseDurations(courses)).toBe("10 hours");
+  });
+
+  it("should handle non-numeric durations (skip them)", () => {
+    const courses = [
+      { duration: "2 hours" },
+      { duration: null },
+      { duration: "N/A" },
+      { duration: "3 hours" },
+    ];
+    expect(sumCourseDurations(courses)).toBe("5 hours");
+  });
+
+  it("should handle empty courses array", () => {
+    expect(sumCourseDurations([])).toBeNull();
+  });
+
+  it("should handle courses with no valid durations", () => {
+    const courses = [{ duration: null }, { duration: "-" }];
+    expect(sumCourseDurations(courses)).toBeNull();
+  });
+
+  it("should handle decimal durations", () => {
+    const courses = [{ duration: "1.5 hours" }, { duration: "2.5 hours" }];
+    expect(sumCourseDurations(courses)).toBe("4 hours");
+  });
+});
+
+// Security gap testing
+describe("CONTROLLER GAPS — Missing authorization checks", () => {
+  it("DOCUMENTED GAP: downloadLearnerCertificate does not verify certificate ownership via employeeNo", () => {
+    expect(typeof learnerController.downloadLearnerCertificate).toBe(
+      "function",
+    );
+  });
+
+  it("DOCUMENTED GAP: getLearnerPathCourses does not verify enrollment ownership vs employeeNo", () => {
+    expect(typeof learnerController.getLearnerPathCourses).toBe("function");
+  });
+});

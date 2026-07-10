@@ -22,7 +22,7 @@ router.post(
   '/',
   protect,
   requireRole([ROLES.SUPER_ADMIN]),
-  requireFields(['email', 'password', 'role']),
+  requireFields(['name', 'email', 'password', 'role']),
   createUser
 );
 router.get('/', protect, requireRole([ROLES.SUPER_ADMIN]), getAllUsers);
