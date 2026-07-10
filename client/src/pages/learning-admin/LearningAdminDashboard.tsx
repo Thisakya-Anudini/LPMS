@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck } from 'lucide-react';
+import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck, Sparkles } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
@@ -31,7 +31,7 @@ type LearningSummary = {
   totalCertificates: number;
 };
 
-const FULL_COMPLETION_VALUE = 'ALL';
+const SELECT_LEARNING_PATH_VALUE = '';
 
 const formatNumber = (value: number) => new Intl.NumberFormat().format(value);
 
@@ -161,13 +161,78 @@ function DistributionDonut({ data }: { data: ChartDatum[] }) {
   );
 }
 
+function CompletionPreview() {
+  return (
+    <div className="grid gap-6 md:grid-cols-[220px_1fr] md:items-center">
+      <div className="relative mx-auto h-44 w-44">
+        <div className="absolute inset-2 animate-pulse rounded-full bg-primary-100/70 blur-xl" />
+        <svg viewBox="0 0 140 140" className="relative h-full w-full" role="img" aria-label="Learning path completion preview">
+          <circle cx="70" cy="70" r="54" fill="none" stroke="#e2e8f0" strokeWidth="14" />
+          <g className="origin-center animate-spin [animation-duration:6s]">
+            <circle
+              cx="70"
+              cy="70"
+              r="54"
+              fill="none"
+              stroke="#0ea5e9"
+              strokeLinecap="round"
+              strokeWidth="14"
+              strokeDasharray="112 228"
+              strokeDashoffset="14"
+            />
+            <circle
+              cx="70"
+              cy="70"
+              r="54"
+              fill="none"
+              stroke="#22c55e"
+              strokeLinecap="round"
+              strokeWidth="14"
+              strokeDasharray="72 268"
+              strokeDashoffset="-118"
+            />
+            <circle
+              cx="70"
+              cy="70"
+              r="54"
+              fill="none"
+              stroke="#f59e0b"
+              strokeLinecap="round"
+              strokeWidth="14"
+              strokeDasharray="42 298"
+              strokeDashoffset="-210"
+            />
+          </g>
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+          <Sparkles className="h-8 w-8 animate-bounce-subtle text-primary-600" />
+          <span className="mt-2 text-xs font-semibold uppercase text-secondary-500">Select A LP</span>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          { label: 'Total assignments', tone: 'bg-primary-50 text-primary-700' },
+          { label: 'Completed', tone: 'bg-success-50 text-success-700' },
+          { label: 'Certificates', tone: 'bg-warning-50 text-warning-700' }
+        ].map((item) => (
+          <div key={item.label} className="rounded-lg border border-secondary-200 bg-secondary-50/60 p-4">
+            <div className={`mb-4 h-10 w-10 animate-pulse rounded-lg ${item.tone}`} />
+            <p className="text-sm font-medium text-secondary-600">{item.label}</p>
+            <div className="mt-3 h-8 w-16 animate-pulse rounded-md bg-secondary-200" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function LearningAdminDashboard() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [paths, setPaths] = useState<LearningPathRow[]>([]);
   const [summary, setSummary] = useState<LearningSummary | null>(null);
   const [completionSummary, setCompletionSummary] = useState<LearningSummary | null>(null);
-  const [selectedLearningPathId, setSelectedLearningPathId] = useState(FULL_COMPLETION_VALUE);
+  const [selectedLearningPathId, setSelectedLearningPathId] = useState(SELECT_LEARNING_PATH_VALUE);
   const [completionLoading, setCompletionLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -189,7 +254,6 @@ export function LearningAdminDashboard() {
         ]);
         setPaths(pathsResponse.learningPaths);
         setSummary(summaryResponse.summary);
-        setCompletionSummary(summaryResponse.summary);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to load learning paths.';
         setError(message);
@@ -207,9 +271,9 @@ export function LearningAdminDashboard() {
       return;
     }
 
-    if (selectedLearningPathId === FULL_COMPLETION_VALUE) {
+    if (selectedLearningPathId === SELECT_LEARNING_PATH_VALUE) {
       setCompletionLoading(false);
-      setCompletionSummary(summary);
+      setCompletionSummary(null);
       return;
     }
 
@@ -243,7 +307,7 @@ export function LearningAdminDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [getAccessToken, loading, selectedLearningPathId, showToast, summary]);
+  }, [getAccessToken, loading, selectedLearningPathId, showToast]);
 
   const stats = useMemo(() => {
     const publicCount = paths.filter((path) => path.category === 'PUBLIC').length;
@@ -258,13 +322,11 @@ export function LearningAdminDashboard() {
   const completionRate = clampPercentage(completionSummary?.completionRate ?? 0);
   const totalEnrollments = completionSummary?.totalEnrollments ?? 0;
   const completedEnrollments = completionSummary?.completedEnrollments ?? 0;
-  const selectedCompletionLabel =
-    selectedLearningPathId === FULL_COMPLETION_VALUE
-      ? 'Full completion'
-      : paths.find((path) => path.id === selectedLearningPathId)?.title ?? 'Selected learning path';
+  const hasSelectedLearningPath = selectedLearningPathId !== SELECT_LEARNING_PATH_VALUE;
+  const selectedCompletionLabel = paths.find((path) => path.id === selectedLearningPathId)?.title ?? 'Selected learning path';
 
   const learningPathOptions = [
-    { value: FULL_COMPLETION_VALUE, label: 'Full completion' },
+    { value: SELECT_LEARNING_PATH_VALUE, label: 'Select A LP' },
     ...paths.map((path) => ({ value: path.id, label: path.title }))
   ];
 
@@ -347,6 +409,8 @@ export function LearningAdminDashboard() {
                 <Skeleton className="h-16 w-full" />
               </div>
             </div>
+          ) : !hasSelectedLearningPath ? (
+            <CompletionPreview />
           ) : (
             <div className="space-y-5">
               <div className="rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">

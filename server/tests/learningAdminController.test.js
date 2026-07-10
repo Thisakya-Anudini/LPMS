@@ -1923,6 +1923,85 @@ describe("GET CLASS ASSIGNMENT OPTIONS", () => {
     expect(res.body.learningPath.title).toBe("Python Basics");
   });
 
+  it("should prefer ERP email in class assignment learner options", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", email: "erp.learner@example.com" }],
+    });
+
+    vi.mocked(query).mockImplementation(async (sql) => {
+      if (
+        sql &&
+        sql.includes("FROM learning_paths") &&
+        sql.includes("is_deleted")
+      ) {
+        return {
+          rows: [
+            {
+              id: "lp-1",
+              title: "Python Basics",
+              description: "Learn Python",
+              status: "ACTIVE",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (sql && sql.includes("information_schema")) {
+        return { rows: [{ present: true }], rowCount: 1 };
+      }
+
+      if (sql && sql.includes("JOIN courses c")) {
+        return {
+          rows: [
+            {
+              course_id: "course-1",
+              course_code: "COURSE-001",
+              course_title: "Python Intro",
+              stage_title: "Stage 1",
+              stage_order: 1,
+              course_order: 1,
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      if (sql && sql.includes("FROM enrollments en")) {
+        return {
+          rows: [
+            {
+              enrollment_id: "en-1",
+              status: "NOT_STARTED",
+              progress: 0,
+              enrolled_at: "2026-01-01",
+              principal_id: "principal-1",
+              name: "John Doe",
+              email: "local.learner@example.com",
+              employee_number: "EMP-001",
+              designation: "Engineer",
+              grade_name: "G4",
+              class_assignments: [],
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+
+      return { rows: [], rowCount: 0 };
+    });
+
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learningAdminController.getClassAssignmentOptions(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learners[0].email).toBe("erp.learner@example.com");
+  });
+
   it("should handle path with no stages (empty courses)", async () => {
     vi.mocked(query)
       .mockResolvedValueOnce({
@@ -2103,6 +2182,12 @@ describe("ASSIGN CLASS ENROLLMENTS", () => {
   });
 
   it("should create class enrollment assignment (returns 201)", async () => {
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [{ employeeNumber: "EMP-001", email: "erp.class@example.com" }],
+    });
+
     vi.mocked(query).mockImplementation(async (sql) => {
       if (sql && sql.includes("information_schema")) {
         return { rows: [{ present: false }], rowCount: 1 };
@@ -2142,6 +2227,12 @@ describe("ASSIGN CLASS ENROLLMENTS", () => {
     await learningAdminController.assignClassEnrollments(req, res);
 
     expect(res.statusCode).toBe(201);
+    expect(sendClassAssignedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        employeeNumber: "EMP-001",
+        to: "erp.class@example.com",
+      }),
+    );
   });
 
   it("should update existing class assignment (ON CONFLICT DO UPDATE)", async () => {
