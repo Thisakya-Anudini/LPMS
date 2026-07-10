@@ -698,10 +698,11 @@ export const getAllLearners = async (req, res) => {
 const sendLearnerLearningPaths = async (res, principalId) => {
   const principal = await query(
     `
-      SELECT id, name, email, role
-      FROM auth_principals
-      WHERE id = $1
-      LIMIT 1
+    SELECT ap.id, ap.name, ap.email, ap.role, e.employee_number
+    FROM auth_principals ap
+    LEFT JOIN employees e ON ap.id = e.principal_id
+    WHERE ap.id = $1
+    LIMIT 1
     `,
     [principalId],
   );
@@ -709,24 +710,44 @@ const sendLearnerLearningPaths = async (res, principalId) => {
     return sendError(res, 404, "NOT_FOUND", "Learner not found.");
   }
 
+  let enrichedEmail = principal.rows[0].email;
+  const employeeNumber = principal.rows[0].employee_number;
+
+  if (employeeNumber) {
+    try {
+      const erpResponse =
+        await fetchEmployeeDetailsForServiceNo(employeeNumber);
+      const erpData = erpResponse?.data?.[0];
+      if (erpData && erpData.email && String(erpData.email).trim()) {
+        enrichedEmail = String(erpData.email).trim().toLowerCase();
+      }
+    } catch (err) {
+      console.error(
+        `Failed to fetch real email for learner ${employeeNumber}:`,
+        err.message,
+      );
+      // Silently fallback to DB email if fetch fails
+    }
+  }
+
   const result = await query(
     `
-      SELECT
-        en.id AS enrollment_id,
-        en.status,
-        en.progress,
-        en.enrolled_at,
-        en.completed_at,
-        lp.id AS learning_path_id,
-        lp.title,
-        lp.description,
-        lp.category,
-        lp.total_duration
-      FROM enrollments en
-      JOIN learning_paths lp ON lp.id = en.learning_path_id
-      WHERE en.principal_id = $1
-        AND lp.is_deleted = FALSE
-      ORDER BY en.enrolled_at DESC
+    SELECT
+      en.id AS enrollment_id,
+      en.status,
+      en.progress,
+      en.enrolled_at,
+      en.completed_at,
+      lp.id AS learning_path_id,
+      lp.title,
+      lp.description,
+      lp.category,
+      lp.total_duration
+    FROM enrollments en
+    JOIN learning_paths lp ON lp.id = en.learning_path_id
+    WHERE en.principal_id = $1
+      AND lp.is_deleted = FALSE
+    ORDER BY en.enrolled_at DESC    
     `,
     [principalId],
   );
@@ -735,7 +756,7 @@ const sendLearnerLearningPaths = async (res, principalId) => {
     learner: {
       id: principal.rows[0].id,
       name: principal.rows[0].name,
-      email: principal.rows[0].email,
+      email: enrichedEmail,
     },
     learningPaths: result.rows,
   });

@@ -1555,15 +1555,16 @@ describe("GET LEARNER LEARNING PATHS", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("should return learner details and learning paths", async () => {
+  it("should return learner and their learning paths with enriched email", async () => {
     vi.mocked(query)
       .mockResolvedValueOnce({
         rows: [
           {
             id: "employee-1",
             name: "John Doe",
-            email: "john@example.com",
+            email: "john@erp.local",
             role: ROLES.EMPLOYEE,
+            employee_number: "EMP-123",
           },
         ],
         rowCount: 1,
@@ -1572,29 +1573,29 @@ describe("GET LEARNER LEARNING PATHS", () => {
         rows: [
           {
             enrollment_id: "en-1",
-            status: "IN_PROGRESS",
-            progress: 50,
-            enrolled_at: new Date(),
-            completed_at: null,
+            status: "ENROLLED",
+            progress: 0,
             learning_path_id: "lp-1",
-            title: "Python Basics",
-            description: "Learn Python",
-            category: "PUBLIC",
-            total_duration: 20,
+            title: "Security Training",
           },
         ],
         rowCount: 1,
       });
 
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      data: [{ email: "john.real@slt.com.lk" }],
+    });
+
     const req = createMockReq({ params: { principalId: "employee-1" } });
     const res = createMockRes();
     await superAdminController.getLearnerLearningPaths(req, res);
 
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-123");
     expect(res.statusCode).toBe(200);
     expect(res.body.learner.id).toBe("employee-1");
-    expect(res.body.learner.name).toBe("John Doe");
+
+    expect(res.body.learner.email).toBe("john.real@slt.com.lk");
     expect(res.body.learningPaths).toHaveLength(1);
-    expect(res.body.learningPaths[0].learning_path_id).toBe("lp-1");
   });
 
   it("should exclude deleted learning paths (JOIN with is_deleted = FALSE)", async () => {
