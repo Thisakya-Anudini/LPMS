@@ -1813,6 +1813,31 @@ describe("SEARCH ASSIGNABLE EMPLOYEES", () => {
     expect(res.statusCode).toBe(502);
     expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
   });
+
+  it("should enrich batch search results with real emails from fetchEmployeeDetailsForServiceNo", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    vi.mocked(fetchEmployeesByFilters).mockResolvedValueOnce({
+      data: [
+        {
+          employeeNumber: "EMP-001",
+          employeeName: "John Doe",
+          email: "1212@slt.lk",
+        },
+      ],
+    });
+
+    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
+      data: [{ email: "john.real@slt.com.lk" }],
+    });
+
+    const req = createMockReq({ body: { designation: "Developer" } });
+    const res = createMockRes();
+    await learningAdminController.searchAssignableEmployees(req, res);
+
+    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.body.employees[0].email).toBe("john.real@slt.com.lk");
+  });
 });
 
 // Get class assignment options testing
