@@ -1881,6 +1881,36 @@ export const getClassAssignmentOptions = async (req, res) => {
     `,
     [id]
   );
+  const progressHasCourseId = await hasColumn('enrollment_progress', 'course_id');
+  const progressHasCourseCode = await hasColumn('enrollment_progress', 'course_code');
+  let courseProgressByEnrollment = new Map();
+  if ((progressHasCourseId || progressHasCourseCode) && learnerResult.rows.length > 0) {
+    const progressResult = await query(
+      `
+        SELECT
+          enrollment_id,
+          ${progressHasCourseId ? 'course_id' : 'NULL::uuid AS course_id'},
+          ${progressHasCourseCode ? 'course_code' : 'NULL::text AS course_code'},
+          progress
+        FROM enrollment_progress
+        WHERE enrollment_id = ANY($1::uuid[])
+      `,
+      [learnerResult.rows.map((row) => row.enrollment_id)]
+    );
+
+    courseProgressByEnrollment = progressResult.rows.reduce((map, row) => {
+      const enrollmentId = String(row.enrollment_id || '').trim();
+      if (!map.has(enrollmentId)) {
+        map.set(enrollmentId, []);
+      }
+      map.get(enrollmentId).push({
+        courseId: row.course_id ? String(row.course_id).trim() : '',
+        courseCode: row.course_code ? String(row.course_code).trim() : '',
+        progress: Number(row.progress || 0)
+      });
+      return map;
+    }, new Map());
+  }
   const erpEmailsByEmployeeNumber = await getErpEmailsByEmployeeNumber(
     learnerResult.rows.map((row) => row.employee_number)
   );
@@ -1906,6 +1936,7 @@ export const getClassAssignmentOptions = async (req, res) => {
       status: row.status,
       progress: Number(row.progress || 0),
       enrolledAt: row.enrolled_at,
+      courseProgress: courseProgressByEnrollment.get(String(row.enrollment_id || '').trim()) || [],
       classAssignments: row.class_assignments || []
     }))
   });
