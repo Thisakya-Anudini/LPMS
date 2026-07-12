@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Download, RefreshCcw, School, Search, Users } from 'lucide-react';
+import { BookOpen, Check, Download, RefreshCcw, School, Search, Users, X } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -49,6 +49,11 @@ type EnrolledLearner = {
   status: string;
   progress: number;
   enrolledAt: string;
+  courseProgress: Array<{
+    courseId: string;
+    courseCode: string;
+    progress: number;
+  }>;
   classAssignments: Array<{
     id: string;
     courseCode: string;
@@ -72,6 +77,7 @@ type ClassReportGroup = {
   startDate: string;
   endDate: string;
   classPayload?: Record<string, unknown>;
+  hasClassAssignment: boolean;
   learners: Array<{ id: string; name: string }>;
 };
 
@@ -126,6 +132,37 @@ const createEmptyClassDetailForm = (): ClassDetailFormValues =>
 
 const getAssignmentForCourse = (learner: EnrolledLearner, courseCode: string) =>
   learner.classAssignments.find((assignment) => assignment.courseCode === courseCode);
+
+const isLearnerCourseCompleted = (learner: EnrolledLearner, course: PathCourse | null) => {
+  if (!course) {
+    return false;
+  }
+
+  const selectedCourseId = String(course.courseId || '').trim().toLowerCase();
+  const selectedCourseCode = String(course.courseCode || '').trim().toLowerCase();
+  const progress = learner.courseProgress.find((courseProgress) => {
+    const progressCourseId = String(courseProgress.courseId || '').trim().toLowerCase();
+    const progressCourseCode = String(courseProgress.courseCode || '').trim().toLowerCase();
+    return (
+      (selectedCourseId && progressCourseId === selectedCourseId) ||
+      (selectedCourseCode && progressCourseCode === selectedCourseCode)
+    );
+  });
+
+  return Number(progress?.progress || 0) >= 100;
+};
+
+const learnerMatchesSearch = (learner: EnrolledLearner, search: string, selectedCourseCode: string) =>
+  [
+    learner.name,
+    learner.email,
+    learner.employeeNumber,
+    learner.designation,
+    learner.gradeName,
+    getAssignmentForCourse(learner, selectedCourseCode)?.classTitle
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(search));
 
 const getPayloadValue = (payload: Record<string, unknown> | undefined, keys: string[]) => {
   if (!payload) {
@@ -301,14 +338,20 @@ export function AssignEnrollmentToClassesPage() {
   const [learners, setLearners] = useState<EnrolledLearner[]>([]);
   const [selectedCourseCode, setSelectedCourseCode] = useState('');
   const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [courseClassCounts, setCourseClassCounts] = useState<Record<string, number>>({});
   const [selectedClassId, setSelectedClassId] = useState('');
   const [selectedEnrollmentIds, setSelectedEnrollmentIds] = useState<string[]>([]);
-  const [assignmentMode, setAssignmentMode] = useState<'assign' | 'reassign'>('assign');
+  const [statusTransferEnrollmentIds, setStatusTransferEnrollmentIds] = useState<string[]>([]);
+  const [assignmentMode, setAssignmentMode] = useState<'assign' | 'reassign' | 'completion'>('assign');
+  const [showCourseStatusPanel, setShowCourseStatusPanel] = useState(false);
+  const [setupCourseStatusTab, setSetupCourseStatusTab] = useState<'notCompleted' | 'completed'>('notCompleted');
+  const [setupCourseStatusSearch, setSetupCourseStatusSearch] = useState('');
   const [learnerSearch, setLearnerSearch] = useState('');
   const [batchSize, setBatchSize] = useState('50');
   const [pathsLoading, setPathsLoading] = useState(true);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [classesLoading, setClassesLoading] = useState(false);
+  const [classAvailabilityLoading, setClassAvailabilityLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [selectedReportGroupKey, setSelectedReportGroupKey] = useState('');
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'assign' | 'reports'>('assign');
@@ -352,25 +395,60 @@ export function AssignEnrollmentToClassesPage() {
     });
   }, [learners, selectedClassId, selectedCourseCode]);
 
-  const selectableLearners = assignmentMode === 'reassign' ? reassignableLearners : unassignedLearners;
+  const completedCourseLearners = useMemo(
+    () => learners.filter((learner) => isLearnerCourseCompleted(learner, selectedCourse)),
+    [learners, selectedCourse]
+  );
+
+  const notCompletedCourseLearners = useMemo(
+    () => learners.filter((learner) => !isLearnerCourseCompleted(learner, selectedCourse)),
+    [learners, selectedCourse]
+  );
+
+  const filteredCompletedCourseLearners = useMemo(() => {
+    const search = learnerSearch.trim().toLowerCase();
+    if (!search) {
+      return completedCourseLearners;
+    }
+    return completedCourseLearners.filter((learner) => learnerMatchesSearch(learner, search, selectedCourseCode));
+  }, [completedCourseLearners, learnerSearch, selectedCourseCode]);
+
+  const filteredSetupNotCompletedLearners = useMemo(() => {
+    const search = setupCourseStatusSearch.trim().toLowerCase();
+    if (!search) {
+      return notCompletedCourseLearners;
+    }
+    return notCompletedCourseLearners.filter((learner) => learnerMatchesSearch(learner, search, selectedCourseCode));
+  }, [notCompletedCourseLearners, selectedCourseCode, setupCourseStatusSearch]);
+
+  const filteredSetupCompletedLearners = useMemo(() => {
+    const search = setupCourseStatusSearch.trim().toLowerCase();
+    if (!search) {
+      return completedCourseLearners;
+    }
+    return completedCourseLearners.filter((learner) => learnerMatchesSearch(learner, search, selectedCourseCode));
+  }, [completedCourseLearners, selectedCourseCode, setupCourseStatusSearch]);
+
+  const statusTransferLearners = useMemo(
+    () => learners.filter((learner) => statusTransferEnrollmentIds.includes(learner.enrollmentId)),
+    [learners, statusTransferEnrollmentIds]
+  );
+
+  const selectableLearners =
+    assignmentMode === 'completion'
+      ? []
+      : assignmentMode === 'reassign'
+        ? reassignableLearners
+        : statusTransferLearners.length > 0
+          ? statusTransferLearners
+          : unassignedLearners;
 
   const filteredLearners = useMemo(() => {
     const search = learnerSearch.trim().toLowerCase();
     if (!search) {
       return selectableLearners;
     }
-    return selectableLearners.filter((learner) =>
-      [
-        learner.name,
-        learner.email,
-        learner.employeeNumber,
-        learner.designation,
-        learner.gradeName,
-        getAssignmentForCourse(learner, selectedCourseCode)?.classTitle
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(search))
-    );
+    return selectableLearners.filter((learner) => learnerMatchesSearch(learner, search, selectedCourseCode));
   }, [learnerSearch, selectableLearners, selectedCourseCode]);
 
   const selectedLearnersForCourse = useMemo(
@@ -457,11 +535,12 @@ export function AssignEnrollmentToClassesPage() {
     const groups = new Map<string, ClassReportGroup>();
 
     for (const row of reportRows) {
-      if (row.assignmentStatus !== 'Assigned' || !row.classCode) {
+      const hasClassAssignment = row.assignmentStatus === 'Assigned' && Boolean(row.classCode);
+      if (!hasClassAssignment && courseClassCounts[row.courseCode] !== 0) {
         continue;
       }
 
-      const key = `${row.courseCode}::${row.classCode}`;
+      const key = hasClassAssignment ? `${row.courseCode}::${row.classCode}` : `${row.courseCode}::NO_CLASS`;
       const existing = groups.get(key);
       const learner = {
         id: row.employeeNumber || '',
@@ -483,6 +562,7 @@ export function AssignEnrollmentToClassesPage() {
           startDate: row.startDate,
           endDate: row.endDate,
           classPayload: row.classPayload,
+          hasClassAssignment,
           learners: [learner]
         });
       }
@@ -494,7 +574,7 @@ export function AssignEnrollmentToClassesPage() {
         first.name.localeCompare(second.name) || first.id.localeCompare(second.id)
       )
     }));
-  }, [reportRows]);
+  }, [courseClassCounts, reportRows]);
 
   const selectedReportGroup = useMemo(
     () => classReportGroups.find((group) => group.key === selectedReportGroupKey) || classReportGroups[0] || null,
@@ -522,6 +602,8 @@ export function AssignEnrollmentToClassesPage() {
     if (!selectedPathId) {
       setCourses([]);
       setLearners([]);
+      setCourseClassCounts({});
+      setStatusTransferEnrollmentIds([]);
       return;
     }
 
@@ -535,6 +617,8 @@ export function AssignEnrollmentToClassesPage() {
       const response = await learningApi.getClassAssignmentOptions(token, selectedPathId);
       setCourses(response.courses);
       setLearners(response.learners);
+      setCourseClassCounts({});
+      setStatusTransferEnrollmentIds([]);
       setSelectedCourseCode((currentCourseCode) =>
         response.courses.some((course) => course.courseCode === currentCourseCode)
           ? currentCourseCode
@@ -564,6 +648,10 @@ export function AssignEnrollmentToClassesPage() {
       }
       const response = await learningApi.getClassesByCourseCode(token, selectedCourseCode);
       setClasses(response.classes);
+      setCourseClassCounts((currentCounts) => ({
+        ...currentCounts,
+        [selectedCourseCode]: response.classes.length
+      }));
       setSelectedClassId(response.classes[0]?.id || '');
       setSelectedEnrollmentIds([]);
     } catch (error) {
@@ -586,6 +674,52 @@ export function AssignEnrollmentToClassesPage() {
   useEffect(() => {
     loadClasses();
   }, [loadClasses]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCourseClassAvailability = async () => {
+      if (courses.length === 0) {
+        setCourseClassCounts({});
+        return;
+      }
+
+      try {
+        setClassAvailabilityLoading(true);
+        const token = await getAccessToken();
+        if (!token) {
+          showToast('Session expired. Please login again.', 'error');
+          return;
+        }
+
+        const classCounts = await Promise.all(
+          courses.map(async (course) => {
+            const response = await learningApi.getClassesByCourseCode(token, course.courseCode);
+            return [course.courseCode, response.classes.length] as const;
+          })
+        );
+
+        if (!cancelled) {
+          setCourseClassCounts(Object.fromEntries(classCounts));
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : 'Failed to check ERP class availability.', 'error');
+          setCourseClassCounts({});
+        }
+      } finally {
+        if (!cancelled) {
+          setClassAvailabilityLoading(false);
+        }
+      }
+    };
+
+    loadCourseClassAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [courses, getAccessToken, showToast]);
 
   useEffect(() => {
     if (classReportGroups.length === 0) {
@@ -617,12 +751,13 @@ export function AssignEnrollmentToClassesPage() {
 
   const clearSelection = () => {
     setSelectedEnrollmentIds([]);
+    setStatusTransferEnrollmentIds([]);
   };
 
   const handleAssign = async () => {
     if (!selectedPathId || !selectedCourseCode || !selectedClass || selectedEnrollmentIds.length === 0) {
       showToast('Select a learning path, course, class, and at least one learner.', 'error');
-      return;
+      return false;
     }
 
     try {
@@ -630,7 +765,7 @@ export function AssignEnrollmentToClassesPage() {
       const token = await getAccessToken();
       if (!token) {
         showToast('Session expired. Please login again.', 'error');
-        return;
+        return false;
       }
       const response = await learningApi.assignClassEnrollments(token, {
         learningPathId: selectedPathId,
@@ -638,17 +773,34 @@ export function AssignEnrollmentToClassesPage() {
         class: selectedClass,
         enrollmentIds: selectedEnrollmentIds
       });
-      const actionLabel = assignmentMode === 'reassign' ? 'reassigned' : 'assigned';
+      const actionLabel = assignmentMode === 'assign' ? 'assigned' : 'reassigned';
       showToast(`${response.assigned.length} learner(s) ${actionLabel} to ${selectedClass.title}.`, 'success');
+      setStatusTransferEnrollmentIds([]);
       await loadPathOptions();
+      return true;
     } catch (error) {
       showToast(
-        error instanceof Error ? error.message : `Failed to ${assignmentMode === 'reassign' ? 'reassign' : 'assign'} learners to class.`,
+        error instanceof Error ? error.message : `Failed to ${assignmentMode === 'assign' ? 'assign' : 'reassign'} learners to class.`,
         'error'
       );
+      return false;
     } finally {
       setAssigning(false);
     }
+  };
+
+  const handleAssignAnotherClassFromStatus = async () => {
+    if (selectedEnrollmentIds.length === 0) {
+      showToast('Select at least one not completed learner.', 'error');
+      return;
+    }
+    setStatusTransferEnrollmentIds(selectedEnrollmentIds);
+    setAssignmentMode('assign');
+    setActiveWorkspaceTab('assign');
+    setShowCourseStatusPanel(false);
+    setSelectedClassId('');
+    setLearnerSearch('');
+    setSetupCourseStatusSearch('');
   };
 
   const downloadReportExcel = (reportGroup: ClassReportGroup | null) => {
@@ -684,7 +836,11 @@ export function AssignEnrollmentToClassesPage() {
               </tr>
               <tr>
                 <th>Class</th>
-                <td>${escapeHtml(reportGroup.classCode)} - ${escapeHtml(reportGroup.classTitle)}</td>
+                <td>${escapeHtml(
+                  reportGroup.hasClassAssignment
+                    ? `${reportGroup.classCode} - ${reportGroup.classTitle}`
+                    : 'No class assigned'
+                )}</td>
               </tr>
               <tr>
                 <td></td>
@@ -706,12 +862,17 @@ export function AssignEnrollmentToClassesPage() {
       `${safeFilenamePart(reportGroup.learningPathTitle, 'learning-path')}_${safeFilenamePart(
         reportGroup.courseCode,
         'course'
-      )}_${safeFilenamePart(reportGroup.classCode, 'class')}_learners.xls`
+      )}_${safeFilenamePart(reportGroup.classCode, 'no-class')}_learners.xls`
     );
     showToast('Excel report downloaded.', 'success');
   };
 
   const openClassDetailModal = async (reportGroup: ClassReportGroup) => {
+    if (!reportGroup.hasClassAssignment || !reportGroup.classId) {
+      showToast('Class details are only available after a course is assigned to an ERP class.', 'info');
+      return;
+    }
+
     setClassDetailGroup(reportGroup);
     setClassDetailForm(buildDefaultClassDetailValues(reportGroup));
     setClassDetailLoading(true);
@@ -877,14 +1038,166 @@ export function AssignEnrollmentToClassesPage() {
               setSelectedClassId('');
               setSelectedEnrollmentIds([]);
               setAssignmentMode('assign');
+              setShowCourseStatusPanel(false);
+              setSetupCourseStatusSearch('');
             }}
           />
         </div>
         {selectedPath ? (
-          <p className="mt-4 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-sm text-primary-900">
-            {selectedPath.title}
-            {selectedCourse ? ` / ${selectedCourse.courseCode}` : ''}
-          </p>
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedCourse) {
+                  setShowCourseStatusPanel((current) => !current);
+                }
+              }}
+              disabled={!selectedCourse}
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-left text-sm text-primary-900 transition hover:border-primary-300 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <span className="font-semibold">
+                {selectedPath.title}
+                {selectedCourse ? ` / ${selectedCourse.courseCode}` : ''}
+              </span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-primary-700">
+                {selectedCourse ? (showCourseStatusPanel ? 'Hide status' : 'Show status') : 'Select course'}
+              </span>
+            </button>
+
+            {showCourseStatusPanel && selectedCourse ? (
+              <div className="mt-3 rounded-lg border border-secondary-200 bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Course Status</p>
+                    <p className="mt-1 text-sm font-semibold text-secondary-900">
+                      {selectedCourse.courseCode} - {selectedCourse.title}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:w-fit">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSetupCourseStatusTab('notCompleted');
+                        setSelectedEnrollmentIds([]);
+                      }}
+                      className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                        setupCourseStatusTab === 'notCompleted'
+                          ? 'bg-red-600 text-white shadow-sm'
+                          : 'text-red-700 hover:bg-red-50'
+                      }`}
+                    >
+                      Not Completed ({notCompletedCourseLearners.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSetupCourseStatusTab('completed');
+                        setSelectedEnrollmentIds([]);
+                      }}
+                      className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                        setupCourseStatusTab === 'completed'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-emerald-700 hover:bg-emerald-50'
+                      }`}
+                    >
+                      Completed ({completedCourseLearners.length})
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <Input
+                    value={setupCourseStatusSearch}
+                    onChange={(event) => setSetupCourseStatusSearch(event.target.value)}
+                    placeholder="Search learners by name or ID"
+                    aria-label="Search course status learners"
+                  />
+                </div>
+
+                <div className="mt-4 overflow-x-auto rounded-lg border border-secondary-200">
+                  {setupCourseStatusTab === 'notCompleted' ? (
+                    <>
+                      <div className="grid min-w-[760px] grid-cols-[48px_1.4fr_140px_1.4fr] bg-red-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-red-700">
+                        <span />
+                        <span>Name</span>
+                        <span>ID</span>
+                        <span>Email</span>
+                      </div>
+                      {filteredSetupNotCompletedLearners.length === 0 ? (
+                        <p className="p-4 text-sm text-secondary-500">No not completed learners found for this course.</p>
+                      ) : (
+                        <div className="max-h-80 min-w-[760px] divide-y divide-red-100 overflow-auto">
+                          {filteredSetupNotCompletedLearners.map((learner) => {
+                            const checked = selectedEnrollmentIds.includes(learner.enrollmentId);
+                            return (
+                              <label
+                                key={`setup-not-completed-${learner.enrollmentId}`}
+                                className={`grid cursor-pointer grid-cols-[48px_1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm transition ${
+                                  checked ? 'bg-red-100' : 'bg-white hover:bg-red-50'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleLearner(learner.enrollmentId)}
+                                  className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                                />
+                                <span className="flex items-center gap-2 font-medium text-red-900">
+                                  <X className="h-4 w-4 text-red-600" />
+                                  {learner.name || '-'}
+                                </span>
+                                <span className="text-red-800">{learner.employeeNumber || '-'}</span>
+                                <span className="text-red-800">{learner.email || '-'}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                        <span>Name</span>
+                        <span>ID</span>
+                        <span>Email</span>
+                      </div>
+                      {filteredSetupCompletedLearners.length === 0 ? (
+                        <p className="p-4 text-sm text-secondary-500">No completed learners found for this course.</p>
+                      ) : (
+                        <div className="max-h-80 min-w-[712px] divide-y divide-emerald-100 overflow-auto">
+                          {filteredSetupCompletedLearners.map((learner) => (
+                            <div
+                              key={`setup-completed-${learner.enrollmentId}`}
+                              className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm"
+                            >
+                              <span className="flex items-center gap-2 font-medium text-emerald-900">
+                                <Check className="h-4 w-4 text-emerald-600" />
+                                {learner.name || '-'}
+                              </span>
+                              <span className="text-emerald-800">{learner.employeeNumber || '-'}</span>
+                              <span className="text-emerald-800">{learner.email || '-'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {setupCourseStatusTab === 'notCompleted' ? (
+                  <div className="mt-4 flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={handleAssignAnotherClassFromStatus}
+                      disabled={selectedEnrollmentIds.length === 0}
+                    >
+                      Assign Another Class
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </Card>
 
@@ -971,23 +1284,33 @@ export function AssignEnrollmentToClassesPage() {
       </Card>
 
       <Card
-        title={assignmentMode === 'reassign' ? 'Reassign Learners to Replacement Class' : 'Learners in Selected Learning Path'}
+        title={
+          assignmentMode === 'completion'
+            ? 'Completion Course Status'
+            : assignmentMode === 'reassign'
+              ? 'Reassign Learners to Replacement Class'
+              : 'Learners in Selected Learning Path'
+        }
         description={
-          assignmentMode === 'reassign'
-            ? 'Move learners who missed an earlier session into the selected course class.'
-            : 'Select unassigned learners to allocate to the selected course class.'
+          assignmentMode === 'completion'
+            ? 'Review learners who have completed the selected course.'
+            : assignmentMode === 'reassign'
+              ? 'Move learners who missed an earlier session into the selected course class.'
+              : 'Select unassigned learners to allocate to the selected course class.'
         }
         action={
-          <Button
-            onClick={handleAssign}
-            isLoading={assigning}
-            disabled={!selectedClass || selectedEnrollmentIds.length === 0}
-          >
-            {assignmentMode === 'reassign' ? 'Reassign to Class' : 'Assign to Class'}
-          </Button>
+          assignmentMode === 'completion' ? undefined : (
+            <Button
+              onClick={handleAssign}
+              isLoading={assigning}
+              disabled={!selectedClass || selectedEnrollmentIds.length === 0}
+            >
+              {assignmentMode === 'assign' ? 'Assign to Class' : 'Reassign to Class'}
+            </Button>
+          )
         }
       >
-        <div className="mb-4 grid grid-cols-2 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:w-fit">
+        <div className="mb-4 grid grid-cols-1 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:grid-cols-3 lg:w-fit">
           <button
             type="button"
             onClick={() => {
@@ -1016,7 +1339,30 @@ export function AssignEnrollmentToClassesPage() {
           >
             Reassign missed session
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAssignmentMode('completion');
+              setSelectedEnrollmentIds([]);
+            }}
+            className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+              assignmentMode === 'completion'
+                ? 'bg-white text-primary-700 shadow-sm'
+                : 'text-secondary-700 hover:bg-white/70'
+            }`}
+          >
+            Completion course status
+          </button>
         </div>
+
+        {assignmentMode === 'completion' ? (
+          <div className="mb-4 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">Selected Course</p>
+            <p className="mt-1 text-sm font-semibold text-primary-950">
+              {selectedCourse ? `${selectedCourse.courseCode} - ${selectedCourse.title}` : 'Select a course'}
+            </p>
+          </div>
+        ) : null}
 
         <div className="mb-4 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
           <Input
@@ -1035,10 +1381,25 @@ export function AssignEnrollmentToClassesPage() {
             onChange={(event) => setBatchSize(event.target.value)}
             aria-label="Batch size"
           />
-          <Button variant="outline" onClick={selectNextBatch} disabled={!selectedCourseCode || selectableLearners.length === 0}>
+          <Button
+            variant="outline"
+            onClick={selectNextBatch}
+            disabled={
+              assignmentMode === 'completion' ||
+              !selectedCourseCode ||
+              selectableLearners.length === 0
+            }
+          >
             Select
           </Button>
-          <Button variant="outline" onClick={selectVisibleLearners} disabled={filteredLearners.length === 0}>
+          <Button
+            variant="outline"
+            onClick={selectVisibleLearners}
+            disabled={
+              assignmentMode === 'completion' ||
+              filteredLearners.length === 0
+            }
+          >
             Select All
           </Button>
           <Button variant="ghost" onClick={clearSelection} disabled={selectedEnrollmentIds.length === 0}>
@@ -1048,14 +1409,52 @@ export function AssignEnrollmentToClassesPage() {
 
         <div className="mb-3 flex items-center gap-2 text-sm text-secondary-600">
           <Search className="h-4 w-4" />
-          {selectedEnrollmentIds.length} selected from {filteredLearners.length} visible{' '}
-          {assignmentMode === 'reassign' ? 'reassignable' : 'unassigned'} learners
+          {assignmentMode === 'completion'
+            ? `${filteredCompletedCourseLearners.length} completed learners`
+            : `${selectedEnrollmentIds.length} selected from ${filteredLearners.length} visible ${
+                assignmentMode === 'reassign'
+                    ? 'reassignable'
+                    : 'unassigned'
+              } learners`}
           {selectedCourseCode
             ? ` (${assignedForCourse} already assigned, ${unassignedLearners.length} unassigned)`
             : ''}
           {selectedReassignmentCount > 0 ? ` - ${selectedReassignmentCount} will move from another class` : ''}
         </div>
 
+        {assignmentMode === 'completion' ? (
+          <div className="overflow-x-auto rounded-lg border border-emerald-200">
+              <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                <span>Name</span>
+                <span>ID</span>
+                <span>Email</span>
+              </div>
+              {optionsLoading ? (
+                <div className="space-y-2 p-4">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : filteredCompletedCourseLearners.length === 0 ? (
+                <p className="p-4 text-sm text-secondary-500">No completed learners found for this course.</p>
+              ) : (
+                <div className="max-h-80 min-w-[712px] divide-y divide-emerald-100 overflow-auto">
+                  {filteredCompletedCourseLearners.map((learner) => (
+                    <div
+                      key={`completed-${learner.enrollmentId}`}
+                      className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm"
+                    >
+                      <span className="flex items-center gap-2 font-medium text-emerald-900">
+                        <Check className="h-4 w-4 text-emerald-600" />
+                        {learner.name || '-'}
+                      </span>
+                      <span className="text-emerald-800">{learner.employeeNumber || '-'}</span>
+                      <span className="text-emerald-800">{learner.email || '-'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+        ) : (
         <div className="overflow-x-auto rounded-lg border border-secondary-200">
           <div className="grid min-w-[760px] grid-cols-[48px_1.6fr_120px_1fr] bg-secondary-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-secondary-500">
             <span />
@@ -1108,6 +1507,7 @@ export function AssignEnrollmentToClassesPage() {
             </div>
           )}
         </div>
+        )}
       </Card>
         </div>
       ) : null}
@@ -1121,9 +1521,13 @@ export function AssignEnrollmentToClassesPage() {
           <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
             Select a learning path to generate the report.
           </p>
+        ) : classAvailabilityLoading ? (
+          <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
+            Checking ERP class availability for these courses...
+          </p>
         ) : classReportGroups.length === 0 ? (
           <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
-            No course classes have assigned learners yet.
+            No report-ready learners found. Assign learners to available ERP classes, or use courses with no ERP classes.
           </p>
         ) : (
           <div className="space-y-5">
@@ -1156,8 +1560,12 @@ export function AssignEnrollmentToClassesPage() {
                         <p className="text-xs text-secondary-500">{group.courseTitle}</p>
                       </div>
                       <div>
-                        <p className="font-semibold text-secondary-900">Class No: {group.classCode}</p>
-                        <p className="text-xs text-secondary-500">{group.classTitle || '-'}</p>
+                        <p className="font-semibold text-secondary-900">
+                          {group.hasClassAssignment ? `Class No: ${group.classCode}` : 'No class assigned'}
+                        </p>
+                        <p className="text-xs text-secondary-500">
+                          {group.hasClassAssignment ? group.classTitle || '-' : 'Report generated from LP enrollment'}
+                        </p>
                       </div>
                     </div>
                     <p className="mt-3 text-sm font-semibold text-primary-700">{group.learners.length} learner(s)</p>
@@ -1186,6 +1594,7 @@ export function AssignEnrollmentToClassesPage() {
                           setSelectedReportGroupKey(group.key);
                           openClassDetailModal(group);
                         }}
+                        disabled={!group.hasClassAssignment}
                       >
                         <Download className="h-4 w-4 shrink-0" />
                         <span>Download class details</span>
@@ -1210,8 +1619,16 @@ export function AssignEnrollmentToClassesPage() {
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Class</p>
-                    <p className="font-semibold text-secondary-900">Class No: {selectedReportGroup.classCode}</p>
-                    <p className="text-xs text-secondary-500">{selectedReportGroup.classTitle || '-'}</p>
+                    <p className="font-semibold text-secondary-900">
+                      {selectedReportGroup.hasClassAssignment
+                        ? `Class No: ${selectedReportGroup.classCode}`
+                        : 'No class assigned'}
+                    </p>
+                    <p className="text-xs text-secondary-500">
+                      {selectedReportGroup.hasClassAssignment
+                        ? selectedReportGroup.classTitle || '-'
+                        : 'Report generated from LP enrollment'}
+                    </p>
                   </div>
                   <span className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
                     {selectedReportGroup.learners.length} learner(s)

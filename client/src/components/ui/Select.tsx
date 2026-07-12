@@ -65,7 +65,7 @@ export function Select({
         {label &&
         <label
           htmlFor={selectId}
-          className="block text-sm font-medium text-slate-700 mb-1">
+          className="block text-sm font-medium text-slate-700 mb-2">
 
             {label}
           </label>
@@ -77,7 +77,7 @@ export function Select({
             disabled={disabled}
             onFocus={(event) => props.onFocus?.(event as unknown as React.FocusEvent<HTMLSelectElement>)}
             onClick={() => setIsOpen((prev) => !prev)}
-            className={`flex h-10 w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0563bb] disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
+            className={`flex h-11 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-4 py-3 text-left text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#0563bb] disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
           >
             <span className="truncate">{selectedLabel}</span>
             <ChevronDown className={`ml-2 h-4 w-4 shrink-0 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -112,14 +112,14 @@ export function Select({
       {label &&
       <label
         htmlFor={selectId}
-        className="block text-sm font-medium text-slate-700 mb-1">
+        className="block text-sm font-medium text-slate-700 mb-2">
 
           {label}
         </label>
       }
         <select
           id={selectId}
-          className={`flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0563bb] focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
+          className={`flex h-11 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500 focus:ring-red-500' : ''} ${className}`}
           {...props}
           disabled={disabled}>
 

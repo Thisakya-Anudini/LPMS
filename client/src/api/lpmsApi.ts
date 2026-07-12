@@ -409,6 +409,11 @@ export const learningApi = {
         status: string;
         progress: number;
         enrolledAt: string;
+        courseProgress: Array<{
+          courseId: string;
+          courseCode: string;
+          progress: number;
+        }>;
         classAssignments: Array<{
           id: string;
           courseCode: string;
