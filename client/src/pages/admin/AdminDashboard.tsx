@@ -1,20 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BriefcaseBusiness, ShieldCheck, UserCheck, Users } from 'lucide-react';
-import { learningApi, superAdminApi, userApi } from '../../api/lpmsApi';
-import { Card } from '../../components/ui/Card';
-import { Input } from '../../components/ui/Input';
-import { Button } from '../../components/ui/Button';
-import { ModalOverlay } from '../../components/ui/ModalOverlay';
-import { Select } from '../../components/ui/Select';
-import { Skeleton } from '../../components/ui/Skeleton';
-import { useAuth } from '../../contexts/useAuth';
-import { useToast } from '../../contexts/useToast';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { BriefcaseBusiness, ShieldCheck, UserCheck, Users } from "lucide-react";
+import { learningApi, superAdminApi, userApi } from "../../api/lpmsApi";
+import { Card } from "../../components/ui/Card";
+import { Input } from "../../components/ui/Input";
+import { Button } from "../../components/ui/Button";
+import { ModalOverlay } from "../../components/ui/ModalOverlay";
+import { Select } from "../../components/ui/Select";
+import { Skeleton } from "../../components/ui/Skeleton";
+import { useAuth } from "../../contexts/useAuth";
+import { useToast } from "../../contexts/useToast";
 
 type UserRow = {
   id: string;
   name: string;
   email: string;
-  role: 'SUPER_ADMIN' | 'LEARNING_ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
+  role: "SUPER_ADMIN" | "LEARNING_ADMIN" | "SUPERVISOR" | "EMPLOYEE";
   is_active: boolean;
 };
 
@@ -47,57 +47,74 @@ type AssignedLearningAdminRow = {
 };
 
 const roleSections: {
-  key: UserRow['role'];
+  key: UserRow["role"];
   label: string;
   panelClass: string;
   headingClass: string;
   headRowClass: string;
 }[] = [
   {
-    key: 'SUPER_ADMIN',
-    label: 'Super Admins',
-    panelClass: 'border-slate-200 bg-white',
-    headingClass: 'text-slate-900',
-    headRowClass: 'bg-slate-100 text-slate-700'
-  }
+    key: "SUPER_ADMIN",
+    label: "Super Admins",
+    panelClass: "border-slate-200 bg-white",
+    headingClass: "text-slate-900",
+    headRowClass: "bg-slate-100 text-slate-700",
+  },
 ];
 
 const initialUserForm = {
-  name: '',
-  email: '',
-  password: '',
-  role: 'SUPER_ADMIN'
+  name: "",
+  email: "",
+  password: "",
+  role: "SUPER_ADMIN",
 };
 
 export function AdminDashboard() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [users, setUsers] = useState<UserRow[]>([]);
-  const [assignedLearningAdmins, setAssignedLearningAdmins] = useState<AssignedLearningAdminRow[]>([]);
+  const [assignedLearningAdmins, setAssignedLearningAdmins] = useState<
+    AssignedLearningAdminRow[]
+  >([]);
   const [learnerTotal, setLearnerTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [pendingDeleteUser, setPendingDeleteUser] = useState<UserRow | null>(null);
+  const [pendingDeleteUser, setPendingDeleteUser] = useState<UserRow | null>(
+    null,
+  );
 
   const [userForm, setUserForm] = useState(initialUserForm);
   const [userFormErrors, setUserFormErrors] = useState<{ name?: string }>({});
   const [userFormLoading, setUserFormLoading] = useState(false);
   const [assignOptionsLoading, setAssignOptionsLoading] = useState(true);
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
-  const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
-  const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
-  const [assignSearchErrors, setAssignSearchErrors] = useState<{ employeeNo?: string; name?: string }>({});
-  const [assignDesignationFilter, setAssignDesignationFilter] = useState('');
-  const [assignGradeFilter, setAssignGradeFilter] = useState('');
-  const [assignOrganizationFilter, setAssignOrganizationFilter] = useState('');
-  const [assignPayrollFilter, setAssignPayrollFilter] = useState('');
+  const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState("");
+  const [assignSurnameSearch, setAssignSurnameSearch] = useState("");
+  const [assignSearchErrors, setAssignSearchErrors] = useState<{
+    employeeNo?: string;
+    name?: string;
+  }>({});
+  const [assignDesignationFilter, setAssignDesignationFilter] = useState("");
+  const [assignGradeFilter, setAssignGradeFilter] = useState("");
+  const [assignOrganizationFilter, setAssignOrganizationFilter] = useState("");
+  const [assignPayrollFilter, setAssignPayrollFilter] = useState("");
   const [erpEmployees, setErpEmployees] = useState<AssignableEmployeeRow[]>([]);
   const [designationOptions, setDesignationOptions] = useState<string[]>([]);
   const [gradeOptions, setGradeOptions] = useState<string[]>([]);
   const [organizationOptions, setOrganizationOptions] = useState<
-    Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
+    Array<{
+      organizationId: string;
+      organizationName: string;
+      parentOrganizationName: string;
+    }>
   >([]);
-  const recentUsersSkeletonRows = Array.from({ length: 3 }, (_, index) => index);
-  const assignResultsSkeletonRows = Array.from({ length: 5 }, (_, index) => index);
+  const recentUsersSkeletonRows = Array.from(
+    { length: 3 },
+    (_, index) => index,
+  );
+  const assignResultsSkeletonRows = Array.from(
+    { length: 5 },
+    (_, index) => index,
+  );
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
   const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
   const hasAssignFilterSearch =
@@ -107,16 +124,16 @@ export function AdminDashboard() {
     Boolean(assignPayrollFilter);
 
   const clearAssignFilters = () => {
-    setAssignDesignationFilter('');
-    setAssignGradeFilter('');
-    setAssignOrganizationFilter('');
-    setAssignPayrollFilter('');
+    setAssignDesignationFilter("");
+    setAssignGradeFilter("");
+    setAssignOrganizationFilter("");
+    setAssignPayrollFilter("");
   };
 
   const activateAssignEmployeeSearch = () => {
     setAssignSearchErrors((prev) => ({ ...prev, name: undefined }));
     if (hasAssignNameSearch) {
-      setAssignSurnameSearch('');
+      setAssignSurnameSearch("");
     }
     if (hasAssignFilterSearch) {
       clearAssignFilters();
@@ -126,7 +143,7 @@ export function AdminDashboard() {
   const activateAssignNameSearch = () => {
     setAssignSearchErrors((prev) => ({ ...prev, employeeNo: undefined }));
     if (hasAssignEmployeeNoSearch) {
-      setAssignEmployeeNoSearch('');
+      setAssignEmployeeNoSearch("");
     }
     if (hasAssignFilterSearch) {
       clearAssignFilters();
@@ -136,15 +153,15 @@ export function AdminDashboard() {
   const activateAssignFilterSearch = () => {
     setAssignSearchErrors({});
     if (hasAssignEmployeeNoSearch) {
-      setAssignEmployeeNoSearch('');
+      setAssignEmployeeNoSearch("");
     }
     if (hasAssignNameSearch) {
-      setAssignSurnameSearch('');
+      setAssignSurnameSearch("");
     }
   };
 
   const handleAssignEmployeeNoChange = (value: string) => {
-    const sanitizedValue = value.replace(/\D/g, '');
+    const sanitizedValue = value.replace(/\D/g, "");
 
     if (sanitizedValue.trim()) {
       activateAssignEmployeeSearch();
@@ -152,13 +169,16 @@ export function AdminDashboard() {
     setAssignEmployeeNoSearch(sanitizedValue);
     setAssignSearchErrors((prev) => ({
       ...prev,
-      employeeNo: value !== sanitizedValue ? 'Only numbers are allowed.' : undefined
+      employeeNo:
+        value !== sanitizedValue ? "Only numbers are allowed." : undefined,
     }));
   };
 
   const handleAssignNameSearchChange = (value: string) => {
-    const lettersOnlyValue = value.replace(/[^A-Za-z\s]/g, '');
-    const sanitizedValue = lettersOnlyValue.replace(/\s+/g, ' ').replace(/^\s+/, '');
+    const lettersOnlyValue = value.replace(/[^A-Za-z\s]/g, "");
+    const sanitizedValue = lettersOnlyValue
+      .replace(/\s+/g, " ")
+      .replace(/^\s+/, "");
     const hasInvalidCharacters = value !== lettersOnlyValue;
     const hasExtraSpaces = lettersOnlyValue !== sanitizedValue;
 
@@ -169,10 +189,10 @@ export function AdminDashboard() {
     setAssignSearchErrors((prev) => ({
       ...prev,
       name: hasInvalidCharacters
-        ? 'Only letters are allowed.'
+        ? "Only letters are allowed."
         : hasExtraSpaces
-          ? 'Use single spaces between names.'
-          : undefined
+          ? "Use single spaces between names."
+          : undefined,
     }));
   };
 
@@ -210,27 +230,31 @@ export function AdminDashboard() {
     try {
       const token = await getAccessToken();
       if (!token) {
-        showToast('Session expired. Please login again.', 'error');
+        showToast("Session expired. Please login again.", "error");
         return;
       }
 
       const response = await userApi.listUsers(token);
       setUsers(response.users);
-      const [learnerResponse, searchOptions, learningAdminAssignments] = await Promise.all([
-        superAdminApi.getLearners(token, {
-          page: 1,
-          pageSize: 50
-        }),
-        learningApi.getAssignableEmployeeSearchOptions(token),
-        superAdminApi.getAssignedLearningAdmins(token)
-      ]);
+      const [learnerResponse, searchOptions, learningAdminAssignments] =
+        await Promise.all([
+          superAdminApi.getLearners(token, {
+            page: 1,
+            pageSize: 50,
+          }),
+          learningApi.getAssignableEmployeeSearchOptions(token),
+          superAdminApi.getAssignedLearningAdmins(token),
+        ]);
       setLearnerTotal(learnerResponse.pagination.total);
       setDesignationOptions(searchOptions.designations);
       setGradeOptions(searchOptions.grades);
       setOrganizationOptions(searchOptions.organizations);
       setAssignedLearningAdmins(learningAdminAssignments.learningAdmins);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to load users.', 'error');
+      showToast(
+        err instanceof Error ? err.message : "Failed to load users.",
+        "error",
+      );
     } finally {
       setLoading(false);
       setAssignOptionsLoading(false);
@@ -241,38 +265,40 @@ export function AdminDashboard() {
     loadUsers();
   }, [loadUsers]);
 
-  const superAdminCount = users.filter((user) => user.role === 'SUPER_ADMIN').length;
+  const superAdminCount = users.filter(
+    (user) => user.role === "SUPER_ADMIN",
+  ).length;
   const learningAdminCount = assignedLearningAdmins.length;
   const dashboardStats = [
     {
-      label: 'Super Admins',
+      label: "Super Admins",
       value: superAdminCount,
       icon: UserCheck,
-      iconClass: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-      detail: 'Full platform access'
+      iconClass: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+      detail: "Full platform access",
     },
     {
-      label: 'Learning Admins',
+      label: "Learning Admins",
       value: learningAdminCount,
       icon: ShieldCheck,
-      iconClass: 'bg-amber-50 text-amber-700 ring-amber-100',
-      detail: 'Assigned from ERP employees'
+      iconClass: "bg-amber-50 text-amber-700 ring-amber-100",
+      detail: "Assigned from ERP employees",
     },
     {
-      label: 'Learners',
+      label: "Learners",
       value: learnerTotal,
       icon: Users,
-      iconClass: 'bg-sky-50 text-sky-700 ring-sky-100',
-      detail: 'Active learner records'
-    }
+      iconClass: "bg-sky-50 text-sky-700 ring-sky-100",
+      detail: "Active learner records",
+    },
   ];
   const usersByRole = useMemo(
     () =>
       roleSections.map((section) => ({
         ...section,
-        users: users.filter((user) => user.role === section.key)
+        users: users.filter((user) => user.role === section.key),
       })),
-    [users]
+    [users],
   );
 
   const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -280,11 +306,11 @@ export function AdminDashboard() {
 
     const trimmedName = userForm.name.trim();
     if (!trimmedName) {
-      setUserFormErrors({ name: 'Name cannot be blank.' });
+      setUserFormErrors({ name: "Name cannot be blank." });
       return;
     }
     if (!/^[A-Za-z\s]+$/.test(trimmedName)) {
-      setUserFormErrors({ name: 'Only letters and spaces are allowed.' });
+      setUserFormErrors({ name: "Only letters and spaces are allowed." });
       return;
     }
 
@@ -293,17 +319,24 @@ export function AdminDashboard() {
     try {
       const token = await getAccessToken();
       if (!token) {
-        showToast('Session expired. Please login again.', 'error');
+        showToast("Session expired. Please login again.", "error");
         return;
       }
 
-      await userApi.createUser(token, { ...userForm, name: trimmedName, role: 'SUPER_ADMIN' });
-      showToast('User account created successfully.', 'success');
+      await userApi.createUser(token, {
+        ...userForm,
+        name: trimmedName,
+        role: "SUPER_ADMIN",
+      });
+      showToast("User account created successfully.", "success");
       setUserForm(initialUserForm);
       setUserFormErrors({});
       await loadUsers();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to create user.', 'error');
+      showToast(
+        err instanceof Error ? err.message : "Failed to create user.",
+        "error",
+      );
     } finally {
       setUserFormLoading(false);
     }
@@ -313,28 +346,31 @@ export function AdminDashboard() {
     try {
       const token = await getAccessToken();
       if (!token) {
-        showToast('Session expired. Please login again.', 'error');
+        showToast("Session expired. Please login again.", "error");
         return;
       }
       await userApi.deleteUser(token, id);
-      showToast('Account deleted successfully.', 'success');
+      showToast("Account deleted successfully.", "success");
       setPendingDeleteUser(null);
       await loadUsers();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete account.', 'error');
+      showToast(
+        err instanceof Error ? err.message : "Failed to delete account.",
+        "error",
+      );
     }
   };
 
   const handleAssignSearch = async () => {
     const employeeNo = assignEmployeeNoSearch.trim();
-    const name = assignSurnameSearch.trim().replace(/\s+/g, ' ');
+    const name = assignSurnameSearch.trim().replace(/\s+/g, " ");
     const nextErrors: { employeeNo?: string; name?: string } = {};
 
     if (employeeNo && !/^\d+$/.test(employeeNo)) {
-      nextErrors.employeeNo = 'Only numbers are allowed.';
+      nextErrors.employeeNo = "Only numbers are allowed.";
     }
     if (name && !/^[A-Za-z]+(?:\s[A-Za-z]+)*$/.test(name)) {
-      nextErrors.name = 'Only letters and single spaces are allowed.';
+      nextErrors.name = "Only letters and single spaces are allowed.";
     }
 
     if (nextErrors.employeeNo || nextErrors.name) {
@@ -350,7 +386,7 @@ export function AdminDashboard() {
       setAssignSearchLoading(true);
       const token = await getAccessToken();
       if (!token) {
-        showToast('Session expired. Please login again.', 'error');
+        showToast("Session expired. Please login again.", "error");
         return;
       }
 
@@ -360,42 +396,57 @@ export function AdminDashboard() {
         designation: assignDesignationFilter,
         grade: assignGradeFilter,
         organizationName: assignOrganizationFilter,
-        payrollType: assignPayrollFilter as '' | 'EXECUTIVE' | 'NON_EXECUTIVE'
+        payrollType: assignPayrollFilter as "" | "EXECUTIVE" | "NON_EXECUTIVE",
       });
 
       setErpEmployees(response.employees as AssignableEmployeeRow[]);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to search ERP employees.', 'error');
+      showToast(
+        err instanceof Error ? err.message : "Failed to search ERP employees.",
+        "error",
+      );
     } finally {
       setAssignSearchLoading(false);
     }
   };
 
-  const handleAssignLearningAdmin = async (employee: AssignableEmployeeRow, shouldAssign: boolean) => {
+  const handleAssignLearningAdmin = async (
+    employee: AssignableEmployeeRow,
+    shouldAssign: boolean,
+  ) => {
     try {
       const token = await getAccessToken();
       if (!token) {
-        showToast('Session expired. Please login again.', 'error');
+        showToast("Session expired. Please login again.", "error");
         return;
       }
 
       if (shouldAssign) {
-        await superAdminApi.assignLearningAdmin(token, employee.employeeNumber, employee);
-        showToast('Employee assigned as Learning Admin.', 'success');
+        await superAdminApi.assignLearningAdmin(
+          token,
+          employee.employeeNumber,
+          employee,
+        );
+        showToast("Employee assigned as Learning Admin.", "success");
       } else {
         await superAdminApi.removeLearningAdmin(token, employee.employeeNumber);
-        showToast('Learning Admin access removed.', 'success');
+        showToast("Learning Admin access removed.", "success");
       }
       setErpEmployees((prev) =>
         prev.map((item) =>
           item.employeeNumber === employee.employeeNumber
             ? { ...item, isLearningAdmin: shouldAssign }
-            : item
-        )
+            : item,
+        ),
       );
       await loadUsers();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to update Learning Admin assignment.', 'error');
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Failed to update Learning Admin assignment.",
+        "error",
+      );
     }
   };
 
@@ -404,10 +455,15 @@ export function AdminDashboard() {
       <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm md:px-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Administration</p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-950">System Accounts</h1>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Administration
+            </p>
+            <h1 className="mt-2 text-2xl font-bold text-slate-950">
+              System Accounts
+            </h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-600">
-              Create, review, and manage Super Admin and Learning Admin access from a single control panel.
+              Create, review, and manage Super Admin and Learning Admin access
+              from a single control panel.
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:w-auto sm:min-w-64">
@@ -416,7 +472,9 @@ export function AdminDashboard() {
               Account Overview
             </div>
             <p className="text-xs text-slate-500">
-              {loading ? 'Refreshing admin records...' : `${superAdminCount + learningAdminCount} privileged accounts managed`}
+              {loading
+                ? "Refreshing admin records..."
+                : `${superAdminCount + learningAdminCount} privileged accounts managed`}
             </p>
           </div>
         </div>
@@ -427,16 +485,26 @@ export function AdminDashboard() {
           const Icon = stat.icon;
 
           return (
-            <Card key={stat.label} className="border-slate-200 shadow-sm" bodyClassName="p-5">
+            <Card
+              key={stat.label}
+              className="border-slate-200 shadow-sm"
+              bodyClassName="p-5"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+                  <p className="text-sm font-medium text-slate-500">
+                    {stat.label}
+                  </p>
                   {loading ? (
                     <Skeleton className="mt-3 h-9 w-20" />
                   ) : (
-                    <p className="mt-2 text-3xl font-bold leading-none text-slate-950">{stat.value}</p>
+                    <p className="mt-2 text-3xl font-bold leading-none text-slate-950">
+                      {stat.value}
+                    </p>
                   )}
-                  <p className="mt-3 text-xs font-medium text-slate-500">{stat.detail}</p>
+                  <p className="mt-3 text-xs font-medium text-slate-500">
+                    {stat.detail}
+                  </p>
                 </div>
                 <div className={`rounded-xl p-3 ring-1 ${stat.iconClass}`}>
                   <Icon className="h-5 w-5" />
@@ -461,9 +529,15 @@ export function AdminDashboard() {
                 const nextValue = event.target.value;
                 setUserForm((prev) => ({ ...prev, name: nextValue }));
                 if (!nextValue.trim()) {
-                  setUserFormErrors((prev) => ({ ...prev, name: 'Name cannot be blank.' }));
+                  setUserFormErrors((prev) => ({
+                    ...prev,
+                    name: "Name cannot be blank.",
+                  }));
                 } else if (!/^[A-Za-z\s]+$/.test(nextValue.trim())) {
-                  setUserFormErrors((prev) => ({ ...prev, name: 'Only letters and spaces are allowed.' }));
+                  setUserFormErrors((prev) => ({
+                    ...prev,
+                    name: "Only letters and spaces are allowed.",
+                  }));
                 } else {
                   setUserFormErrors((prev) => ({ ...prev, name: undefined }));
                 }
@@ -474,14 +548,21 @@ export function AdminDashboard() {
               label="Email"
               type="email"
               value={userForm.email}
-              onChange={(event) => setUserForm((prev) => ({ ...prev, email: event.target.value }))}
+              onChange={(event) =>
+                setUserForm((prev) => ({ ...prev, email: event.target.value }))
+              }
               required
             />
             <Input
               label="Password"
               type="password"
               value={userForm.password}
-              onChange={(event) => setUserForm((prev) => ({ ...prev, password: event.target.value }))}
+              onChange={(event) =>
+                setUserForm((prev) => ({
+                  ...prev,
+                  password: event.target.value,
+                }))
+              }
               required
             />
           </div>
@@ -506,7 +587,9 @@ export function AdminDashboard() {
               label="Search by Employee No"
               value={assignEmployeeNoSearch}
               onFocus={activateAssignEmployeeSearch}
-              onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
+              onChange={(event) =>
+                handleAssignEmployeeNoChange(event.target.value)
+              }
               placeholder="e.g. 011338"
               inputMode="numeric"
               error={assignSearchErrors.employeeNo}
@@ -515,7 +598,9 @@ export function AdminDashboard() {
               label="Search by Name"
               value={assignSurnameSearch}
               onFocus={activateAssignNameSearch}
-              onChange={(event) => handleAssignNameSearchChange(event.target.value)}
+              onChange={(event) =>
+                handleAssignNameSearchChange(event.target.value)
+              }
               placeholder="e.g. Mohamed"
               error={assignSearchErrors.name}
             />
@@ -523,10 +608,15 @@ export function AdminDashboard() {
               label="Filter by Designation"
               value={assignDesignationFilter}
               onFocus={activateAssignFilterSearch}
-              onChange={(event) => handleAssignDesignationChange(event.target.value)}
+              onChange={(event) =>
+                handleAssignDesignationChange(event.target.value)
+              }
               options={[
-                { value: '', label: 'All Designations' },
-                ...designationOptions.map((option) => ({ value: option, label: option }))
+                { value: "", label: "All Designations" },
+                ...designationOptions.map((option) => ({
+                  value: option,
+                  label: option,
+                })),
               ]}
               isLoading={assignOptionsLoading}
             />
@@ -536,8 +626,11 @@ export function AdminDashboard() {
               onFocus={activateAssignFilterSearch}
               onChange={(event) => handleAssignGradeChange(event.target.value)}
               options={[
-                { value: '', label: 'All Grades' },
-                ...gradeOptions.map((option) => ({ value: option, label: option }))
+                { value: "", label: "All Grades" },
+                ...gradeOptions.map((option) => ({
+                  value: option,
+                  label: option,
+                })),
               ]}
               isLoading={assignOptionsLoading}
             />
@@ -545,15 +638,17 @@ export function AdminDashboard() {
               label="Filter by Organization"
               value={assignOrganizationFilter}
               onFocus={activateAssignFilterSearch}
-              onChange={(event) => handleAssignOrganizationChange(event.target.value)}
+              onChange={(event) =>
+                handleAssignOrganizationChange(event.target.value)
+              }
               options={[
-                { value: '', label: 'All Organizations' },
+                { value: "", label: "All Organizations" },
                 ...organizationOptions.map((option) => ({
                   value: option.organizationName,
                   label: option.parentOrganizationName
                     ? `${option.organizationName} (${option.parentOrganizationName})`
-                    : option.organizationName
-                }))
+                    : option.organizationName,
+                })),
               ]}
               isLoading={assignOptionsLoading}
             />
@@ -561,30 +656,36 @@ export function AdminDashboard() {
               label="Executive / Non Executive"
               value={assignPayrollFilter}
               onFocus={activateAssignFilterSearch}
-              onChange={(event) => handleAssignPayrollChange(event.target.value)}
+              onChange={(event) =>
+                handleAssignPayrollChange(event.target.value)
+              }
               options={[
-                { value: '', label: 'All Payrolls' },
-                { value: 'EXECUTIVE', label: 'Executive' },
-                { value: 'NON_EXECUTIVE', label: 'Non Executive' }
+                { value: "", label: "All Payrolls" },
+                { value: "EXECUTIVE", label: "Executive" },
+                { value: "NON_EXECUTIVE", label: "Non Executive" },
               ]}
               isLoading={assignOptionsLoading}
             />
           </div>
 
           <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-medium text-slate-500">ERP results: {erpEmployees.length}</p>
+            <p className="text-xs font-medium text-slate-500">
+              ERP results: {erpEmployees.length}
+            </p>
             <Button
               type="button"
               onClick={handleAssignSearch}
               isLoading={assignSearchLoading}
               disabled={
-                Boolean(assignSearchErrors.employeeNo || assignSearchErrors.name) ||
-                !assignEmployeeNoSearch.trim() &&
-                !assignSurnameSearch.trim() &&
-                !assignDesignationFilter &&
-                !assignGradeFilter &&
-                !assignOrganizationFilter &&
-                !assignPayrollFilter
+                Boolean(
+                  assignSearchErrors.employeeNo || assignSearchErrors.name,
+                ) ||
+                (!assignEmployeeNoSearch.trim() &&
+                  !assignSurnameSearch.trim() &&
+                  !assignDesignationFilter &&
+                  !assignGradeFilter &&
+                  !assignOrganizationFilter &&
+                  !assignPayrollFilter)
               }
             >
               Search
@@ -619,7 +720,9 @@ export function AdminDashboard() {
                 ))}
               </div>
             ) : erpEmployees.length === 0 ? (
-              <p className="p-4 text-sm text-slate-500">Search ERP to load employees for Learning Admin assignment.</p>
+              <p className="p-4 text-sm text-slate-500">
+                Search ERP to load employees for Learning Admin assignment.
+              </p>
             ) : (
               <div className="min-w-[1080px]">
                 <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
@@ -636,19 +739,23 @@ export function AdminDashboard() {
                     key={employee.employeeNumber}
                     className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50"
                   >
-                    <span className="font-semibold text-slate-900">{employee.employeeName}</span>
+                    <span className="font-semibold text-slate-900">
+                      {employee.employeeName}
+                    </span>
                     <span>{employee.employeeNumber}</span>
-                    <span>{employee.designation || '-'}</span>
-                    <span>{employee.gradeName || '-'}</span>
-                    <span>{employee.organizationName || '-'}</span>
-                    <span>{employee.email || '-'}</span>
+                    <span>{employee.designation || "-"}</span>
+                    <span>{employee.gradeName || "-"}</span>
+                    <span>{employee.organizationName || "-"}</span>
+                    <span className="break-all">{employee.email || "-"}</span>
                     <span>
                       {employee.isLearningAdmin ? (
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => handleAssignLearningAdmin(employee, false)}
+                          onClick={() =>
+                            handleAssignLearningAdmin(employee, false)
+                          }
                         >
                           Remove
                         </Button>
@@ -656,7 +763,9 @@ export function AdminDashboard() {
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => handleAssignLearningAdmin(employee, true)}
+                          onClick={() =>
+                            handleAssignLearningAdmin(employee, true)
+                          }
                         >
                           Assign
                         </Button>
@@ -673,9 +782,14 @@ export function AdminDashboard() {
       <Card className="shadow-sm" bodyClassName="p-5">
         <div className="space-y-6">
           {usersByRole.map((section) => (
-            <div key={section.key} className={`rounded-xl border ${section.panelClass}`}>
+            <div
+              key={section.key}
+              className={`rounded-xl border ${section.panelClass}`}
+            >
               <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-                <h3 className={`text-base font-semibold ${section.headingClass}`}>
+                <h3
+                  className={`text-base font-semibold ${section.headingClass}`}
+                >
                   {section.label}
                 </h3>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -685,7 +799,9 @@ export function AdminDashboard() {
               <div className="overflow-x-auto">
                 <table className="w-full table-fixed text-sm">
                   <thead>
-                    <tr className={`text-left border-b border-slate-200 ${section.headRowClass}`}>
+                    <tr
+                      className={`text-left border-b border-slate-200 ${section.headRowClass}`}
+                    >
                       <th className="py-3 px-4 w-1/4 font-semibold">Name</th>
                       <th className="py-3 px-4 w-2/5 font-semibold">Email</th>
                       <th className="py-3 px-4 w-1/5 font-semibold">Status</th>
@@ -695,27 +811,45 @@ export function AdminDashboard() {
                   <tbody>
                     {loading ? (
                       recentUsersSkeletonRows.map((row) => (
-                        <tr key={`${section.key}-skeleton-${row}`} className="border-b border-slate-100">
-                          <td className="py-3 px-4"><Skeleton className="h-5 w-28" /></td>
-                          <td className="py-3 px-4"><Skeleton className="h-5 w-40" /></td>
-                          <td className="py-3 px-4"><Skeleton className="h-5 w-16" /></td>
-                          <td className="py-3 px-4"><Skeleton className="h-8 w-20 rounded-lg" /></td>
+                        <tr
+                          key={`${section.key}-skeleton-${row}`}
+                          className="border-b border-slate-100"
+                        >
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-5 w-28" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-5 w-40" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-5 w-16" />
+                          </td>
+                          <td className="py-3 px-4">
+                            <Skeleton className="h-8 w-20 rounded-lg" />
+                          </td>
                         </tr>
                       ))
                     ) : section.users.length ? (
                       section.users.map((user) => (
-                        <tr key={user.id} className="border-b border-slate-100 last:border-0">
-                          <td className="py-3 px-4 font-medium text-slate-900">{user.name}</td>
-                          <td className="py-3 px-4 text-slate-700 break-words">{user.email}</td>
+                        <tr
+                          key={user.id}
+                          className="border-b border-slate-100 last:border-0"
+                        >
+                          <td className="py-3 px-4 font-medium text-slate-900">
+                            {user.name}
+                          </td>
+                          <td className="py-3 px-4 text-slate-700 break-words">
+                            {user.email}
+                          </td>
                           <td className="py-3 px-4">
                             <span
                               className={
                                 user.is_active
-                                  ? 'rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700'
-                                  : 'rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700'
+                                  ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
+                                  : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
                               }
                             >
-                              {user.is_active ? 'Active' : 'Inactive'}
+                              {user.is_active ? "Active" : "Inactive"}
                             </span>
                           </td>
                           <td className="py-3 px-4">
@@ -767,33 +901,51 @@ export function AdminDashboard() {
                 <tbody>
                   {loading ? (
                     recentUsersSkeletonRows.map((row) => (
-                      <tr key={`learning-admin-skeleton-${row}`} className="border-b border-slate-100">
+                      <tr
+                        key={`learning-admin-skeleton-${row}`}
+                        className="border-b border-slate-100"
+                      >
                         <td className="py-3 px-4">
                           <Skeleton className="mb-2 h-5 w-28" />
                           <Skeleton className="h-4 w-20" />
                         </td>
-                        <td className="py-3 px-4"><Skeleton className="h-5 w-40" /></td>
-                        <td className="py-3 px-4"><Skeleton className="h-5 w-16" /></td>
-                        <td className="py-3 px-4"><Skeleton className="h-8 w-20 rounded-lg" /></td>
+                        <td className="py-3 px-4">
+                          <Skeleton className="h-5 w-40" />
+                        </td>
+                        <td className="py-3 px-4">
+                          <Skeleton className="h-5 w-16" />
+                        </td>
+                        <td className="py-3 px-4">
+                          <Skeleton className="h-8 w-20 rounded-lg" />
+                        </td>
                       </tr>
                     ))
                   ) : assignedLearningAdmins.length ? (
                     assignedLearningAdmins.map((admin) => (
-                      <tr key={admin.employee_number} className="border-b border-slate-100 last:border-0">
+                      <tr
+                        key={admin.employee_number}
+                        className="border-b border-slate-100 last:border-0"
+                      >
                         <td className="py-3 px-4">
-                          <p className="font-medium text-slate-900">{admin.name}</p>
-                          <p className="text-xs text-slate-500">{admin.employee_number}</p>
+                          <p className="font-medium text-slate-900">
+                            {admin.name}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {admin.employee_number}
+                          </p>
                         </td>
-                        <td className="py-3 px-4 text-slate-700 break-words">{admin.email}</td>
+                        <td className="py-3 px-4 text-slate-700 break-words">
+                          {admin.email}
+                        </td>
                         <td className="py-3 px-4">
                           <span
                             className={
                               admin.is_active
-                                ? 'rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700'
-                                : 'rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700'
+                                ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
+                                : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
                             }
                           >
-                            {admin.is_active ? 'Active' : 'Inactive'}
+                            {admin.is_active ? "Active" : "Inactive"}
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -805,19 +957,19 @@ export function AdminDashboard() {
                                 {
                                   employeeNumber: admin.employee_number,
                                   employeeName: admin.name,
-                                  employeeSurname: '',
+                                  employeeSurname: "",
                                   email: admin.email,
                                   designation: admin.designation,
                                   grade_name: admin.grade_name,
                                   gradeName: admin.grade_name,
-                                  organizationName: '',
-                                  costCenterCode: '',
-                                  costCenterName: '',
-                                  employeeInitials: '',
-                                  employeeSupervisorNumber: '',
-                                  isLearningAdmin: true
+                                  organizationName: "",
+                                  costCenterCode: "",
+                                  costCenterName: "",
+                                  employeeInitials: "",
+                                  employeeSupervisorNumber: "",
+                                  isLearningAdmin: true,
                                 },
-                                false
+                                false,
                               )
                             }
                           >
@@ -844,23 +996,38 @@ export function AdminDashboard() {
         <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
             <div className="border-b border-slate-200 px-6 py-4">
-              <h2 className="text-lg font-semibold text-slate-900">Delete Account</h2>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Delete Account
+              </h2>
               <p className="mt-1 text-sm text-slate-500">
                 This will permanently remove the account and related records.
               </p>
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-slate-700">
-                Are you sure you want to delete{' '}
-                <span className="font-semibold text-slate-900">{pendingDeleteUser.name}</span>?
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-slate-900">
+                  {pendingDeleteUser.name}
+                </span>
+                ?
               </p>
-              <p className="mt-2 text-xs text-slate-500">{pendingDeleteUser.email}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {pendingDeleteUser.email}
+              </p>
             </div>
             <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
-              <Button type="button" variant="outline" onClick={() => setPendingDeleteUser(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPendingDeleteUser(null)}
+              >
                 Cancel
               </Button>
-              <Button type="button" variant="danger" onClick={() => handleDeleteUser(pendingDeleteUser.id)}>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => handleDeleteUser(pendingDeleteUser.id)}
+              >
                 Delete
               </Button>
             </div>
