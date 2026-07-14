@@ -31,6 +31,8 @@ export function CertificateCustomizationPage() {
   const [rows, setRows] = useState<CertificateSettingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rowsPerPage = 10;
   const [form, setForm] = useState({ signerName: '', signerTitle: '', signaturePngDataUrl: '' });
   const [saving, setSaving] = useState(false);
   const [previewState, setPreviewState] = useState<{
@@ -61,6 +63,14 @@ export function CertificateCustomizationPage() {
   useEffect(() => {
     loadRows();
   }, [loadRows]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [rows.length]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage));
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const paginatedRows = rows.slice(startIndex, startIndex + rowsPerPage);
 
   const revokePreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
@@ -175,11 +185,12 @@ export function CertificateCustomizationPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Certificate Customization</h1>
-        <p className="text-slate-500">Set signature name and designation per learning path.</p>
-      </div>
+    <div className="max-h-[calc(100vh-8rem)] overflow-y-auto pr-2">
+      <div className="space-y-6 pb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Certificate Customization</h1>
+          <p className="text-slate-500">Set signature name and designation per learning path.</p>
+        </div>
 
       <Card>
         <div className="overflow-x-auto">
@@ -204,7 +215,7 @@ export function CertificateCustomizationPage() {
                   <td className="py-3 px-3 text-slate-500" colSpan={6}>No learning paths found.</td>
                 </tr>
               ) : (
-                rows.map((row) => (
+                paginatedRows.map((row) => (
                   <tr key={row.id} className="border-b border-slate-100">
                     <td className="py-2 px-3 font-medium text-slate-900">{row.title}</td>
                     <td className="py-2 px-3">{row.certificate_signer_name || '-'}</td>
@@ -230,6 +241,51 @@ export function CertificateCustomizationPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-1 border-t border-slate-200 pt-3">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+          >
+            First
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            &lt;
+          </Button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+            <Button
+              key={pageNum}
+              size="sm"
+              variant={currentPage === pageNum ? 'default' : 'outline'}
+              onClick={() => setCurrentPage(pageNum)}
+            >
+              {pageNum}
+            </Button>
+          ))}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            &gt;
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+          >
+            Last
+          </Button>
         </div>
       </Card>
 
@@ -342,6 +398,7 @@ export function CertificateCustomizationPage() {
           </Card>
         </ModalOverlay>
       ) : null}
+      </div>
     </div>
   );
 }
