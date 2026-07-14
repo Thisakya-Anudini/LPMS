@@ -500,7 +500,7 @@ export function LearnerMyProgressPage() {
                           <div>
                             <p className="text-sm font-semibold text-secondary-900">
                               {course.title}{' '}
-                              {course.deliveryMode === 'ONLINE' ? 'Online' : course.deliveryMode === 'PHYSICAL' ? 'Physical' : ''}
+                              {course.deliveryMode === 'ONLINE' ? 'Online' : course.deliveryMode === 'PHYSICAL' ? 'Physical' : 'N/A'}
                             </p>
 
                             <p className="mt-2 text-xs font-medium tracking-wide text-secondary-500">{course.code}</p>
@@ -675,7 +675,9 @@ export function LearnerMyProgressPage() {
                               <span className="block text-xs text-secondary-500 mt-2">
                                 {course.deliveryMode === 'ONLINE'
                                   ? 'Mode: Online'
-                                  : `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`}
+                                  : course.deliveryMode === 'PHYSICAL'
+                                    ? `Mode: Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`
+                                    : 'Mode: N/A'}
                                 {courseDuration ? ` | Duration: ${courseDuration}` : ''}
                               </span>
                             </div>

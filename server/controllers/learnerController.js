@@ -65,14 +65,19 @@ const normalizeEmailFromEmployeeDetails = (row) => {
 
 const normalizeCourseDeliveryMode = (value) => {
   const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'N/A') return 'N/A';
+  
   if (normalized === 'PHYSICAL' || normalized === 'CLASSROOM') {
     return 'PHYSICAL';
   }
-  if (normalized === 'HYBRID') {
+  if (normalized === 'HYBRID' || normalized === 'ONLINE') {
     return 'ONLINE';
   }
-  return 'ONLINE';
+  
+  // Change the default fallback to N/A 
+  return 'N/A';
 };
+
 
 const normalizeErpCourse = (row, index = 0) => {
   const courseCode = String(row?.courseCode || '').trim();
@@ -300,6 +305,77 @@ const buildErpEnrollmentIndex = (rows) => {
   }
 
   return index;
+};
+
+const buildCompletedErpOnlyCourses = ({
+  rows,
+  erpCourses,
+  alreadyEnrolledCourses
+}) => {
+  const existingKeys = new Set(
+    alreadyEnrolledCourses
+      .flatMap((course) => [course.code, course.title])
+      .map(normalizeCourseKey)
+      .filter(Boolean)
+  );
+  const erpCoursesByKey = new Map();
+
+  for (const course of erpCourses) {
+    for (const key of [course.code, course.title].map(normalizeCourseKey).filter(Boolean)) {
+      if (!erpCoursesByKey.has(key)) {
+        erpCoursesByKey.set(key, course);
+      }
+    }
+  }
+
+  const completedCourses = [];
+  for (const enrollment of rows.map(normalizeErpEnrollmentRow)) {
+    if (!enrollment.isCompleted) {
+      continue;
+    }
+
+    const keys = [enrollment.courseCode, enrollment.courseTitle].map(normalizeCourseKey).filter(Boolean);
+    if (keys.length === 0 || keys.some((key) => existingKeys.has(key))) {
+      continue;
+    }
+
+    const erpCourse = keys.map((key) => erpCoursesByKey.get(key)).find(Boolean);
+    const code = enrollment.courseCode || erpCourse?.code || enrollment.courseTitle;
+    const title = enrollment.courseTitle || erpCourse?.title || code || 'Course';
+
+    completedCourses.push({
+      id: erpCourse?.id || code || title,
+      code: code || title,
+      title,
+      description: erpCourse?.description || null,
+      durationHours: erpCourse?.durationHours || null,
+      duration: enrollment.duration || normalizeDisplayValue(erpCourse?.duration),
+      erpStatus: enrollment.statusLabel,
+      isCompleted: true,
+      deliveryMode: normalizeCourseDeliveryMode(erpCourse?.deliveryMode),
+      stageTitle: null,
+      stageOrder: 0,
+      courseOrder: 0,
+      enrollment: {
+        id: `erp-${normalizeLooseKey(code || title)}`,
+        status: 'COMPLETED',
+        progress: 100
+      },
+      learningPath: {
+        id: 'erp-course-enrollments',
+        title: 'ERP Course Enrollment',
+        description: 'Completed course from ERP enrollment details.',
+        category: 'RESTRICTED',
+        totalDuration: enrollment.duration || normalizeDisplayValue(erpCourse?.duration) || ''
+      }
+    });
+
+    for (const key of keys) {
+      existingKeys.add(key);
+    }
+  }
+
+  return completedCourses;
 };
 
 const findErpEnrollmentForCourse = (index, course) => {
@@ -695,10 +771,11 @@ const listLearnerPathCourses = async ({ enrollmentId, learningPathId, useCourseR
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             course.duration AS course_duration,
             CASE
-              WHEN course.type = 'CLASSROOM' THEN 'PHYSICAL'
-              WHEN course.type = 'HYBRID' THEN 'ONLINE'
-              ELSE 'ONLINE'
-            END AS delivery_mode,
+              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR
+                   COALESCE(course.title, lps.title) ILIKE '%eleaning%'
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode,       
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -723,7 +800,12 @@ const listLearnerPathCourses = async ({ enrollmentId, learningPathId, useCourseR
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             sc.course_duration,
-            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+            CASE
+              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -1316,11 +1398,13 @@ export const getLearnerOtherCourses = async (req, res) => {
   const principalId = await resolvePrincipalForLearner(req.user);
 
   try {
+    let erpEnrollmentRows = [];
     let erpEnrollmentIndex = new Map();
     if (employeeNo) {
       try {
         const erpEnrollmentResponse = await fetchCourseEnrollmentDetails(employeeNo);
-        erpEnrollmentIndex = buildErpEnrollmentIndex(extractErpRows(erpEnrollmentResponse));
+        erpEnrollmentRows = extractErpRows(erpEnrollmentResponse);
+        erpEnrollmentIndex = buildErpEnrollmentIndex(erpEnrollmentRows);
       } catch (error) {
         console.warn('LPMS ERP other-course enrollment sync failed:', {
           employeeNo,
@@ -1380,9 +1464,10 @@ export const getLearnerOtherCourses = async (req, res) => {
               COALESCE(c.description, sc.course_title) AS course_description,
               COALESCE(c.duration, sc.course_duration) AS course_duration,
               CASE
-                WHEN c.type = 'CLASSROOM' THEN 'PHYSICAL'
-                WHEN c.type = 'HYBRID' THEN 'ONLINE'
-                ELSE COALESCE(sc.delivery_mode, 'ONLINE')
+                WHEN COALESCE(c.title, sc.course_title) ILIKE '%online%' OR 
+                     COALESCE(c.title, sc.course_title) ILIKE '%elearning%' 
+                THEN 'ONLINE'
+                ELSE 'N/A'
               END AS delivery_mode,
               lps.title AS stage_title,
               lps.stage_order,
@@ -1412,7 +1497,12 @@ export const getLearnerOtherCourses = async (req, res) => {
               sc.course_title,
               sc.course_title AS course_description,
               sc.course_duration,
-              COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+              CASE
+                WHEN sc.course_title ILIKE '%online%' OR 
+                     sc.course_title ILIKE '%elearning%' 
+                THEN 'ONLINE'
+                ELSE 'N/A'
+              END AS delivery_mode,
               lps.title AS stage_title,
               lps.stage_order,
               sc.course_order
@@ -1467,15 +1557,25 @@ export const getLearnerOtherCourses = async (req, res) => {
       };
     });
 
-    const enrolledKeys = new Set(
+    const erpOnlyCompletedCourses = buildCompletedErpOnlyCourses({
+      rows: erpEnrollmentRows,
+      erpCourses,
       alreadyEnrolledCourses
+    });
+    const enrolledAndCompletedCourses = [
+      ...alreadyEnrolledCourses,
+      ...erpOnlyCompletedCourses
+    ];
+
+    const enrolledKeys = new Set(
+      enrolledAndCompletedCourses
         .flatMap((course) => [course.code, course.title])
         .map(normalizeCourseKey)
         .filter(Boolean)
     );
 
     const learningPathsByCourseKey = new Map();
-    for (const course of alreadyEnrolledCourses) {
+    for (const course of enrolledAndCompletedCourses) {
       for (const key of [course.code, course.title].map(normalizeCourseKey).filter(Boolean)) {
         if (!learningPathsByCourseKey.has(key)) {
           learningPathsByCourseKey.set(key, []);
@@ -1503,7 +1603,7 @@ export const getLearnerOtherCourses = async (req, res) => {
     });
 
     return res.status(200).json({
-      alreadyEnrolledCourses,
+      alreadyEnrolledCourses: enrolledAndCompletedCourses,
       preferredCourses: courses.filter((course) => !course.alreadyEnrolled),
       courses
     });
@@ -1611,8 +1711,10 @@ export const getPublicLearningPathById = async (req, res) => {
             course.title AS course_title,
             sc.course_order,
             CASE
-              WHEN course.type = 'ONLINE' THEN 'ONLINE'
-              ELSE 'PHYSICAL'
+              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(course.title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
             END AS delivery_mode
           FROM learning_path_stages lps
           JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -1626,7 +1728,12 @@ export const getPublicLearningPathById = async (req, res) => {
             COALESCE(sc.course_code, sc.course_title) AS course_id,
             sc.course_title AS course_title,
             sc.course_order,
-            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode
+            CASE
+              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode
           FROM learning_path_stages lps
           JOIN stage_courses sc ON sc.stage_id = lps.id
           WHERE lps.learning_path_id = $1
@@ -2012,9 +2119,10 @@ export const updateLearnerCourseCompletion = async (req, res) => {
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             CASE
-              WHEN course.type = 'CLASSROOM' THEN 'PHYSICAL'
-              WHEN course.type = 'HYBRID' THEN 'ONLINE'
-              ELSE 'ONLINE'
+              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(course.title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
             END AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
@@ -2036,7 +2144,12 @@ export const updateLearnerCourseCompletion = async (req, res) => {
             lps.title AS stage_title,
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
-            COALESCE(sc.delivery_mode, 'ONLINE') AS delivery_mode,
+            CASE
+              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
+                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
+              THEN 'ONLINE'
+              ELSE 'N/A'
+            END AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id

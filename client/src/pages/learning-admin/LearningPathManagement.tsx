@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { ApiRequestError, courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -76,6 +76,8 @@ type StageForm = {
   selectedCourseIds: string[];
 };
 
+const EMPLOYEE_NO_LENGTH = 6;
+
 const createStageForm = (index: number): StageForm => ({
   stageId: `stage-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
   title: `Stage ${index + 1}`,
@@ -111,54 +113,6 @@ const filterCoursesByQuery = (courses: CourseItem[], query: string) => {
   });
 };
 
-const DURATION_UNIT_OPTIONS = [
-  { value: 'hours', label: 'Hours' },
-  { value: 'days', label: 'Days' },
-  { value: 'weeks', label: 'Weeks' },
-  { value: 'months', label: 'Months' },
-  { value: 'years', label: 'Years' }
-];
-
-const parseDurationParts = (value: string) => {
-  const normalized = String(value || '').trim();
-  if (!normalized) {
-    return { value: '', unit: 'months' };
-  }
-
-  const durationMatch = normalized.match(/^([0-9]+(?:\.[0-9]+)?)\s*(hours?|hrs?|days?|dates?|weeks?|months?|years?|yrs?)?\s*$/i);
-  if (!durationMatch) {
-    return { value: normalized, unit: 'months' };
-  }
-
-  const numberPart = durationMatch[1];
-  const unitPart = durationMatch[2]?.toLowerCase();
-  const normalizedUnit =
-    unitPart === 'hour' || unitPart === 'hours' || unitPart === 'hr' || unitPart === 'hrs'
-      ? 'hours'
-      : unitPart === 'day' || unitPart === 'days' || unitPart === 'date' || unitPart === 'dates'
-        ? 'days'
-        : unitPart === 'week' || unitPart === 'weeks'
-          ? 'weeks'
-          : unitPart === 'month' || unitPart === 'months'
-            ? 'months'
-            : unitPart === 'year' || unitPart === 'years' || unitPart === 'yr' || unitPart === 'yrs'
-              ? 'years'
-              : 'months';
-
-  return {
-    value: numberPart,
-    unit: normalizedUnit
-  };
-};
-
-const formatDurationValue = (value: string, unit: string) => {
-  const normalizedValue = String(value || '').trim();
-  if (!normalizedValue) {
-    return '';
-  }
-
-  return `${normalizedValue} ${unit}`;
-};
 const normalizeTitleInputSpacing = (value: string) => value.replace(/\s{2,}/g, ' ');
 
 const isDuplicateLearningPathPayload = (payload: unknown): payload is DuplicateLearningPathPayload => {
@@ -174,9 +128,6 @@ const initialPathForm = {
   title: '',
   description: '',
   category: 'PUBLIC' as Category,
-  totalDuration: '',
-  durationValue: '',
-  durationUnit: 'months',
   stages: [] as StageForm[],
   draftStage: createStageForm(0) as StageForm
 };
@@ -204,7 +155,7 @@ const sectionMeta: Record<LearningPathManagementSection, { title: string; descri
 };
 
 export function LearningPathManagement({ section }: { section: LearningPathManagementSection }) {
-  const { getAccessToken } = useAuth();
+  const { getAccessToken, user } = useAuth();
   const { showToast } = useToast();
 
   const [paths, setPaths] = useState<LearningPathRow[]>([]);
@@ -216,9 +167,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [pathForm, setPathForm] = useState(initialPathForm);
   const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | { message: string; existing: DuplicateLearningPathSummary[] }>(null);
   const [pathTitleError, setPathTitleError] = useState<string | null>(null);
-  const [pathDurationError, setPathDurationError] = useState<string | null>(null);
   const [editTitleError, setEditTitleError] = useState<string | null>(null);
-  const [editDurationError, setEditDurationError] = useState<string | null>(null);
   const [pathFormLoading, setPathFormLoading] = useState(false);
   const [createCourseSearch, setCreateCourseSearch] = useState('');
   const [editCourseSearch, setEditCourseSearch] = useState('');
@@ -228,9 +177,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     title: '',
     description: '',
     category: 'PUBLIC' as Category,
-    totalDuration: '',
-    durationValue: '',
-    durationUnit: 'months',
     status: 'ACTIVE' as PathStatus,
     stages: [] as StageForm[]
   });
@@ -243,6 +189,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [assignOptionsLoading, setAssignOptionsLoading] = useState(section === 'assign');
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
+  const [assignEmployeeNoError, setAssignEmployeeNoError] = useState('');
+  const [assignEmployeeNoChecking, setAssignEmployeeNoChecking] = useState(false);
   const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
   const [assignDesignationFilter, setAssignDesignationFilter] = useState('');
   const [assignGradeFilter, setAssignGradeFilter] = useState('');
@@ -254,6 +202,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
   >([]);
   const [enrolledEmployeeNumbers, setEnrolledEmployeeNumbers] = useState<Set<string>>(new Set());
+  const assignEmployeeNoValidationRequestId = useRef(0);
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
   const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
   const hasAssignFilterSearch =
@@ -261,6 +210,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     Boolean(assignGradeFilter) ||
     Boolean(assignOrganizationFilter) ||
     Boolean(assignPayrollFilter);
+  const assignEmployeeNoPlaceholder = `e.g. ${user?.employeeNo?.trim() || 'employee number'}`;
+  const assignNamePlaceholder = `e.g. ${user?.name?.trim() || 'name'}`;
 
   const clearAssignFilters = () => {
     setAssignDesignationFilter('');
@@ -270,6 +221,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const activateAssignEmployeeSearch = () => {
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
     }
@@ -279,6 +232,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const activateAssignNameSearch = () => {
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
     }
@@ -288,6 +243,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const activateAssignFilterSearch = () => {
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
     }
@@ -297,7 +254,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const handleAssignEmployeeNoChange = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
+    const numericValue = value.replace(/\D/g, '').slice(0, EMPLOYEE_NO_LENGTH);
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (numericValue.trim()) {
       activateAssignEmployeeSearch();
     }
@@ -436,28 +395,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     return { valid: true };
   };
 
-  const validateDurationValue = (value: string, unit: string): { valid: true } | { valid: false; message: string } => {
-    const normalized = String(value || '').trim();
-    if (normalized === '') {
-      return { valid: true };
-    }
-    if (normalized.startsWith('-')) {
-      return { valid: false, message: 'Duration must not be negative.' };
-    }
-
-    if (!/^([0-9]+(?:\.[0-9]+)?)$/.test(normalized)) {
-      return { valid: false, message: 'Duration must be a valid number.' };
-    }
-
-    const normalizedUnit = String(unit || '').trim().toLowerCase();
-    const allowedUnits = ['hours', 'days', 'weeks', 'months', 'years'];
-    if (!allowedUnits.includes(normalizedUnit)) {
-      return { valid: false, message: 'Please select a valid duration unit.' };
-    }
-
-    return { valid: true };
-  };
-
   const validateCoursesSelected = (stages: StageForm[]): { valid: true } | { valid: false; message: string } => {
     const hasSelectedCourses = stages.some((stage) => stage.selectedCourseIds.length > 0);
     if (!hasSelectedCourses) {
@@ -475,13 +412,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     if (!titleValidation.valid) {
       setPathTitleError(titleValidation.message);
       showToast(titleValidation.message, 'error');
-      setPathFormLoading(false);
-      return;
-    }
-    const durationValidation = validateDurationValue(pathForm.durationValue, pathForm.durationUnit);
-    if (!durationValidation.valid) {
-      setPathDurationError(durationValidation.message);
-      showToast(durationValidation.message, 'error');
       setPathFormLoading(false);
       return;
     }
@@ -506,13 +436,11 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         return;
       }
 
-      const totalDuration = formatDurationValue(pathForm.durationValue, pathForm.durationUnit);
-
       await learningApi.createLearningPath(token, {
         title: pathForm.title,
         description: pathForm.description,
         category: pathForm.category,
-        totalDuration,
+        totalDuration: '',
         stages: getCreateStagesPayload()
       });
       setPathForm(initialPathForm);
@@ -555,21 +483,15 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             .sort((a, b) => a.course_order - b.course_order)
             .map((course) => courses.find((catalogCourse) => catalogCourse.title === course.title)?.id)
             .filter((value): value is string => Boolean(value))
-        }));
+      }));
 
       setEditPathId(path.id);
-      const parsedDuration = parseDurationParts(path.total_duration);
-
-      
       setEditCourseSearch('');
             
       const initialForm = {
         title: path.title,
         description: path.description,
         category: path.category,
-        totalDuration: path.total_duration,
-        durationValue: parsedDuration.value,
-        durationUnit: parsedDuration.unit,
         status: path.status,
         stages: mappedStages.length > 0 ? mappedStages : [createStageForm(0)]
       };
@@ -593,13 +515,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     if (!titleValidation.valid) {
       setEditTitleError(titleValidation.message);
       showToast(titleValidation.message, 'error');
-      setEditLoading(false);
-      return;
-    }
-    const durationValidation = validateDurationValue(editForm.durationValue, editForm.durationUnit);
-    if (!durationValidation.valid) {
-      setEditDurationError(durationValidation.message);
-      showToast(durationValidation.message, 'error');
       setEditLoading(false);
       return;
     }
@@ -627,7 +542,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       const isUnchanged = originalEditForm.title === editForm.title &&
       originalEditForm.description === editForm.description &&
       originalEditForm.category === editForm.category &&
-      originalEditForm.totalDuration === editForm.totalDuration &&
       originalEditForm.status === editForm.status &&
       JSON.stringify(originalEditForm.stages) === JSON.stringify(editForm.stages);
 
@@ -647,13 +561,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         return;
       }
 
-      const totalDuration = formatDurationValue(editForm.durationValue, editForm.durationUnit);
-
       await learningApi.updateLearningPath(token, editPathId, {
         title: editForm.title,
         description: editForm.description,
         category: editForm.category,
-        totalDuration,
         status: editForm.status,
         stages: toStages(editForm.stages)
       });
@@ -826,27 +737,26 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {stages.map((stage, stageIndex) => (
           <div key={`${mode}-${stage.stageId}`} className="md:col-span-2 border border-slate-200 rounded-lg p-3 space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-end gap-2">
               <Input
                 label={`Stage ${stageIndex + 1} Name`}
                 value={stage.title}
                 onChange={(event) => updateStageTitle(mode, stageIndex, event.target.value)}
                 required
               />
-              <Button type="button" variant="outline" size="sm" onClick={() => removeStage(mode, stageIndex)}>
+              <Button type="button" variant="outline" className='h-11' onClick={() => removeStage(mode, stageIndex)}>
                 Remove Stage
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <p className="text-sm font-medium text-slate-700">Select Courses</p>
                   {mode === 'edit' ? (
                     <div className="w-full md:w-80">
                       <Input
-                        id={`edit-course-search-${stage.stageId}`}
-                        label="Search Courses"
+                        id={`edit-course-search-${stage.stageId}`}                       
                         placeholder="Search by course name or ID"
                         value={editCourseSearch}
                         onChange={(event) => setEditCourseSearch(event.target.value)}
@@ -885,7 +795,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                             <span className="block text-xs text-slate-600">
                               {course.deliveryMode === 'ONLINE'
                                 ? `Online${course.videoUrl ? ' | Video available' : ''}`
-                                : `Physical${course.venue ? ` | ${course.venue}` : ''}`}
+                                : course.deliveryMode === 'PHYSICAL'
+                                  ? `Physical${course.venue ? ` | Venue: ${course.venue}` : ''}`
+                                  : 'N/A'}
                             </span>
                           ) : null}
                         </span>
@@ -934,9 +846,10 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
             </div>
           </div>
         ))}
-        <div className="md:col-span-2">
-          <Button type="button" variant="outline" onClick={() => addStage(mode)}>
-            Add Stage
+        <div className="md:col-span-2 pt-2">
+          <Button type="button" variant="secondary" className="w-full" onClick={() => addStage(mode)}>
+            <Plus className="h-4 w-4" />
+            Add Another Stage
           </Button>
         </div>
       </div>
@@ -959,23 +872,22 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
               />
               <Button
                 type="button"
-                variant="outline"
-                size="md"
+                variant="secondary"
                 onClick={() => addStage('create')}
-                className="self-end border-slate-400 text-slate-900 hover:bg-slate-200"
+                className="h-11"
               >
+                <Plus className="h-5 w-5" />
                 Add Stage
               </Button>
             </div>
 
             <div>
-              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <p className="text-sm font-medium text-slate-700">Select Courses</p>
                 <div className="w-full md:w-80">
                   <Input
                     id="create-course-search"
                     key="create-course-search"
-                    label="Search Courses"
                     placeholder="Search by course name or ID"
                     value={createCourseSearch}
                     onChange={(event) => setCreateCourseSearch(event.target.value)}
@@ -1097,9 +1009,64 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     fetchEnrolled();
   }, [assignForm.learningPathId, getAccessToken, showToast]);
 
+  useEffect(() => {
+    const employeeNo = assignEmployeeNoSearch.trim();
+    const requestId = assignEmployeeNoValidationRequestId.current + 1;
+    assignEmployeeNoValidationRequestId.current = requestId;
+
+    if (section !== 'assign' || !employeeNo || employeeNo.length < EMPLOYEE_NO_LENGTH) {
+      setAssignEmployeeNoChecking(false);
+      return;
+    }
+
+    setAssignEmployeeNoChecking(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token || assignEmployeeNoValidationRequestId.current !== requestId) {
+          return;
+        }
+
+        const response = await learningApi.searchAssignableEmployees(token, { employeeNo });
+        if (assignEmployeeNoValidationRequestId.current !== requestId) {
+          return;
+        }
+
+        const hasExactEmployee = response.employees.some(
+          (employee) => String(employee.employeeNumber || '').trim() === employeeNo
+        );
+        setAssignEmployeeNoError(hasExactEmployee ? '' : 'Incorrect employee number.');
+      } catch {
+        if (assignEmployeeNoValidationRequestId.current === requestId) {
+          setAssignEmployeeNoError('Unable to validate employee number.');
+        }
+      } finally {
+        if (assignEmployeeNoValidationRequestId.current === requestId) {
+          setAssignEmployeeNoChecking(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [assignEmployeeNoSearch, getAccessToken, section]);
+
   const handleAssignSearch = async () => {
+    const employeeNo = assignEmployeeNoSearch.trim();
+    if (employeeNo && employeeNo.length !== EMPLOYEE_NO_LENGTH) {
+      setAssignEmployeeNoError(`Employee No must be ${EMPLOYEE_NO_LENGTH} digits.`);
+      setLearners([]);
+      setAssignForm((prev) => ({ ...prev, selectedLearnerEmployeeNumbers: [] }));
+      return;
+    }
+    if (employeeNo && (assignEmployeeNoChecking || assignEmployeeNoError)) {
+      return;
+    }
+
     try {
       setAssignSearchLoading(true);
+      setAssignEmployeeNoError('');
       const token = await getAccessToken();
       if (!token) {
         showToast('Session expired. Please login again.', 'error');
@@ -1117,6 +1084,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
       setLearners(response.employees);
       setAssignForm((prev) => ({ ...prev, selectedLearnerEmployeeNumbers: [] }));
+      if (employeeNo && response.employees.length === 0) {
+        setAssignEmployeeNoError('Incorrect employee number.');
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to search ERP employees.', 'error');
     } finally {
@@ -1152,7 +1122,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
         <div className="grid grid-cols-1 xl:grid-cols-9 gap-6">
           <Card title="Create Learning Path" className="xl:col-span-5">
             <form className="space-y-4" onSubmit={handleCreatePath}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                 <Input
                   label="Title"
                   value={pathForm.title}
@@ -1189,43 +1159,17 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     { value: 'RESTRICTED', label: 'Restricted' }
                   ]}
                 />
-                <div className="md:col-span-2">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px]">
-                    <Input
-                      label="Total Duration"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={pathForm.durationValue}
-                      error={pathDurationError ?? undefined}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setPathForm((prev) => ({
-                          ...prev,
-                          durationValue: nextValue,
-                          totalDuration: formatDurationValue(nextValue, prev.durationUnit)
-                        }));
-                        setPathDurationError(null);
-                      }}
-                      placeholder="e.g. 2"
-                      required
-                    />
-                    <Select
-                      label="Unit"
-                      value={pathForm.durationUnit}
-                      onChange={(event) => {
-                        const nextUnit = event.target.value;
-                        setPathForm((prev) => ({
-                          ...prev,
-                          durationUnit: nextUnit,
-                          totalDuration: formatDurationValue(prev.durationValue, nextUnit)
-                        }));
-                      }}
-                      options={DURATION_UNIT_OPTIONS}
-                    />
+                {pathDuplicateWarning ? (
+                  <div className="md:col-span-2 mt-1 text-sm text-amber-700">
+                    <p className="font-medium">{pathDuplicateWarning.message}</p>
+                    <ul className="list-disc list-inside">
+                      {pathDuplicateWarning.existing.map((e) => (
+                        <li key={e.id ?? String(e.title)}>{e.title} {e.overlappingCourses && e.overlappingCourses.length > 0 ? `— overlapping courses: ${e.overlappingCourses.map((c) => c.title || c.code).join(', ')}` : ''}</li>
+                      ))}
+                    </ul>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">Examples: 8 hours, 3 days, 2 weeks, 6 months, 1 year.</p>
-                </div>
+                ) : null}
+                
                 <Input
                   label="Description"
                   value={pathForm.description}
@@ -1254,7 +1198,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                   {pathForm.description.trim() || 'Add a description to preview details.'}
                 </p>
                 <p className="text-xs text-slate-500 mt-2">
-                  {pathForm.category.replace('_', ' ')} | {formatDurationValue(pathForm.durationValue, pathForm.durationUnit) || 'Duration not set'}
+                  {pathForm.category.replace('_', ' ')}
                 </p>
               </div>
               <div>
@@ -1360,14 +1304,14 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={assignEmployeeNoSearch}
                     onFocus={activateAssignEmployeeSearch}
                     onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
-                    placeholder="e.g. 011338"
+                    placeholder={assignEmployeeNoPlaceholder}
                   />
                   <Input
                     label="Search by Name"
                     value={assignSurnameSearch}
                     onFocus={activateAssignNameSearch}
                     onChange={(event) => handleAssignNameSearchChange(event.target.value)}
-                    placeholder="e.g. Mohamed"
+                    placeholder={assignNamePlaceholder}
                   />
                   <Select
                     label="Filter by Designation"
@@ -1427,12 +1371,16 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     onClick={handleAssignSearch}
                     isLoading={assignSearchLoading}
                     disabled={
-                      !assignEmployeeNoSearch.trim() &&
-                      !assignSurnameSearch.trim() &&
-                      !assignDesignationFilter &&
-                      !assignGradeFilter &&
-                      !assignOrganizationFilter &&
-                      !assignPayrollFilter
+                      (
+                        !assignEmployeeNoSearch.trim() &&
+                        !assignSurnameSearch.trim() &&
+                        !assignDesignationFilter &&
+                        !assignGradeFilter &&
+                        !assignOrganizationFilter &&
+                        !assignPayrollFilter
+                      ) ||
+                      assignEmployeeNoChecking ||
+                      Boolean(assignEmployeeNoError)
                     }
                   >
                     Search
@@ -1638,13 +1586,13 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
       {section === 'manage' && editPathId ? (
         <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-xl bg-white shadow-xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-7 py-5">
               <h2 className="text-lg font-semibold text-slate-900">Edit Learning Path</h2>
               <Button type="button" variant="outline" size="sm" onClick={() => setEditPathId(null)}>
                 Close
               </Button>
             </div>
-            <div className="p-4">
+            <div className="p-7">
               <form className="space-y-4" onSubmit={handleUpdatePath}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
@@ -1656,6 +1604,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       setEditForm((prev) => ({ ...prev, title: sanitized }));
                       setEditTitleError(null);
                     }}
+                    maxLength={50}
+                    helperText={`${editForm.title.length}/50 characters entered, ${50 - editForm.title.length} remaining`}
                     required
                   />
                   <Select
@@ -1669,42 +1619,6 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                       { value: 'RESTRICTED', label: 'Restricted' }
                     ]}
                   />
-                  <div className="md:col-span-2">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px]">
-                      <Input
-                        label="Total Duration"
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={editForm.durationValue}
-                        error={editDurationError ?? undefined}
-                        onChange={(event) => {
-                          const nextValue = event.target.value;
-                          setEditForm((prev) => ({
-                            ...prev,
-                            durationValue: nextValue,
-                            totalDuration: formatDurationValue(nextValue, prev.durationUnit)
-                          }));
-                          setEditDurationError(null);
-                        }}
-                        required
-                      />
-                      <Select
-                        label="Unit"
-                        value={editForm.durationUnit}
-                        onChange={(event) => {
-                          const nextUnit = event.target.value;
-                          setEditForm((prev) => ({
-                            ...prev,
-                            durationUnit: nextUnit,
-                            totalDuration: formatDurationValue(prev.durationValue, nextUnit)
-                          }));
-                        }}
-                        options={DURATION_UNIT_OPTIONS}
-                      />
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">Examples: 8 hours, 3 days, 2 weeks, 6 months, 1 year.</p>
-                  </div>
                   <Select
                     label="Status"
                     value={editForm.status}

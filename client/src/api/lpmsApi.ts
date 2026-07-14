@@ -233,7 +233,7 @@ export const learningApi = {
       title: string;
       description: string;
       category: 'RESTRICTED' | 'PUBLIC';
-      totalDuration: string;
+      totalDuration?: string;
       stages?: Array<{
         title: string;
         order: number;
@@ -254,7 +254,7 @@ export const learningApi = {
       title: string;
       description: string;
       category: 'RESTRICTED' | 'PUBLIC';
-      totalDuration: string;
+      totalDuration?: string;
       status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
       stages?: Array<{
         title: string;
@@ -409,6 +409,11 @@ export const learningApi = {
         status: string;
         progress: number;
         enrolledAt: string;
+        courseProgress: Array<{
+          courseId: string;
+          courseCode: string;
+          progress: number;
+        }>;
         classAssignments: Array<{
           id: string;
           courseCode: string;
