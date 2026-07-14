@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { ApiRequestError, courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -1304,7 +1304,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     value={assignEmployeeNoSearch}
                     onFocus={activateAssignEmployeeSearch}
                     onChange={(event) => handleAssignEmployeeNoChange(event.target.value)}
-                    placeholder="e.g. 011338"
+                    placeholder={assignEmployeeNoPlaceholder}
                   />
                   <Input
                     label="Search by Name"
