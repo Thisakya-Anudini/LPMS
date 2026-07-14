@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Check, Download, RefreshCcw, School, Search, Users, X } from 'lucide-react';
+import { BookOpen, Check, Download, FileText, RefreshCcw, School, Search, Users, X } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -355,10 +355,42 @@ export function AssignEnrollmentToClassesPage() {
   const [assigning, setAssigning] = useState(false);
   const [selectedReportGroupKey, setSelectedReportGroupKey] = useState('');
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'assign' | 'reports'>('assign');
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [classDetailGroup, setClassDetailGroup] = useState<ClassReportGroup | null>(null);
   const [classDetailForm, setClassDetailForm] = useState<ClassDetailFormValues>(createEmptyClassDetailForm);
   const [classDetailLoading, setClassDetailLoading] = useState(false);
   const [classDetailSaving, setClassDetailSaving] = useState(false);
+
+  const closeReportModal = useCallback(() => {
+    setIsReportModalOpen(false);
+  }, []);
+
+  const closeClassDetailModal = useCallback(() => {
+    setClassDetailGroup(null);
+    setClassDetailForm(createEmptyClassDetailForm());
+  }, []);
+
+  useEffect(() => {
+    if (!isReportModalOpen && !classDetailGroup) {
+      return undefined;
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      if (classDetailGroup) {
+        closeClassDetailModal();
+        return;
+      }
+
+      closeReportModal();
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [classDetailGroup, closeClassDetailModal, closeReportModal, isReportModalOpen]);
 
   const selectedPath = useMemo(
     () => learningPaths.find((path) => path.id === selectedPathId) || null,
@@ -906,11 +938,6 @@ export function AssignEnrollmentToClassesPage() {
     }
   };
 
-  const closeClassDetailModal = () => {
-    setClassDetailGroup(null);
-    setClassDetailForm(createEmptyClassDetailForm());
-  };
-
   const downloadClassDetailExcel = (values: ClassDetailFormValues) => {
     const workbookHtml = `
       <html>
@@ -1022,7 +1049,24 @@ export function AssignEnrollmentToClassesPage() {
         </div>
       </div>
 
-      <Card title="Class Assignment Setup" description="Choose the learning path, course, and ERP class before selecting learners.">
+      <Card
+        title="Class Assignment Setup"
+        description="Choose the learning path, course, and ERP class before selecting learners."
+        action={
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              setActiveWorkspaceTab('assign');
+              setIsReportModalOpen(true);
+            }}
+            className="min-h-10 rounded-xl bg-slate-950 px-5 font-semibold text-white shadow-medium hover:bg-slate-800"
+          >
+            <FileText className="h-4 w-4" />
+            Report
+          </Button>
+        }
+      >
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Select
             label="Learning Path"
@@ -1204,37 +1248,9 @@ export function AssignEnrollmentToClassesPage() {
         ) : null}
       </Card>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-secondary-200 bg-white p-3 shadow-soft sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid grid-cols-2 gap-2 sm:w-fit">
-          <button
-            type="button"
-            onClick={() => setActiveWorkspaceTab('assign')}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              activeWorkspaceTab === 'assign'
-                ? 'bg-primary-700 text-white shadow-sm'
-                : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
-            }`}
-          >
-            Assign learners
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveWorkspaceTab('reports')}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              activeWorkspaceTab === 'reports'
-                ? 'bg-primary-700 text-white shadow-sm'
-                : 'bg-secondary-50 text-secondary-700 hover:bg-secondary-100'
-            }`}
-          >
-            Reports
-          </button>
-        </div>
-        <p className="text-sm text-secondary-500">
-          {activeWorkspaceTab === 'assign'
-            ? `${selectedEnrollmentIds.length} selected / ${filteredLearners.length} available`
-            : `${classReportGroups.length} report box(es) ready`}
-        </p>
-      </div>
+      <p className="text-sm text-secondary-500">
+        {selectedEnrollmentIds.length} selected / {filteredLearners.length} available
+      </p>
 
       {activeWorkspaceTab === 'assign' ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(320px,430px)_minmax(0,1fr)]">
@@ -1515,148 +1531,200 @@ export function AssignEnrollmentToClassesPage() {
         </div>
       ) : null}
 
-      {activeWorkspaceTab === 'reports' ? (
-      <Card
-        title="Course/Class Learner Reports"
-        description="Select a course class box to view learner details and download the Excel report."
-      >
-        {reportRows.length === 0 ? (
-          <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
-            Select a learning path to generate the report.
-          </p>
-        ) : classAvailabilityLoading ? (
-          <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
-            Checking ERP class availability for these courses...
-          </p>
-        ) : classReportGroups.length === 0 ? (
-          <p className="rounded-lg border border-secondary-200 p-4 text-sm text-secondary-500">
-            No report-ready learners found. Assign learners to available ERP classes, or use courses with no ERP classes.
-          </p>
-        ) : (
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {classReportGroups.map((group) => {
-                const active = selectedReportGroup?.key === group.key;
-                return (
-                  <div
-                    key={group.key}
-                    onClick={() => setSelectedReportGroupKey(group.key)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        setSelectedReportGroupKey(group.key);
-                      }
-                    }}
-                    className={`rounded-lg border p-4 text-left transition cursor-pointer ${
-                      active
-                        ? 'border-primary-500 bg-primary-50 shadow-sm'
-                        : 'border-secondary-200 bg-white hover:border-primary-300 hover:bg-secondary-50'
-                    }`}
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                      {group.learningPathTitle}
-                    </p>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <p className="font-semibold text-secondary-900">{group.courseCode}</p>
-                        <p className="text-xs text-secondary-500">{group.courseTitle}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-secondary-900">
-                          {group.hasClassAssignment ? `Class No: ${group.classCode}` : 'No class assigned'}
-                        </p>
-                        <p className="text-xs text-secondary-500">
-                          {group.hasClassAssignment ? group.classTitle || '-' : 'Report generated from LP enrollment'}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="mt-3 text-sm font-semibold text-primary-700">{group.learners.length} learner(s)</p>
-                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-auto min-h-9 w-full whitespace-normal px-3 py-2"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedReportGroupKey(group.key);
-                          downloadReportExcel(group);
-                        }}
-                      >
-                        <Download className="h-4 w-4 shrink-0" />
-                        <span>Download enrolled learners Excel</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-auto min-h-9 w-full whitespace-normal px-3 py-2"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedReportGroupKey(group.key);
-                          openClassDetailModal(group);
-                        }}
-                        disabled={!group.hasClassAssignment}
-                      >
-                        <Download className="h-4 w-4 shrink-0" />
-                        <span>Download class details</span>
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {selectedReportGroup ? (
-              <div className="rounded-lg border border-secondary-200">
-                <div className="grid gap-2 border-b border-secondary-200 bg-secondary-50 px-4 py-3 text-sm lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-center">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Learning Path</p>
-                    <p className="font-semibold text-secondary-900">{selectedReportGroup.learningPathTitle}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Course</p>
-                    <p className="font-semibold text-secondary-900">{selectedReportGroup.courseCode}</p>
-                    <p className="text-xs text-secondary-500">{selectedReportGroup.courseTitle}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Class</p>
-                    <p className="font-semibold text-secondary-900">
-                      {selectedReportGroup.hasClassAssignment
-                        ? `Class No: ${selectedReportGroup.classCode}`
-                        : 'No class assigned'}
-                    </p>
-                    <p className="text-xs text-secondary-500">
-                      {selectedReportGroup.hasClassAssignment
-                        ? selectedReportGroup.classTitle || '-'
-                        : 'Report generated from LP enrollment'}
-                    </p>
-                  </div>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                    {selectedReportGroup.learners.length} learner(s)
+      {isReportModalOpen ? (
+        <ModalOverlay className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div
+            className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-large ring-1 ring-white/20 animate-slide-in"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="class-assignment-report-title"
+          >
+            <div className="bg-slate-950 px-5 py-5 text-white">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 gap-3">
+                  <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-200 ring-1 ring-white/15">
+                    <FileText className="h-6 w-6" />
                   </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase text-sky-200">Class Assignment Report</p>
+                    <h2 id="class-assignment-report-title" className="mt-1 text-2xl font-bold text-white">
+                      Course/Class Learner Reports
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-300">
+                      Select a course class box to view learner details and download the Excel report.
+                    </p>
+                  </div>
                 </div>
-                <div className="grid grid-cols-[160px_1fr] border-b border-secondary-100 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                  <span>ID</span>
-                  <span>Name</span>
+                <button
+                  type="button"
+                  onClick={closeReportModal}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  aria-label="Close report window"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
+                  <p className="text-xs font-semibold uppercase text-slate-300">Learning Path</p>
+                  <p className="mt-1 truncate text-sm font-semibold text-white">{selectedPath?.title || 'Not selected'}</p>
                 </div>
-                <div className="max-h-80 divide-y divide-secondary-100 overflow-auto">
-                  {selectedReportGroup.learners.map((learner) => (
-                    <div
-                      key={`${selectedReportGroup.key}-${learner.id}`}
-                      className="grid grid-cols-[160px_1fr] px-4 py-2 text-sm"
-                    >
-                      <span className="text-secondary-700">{learner.id || '-'}</span>
-                      <span className="font-medium text-secondary-900">{learner.name || '-'}</span>
-                    </div>
-                  ))}
+                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
+                  <p className="text-xs font-semibold uppercase text-slate-300">Report Boxes</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{classReportGroups.length} ready</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
+                  <p className="text-xs font-semibold uppercase text-slate-300">Learners</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{learners.length} enrolled</p>
                 </div>
               </div>
-            ) : null}
+            </div>
+
+            <div className="overflow-y-auto bg-secondary-50 p-5">
+              {reportRows.length === 0 ? (
+                <p className="rounded-xl border border-secondary-200 bg-white p-5 text-sm text-secondary-500 shadow-soft">
+                  Select a learning path to generate the report.
+                </p>
+              ) : classAvailabilityLoading ? (
+                <p className="rounded-xl border border-secondary-200 bg-white p-5 text-sm text-secondary-500 shadow-soft">
+                  Checking ERP class availability for these courses...
+                </p>
+              ) : classReportGroups.length === 0 ? (
+                <p className="rounded-xl border border-secondary-200 bg-white p-5 text-sm text-secondary-500 shadow-soft">
+                  No report-ready learners found. Assign learners to available ERP classes, or use courses with no ERP classes.
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {classReportGroups.map((group) => {
+                      const active = selectedReportGroup?.key === group.key;
+                      return (
+                        <div
+                          key={group.key}
+                          onClick={() => setSelectedReportGroupKey(group.key)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              setSelectedReportGroupKey(group.key);
+                            }
+                          }}
+                          className={`cursor-pointer rounded-xl border p-4 text-left transition ${
+                            active
+                              ? 'border-primary-500 bg-white shadow-medium ring-2 ring-primary-100'
+                              : 'border-secondary-200 bg-white shadow-soft hover:border-primary-300 hover:bg-primary-50/40'
+                          }`}
+                        >
+                          <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                            {group.learningPathTitle}
+                          </p>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div>
+                              <p className="font-semibold text-secondary-900">{group.courseCode}</p>
+                              <p className="text-xs text-secondary-500">{group.courseTitle}</p>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-secondary-900">
+                                {group.hasClassAssignment ? `Class No: ${group.classCode}` : 'No class assigned'}
+                              </p>
+                              <p className="text-xs text-secondary-500">
+                                {group.hasClassAssignment ? group.classTitle || '-' : 'Report generated from LP enrollment'}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="mt-3 text-sm font-semibold text-primary-700">{group.learners.length} learner(s)</p>
+                          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-auto min-h-9 w-full whitespace-normal px-3 py-2"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedReportGroupKey(group.key);
+                                downloadReportExcel(group);
+                              }}
+                            >
+                              <Download className="h-4 w-4 shrink-0" />
+                              <span>Download enrolled learners Excel</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="h-auto min-h-9 w-full whitespace-normal rounded-xl bg-slate-950 px-3 py-2 shadow-sm hover:bg-slate-800"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelectedReportGroupKey(group.key);
+                                openClassDetailModal(group);
+                              }}
+                              disabled={!group.hasClassAssignment}
+                            >
+                              <FileText className="h-4 w-4 shrink-0" />
+                              <span>Class detail report</span>
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {selectedReportGroup ? (
+                    <div className="overflow-hidden rounded-xl border border-secondary-200 bg-white shadow-soft">
+                      <div className="grid gap-2 border-b border-secondary-200 bg-white px-4 py-3 text-sm lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-center">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Learning Path</p>
+                          <p className="font-semibold text-secondary-900">{selectedReportGroup.learningPathTitle}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Course</p>
+                          <p className="font-semibold text-secondary-900">{selectedReportGroup.courseCode}</p>
+                          <p className="text-xs text-secondary-500">{selectedReportGroup.courseTitle}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">Class</p>
+                          <p className="font-semibold text-secondary-900">
+                            {selectedReportGroup.hasClassAssignment
+                              ? `Class No: ${selectedReportGroup.classCode}`
+                              : 'No class assigned'}
+                          </p>
+                          <p className="text-xs text-secondary-500">
+                            {selectedReportGroup.hasClassAssignment
+                              ? selectedReportGroup.classTitle || '-'
+                              : 'Report generated from LP enrollment'}
+                          </p>
+                        </div>
+                        <span className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                          {selectedReportGroup.learners.length} learner(s)
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[160px_1fr] border-b border-secondary-100 bg-secondary-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                        <span>ID</span>
+                        <span>Name</span>
+                      </div>
+                      <div className="max-h-80 divide-y divide-secondary-100 overflow-auto">
+                        {selectedReportGroup.learners.map((learner) => (
+                          <div
+                            key={`${selectedReportGroup.key}-${learner.id}`}
+                            className="grid grid-cols-[160px_1fr] px-4 py-2 text-sm"
+                          >
+                            <span className="text-secondary-700">{learner.id || '-'}</span>
+                            <span className="font-medium text-secondary-900">{learner.name || '-'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-secondary-200 bg-white px-5 py-4">
+              <Button type="button" variant="outline" onClick={closeReportModal}>
+                Close
+              </Button>
+            </div>
           </div>
-        )}
-      </Card>
+        </ModalOverlay>
       ) : null}
 
       {classDetailGroup ? (
