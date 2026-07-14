@@ -434,14 +434,17 @@ export function AssignEnrollmentToClassesPage() {
     [learners, statusTransferEnrollmentIds]
   );
 
-  const selectableLearners =
-    assignmentMode === 'completion'
-      ? []
-      : assignmentMode === 'reassign'
-        ? reassignableLearners
-        : statusTransferLearners.length > 0
-          ? statusTransferLearners
-          : unassignedLearners;
+  const selectableLearners = useMemo(
+    () =>
+      assignmentMode === 'completion'
+        ? []
+        : assignmentMode === 'reassign'
+          ? reassignableLearners
+          : statusTransferLearners.length > 0
+            ? statusTransferLearners
+            : unassignedLearners,
+    [assignmentMode, reassignableLearners, statusTransferLearners, unassignedLearners]
+  );
 
   const filteredLearners = useMemo(() => {
     const search = learnerSearch.trim().toLowerCase();

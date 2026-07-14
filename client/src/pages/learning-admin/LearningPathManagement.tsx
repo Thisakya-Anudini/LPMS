@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { ApiRequestError, courseApi, learningApi } from '../../api/lpmsApi';
 import { Badge } from '../../components/ui/Badge';
@@ -75,6 +75,8 @@ type StageForm = {
   title: string;
   selectedCourseIds: string[];
 };
+
+const EMPLOYEE_NO_LENGTH = 6;
 
 const createStageForm = (index: number): StageForm => ({
   stageId: `stage-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
@@ -187,6 +189,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   const [assignOptionsLoading, setAssignOptionsLoading] = useState(section === 'assign');
   const [assignSearchLoading, setAssignSearchLoading] = useState(false);
   const [assignEmployeeNoSearch, setAssignEmployeeNoSearch] = useState('');
+  const [assignEmployeeNoError, setAssignEmployeeNoError] = useState('');
+  const [assignEmployeeNoChecking, setAssignEmployeeNoChecking] = useState(false);
   const [assignSurnameSearch, setAssignSurnameSearch] = useState('');
   const [assignDesignationFilter, setAssignDesignationFilter] = useState('');
   const [assignGradeFilter, setAssignGradeFilter] = useState('');
@@ -198,6 +202,7 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     Array<{ organizationId: string; organizationName: string; parentOrganizationName: string }>
   >([]);
   const [enrolledEmployeeNumbers, setEnrolledEmployeeNumbers] = useState<Set<string>>(new Set());
+  const assignEmployeeNoValidationRequestId = useRef(0);
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
   const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
   const hasAssignFilterSearch =
@@ -216,6 +221,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const activateAssignEmployeeSearch = () => {
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (hasAssignNameSearch) {
       setAssignSurnameSearch('');
     }
@@ -225,6 +232,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const activateAssignNameSearch = () => {
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
     }
@@ -234,6 +243,8 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const activateAssignFilterSearch = () => {
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch('');
     }
@@ -243,7 +254,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
   };
 
   const handleAssignEmployeeNoChange = (value: string) => {
-    const numericValue = value.replace(/\D/g, '');
+    const numericValue = value.replace(/\D/g, '').slice(0, EMPLOYEE_NO_LENGTH);
+    setAssignEmployeeNoError('');
+    setAssignEmployeeNoChecking(false);
     if (numericValue.trim()) {
       activateAssignEmployeeSearch();
     }
@@ -996,9 +1009,64 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
     fetchEnrolled();
   }, [assignForm.learningPathId, getAccessToken, showToast]);
 
+  useEffect(() => {
+    const employeeNo = assignEmployeeNoSearch.trim();
+    const requestId = assignEmployeeNoValidationRequestId.current + 1;
+    assignEmployeeNoValidationRequestId.current = requestId;
+
+    if (section !== 'assign' || !employeeNo || employeeNo.length < EMPLOYEE_NO_LENGTH) {
+      setAssignEmployeeNoChecking(false);
+      return;
+    }
+
+    setAssignEmployeeNoChecking(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token || assignEmployeeNoValidationRequestId.current !== requestId) {
+          return;
+        }
+
+        const response = await learningApi.searchAssignableEmployees(token, { employeeNo });
+        if (assignEmployeeNoValidationRequestId.current !== requestId) {
+          return;
+        }
+
+        const hasExactEmployee = response.employees.some(
+          (employee) => String(employee.employeeNumber || '').trim() === employeeNo
+        );
+        setAssignEmployeeNoError(hasExactEmployee ? '' : 'Incorrect employee number.');
+      } catch {
+        if (assignEmployeeNoValidationRequestId.current === requestId) {
+          setAssignEmployeeNoError('Unable to validate employee number.');
+        }
+      } finally {
+        if (assignEmployeeNoValidationRequestId.current === requestId) {
+          setAssignEmployeeNoChecking(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [assignEmployeeNoSearch, getAccessToken, section]);
+
   const handleAssignSearch = async () => {
+    const employeeNo = assignEmployeeNoSearch.trim();
+    if (employeeNo && employeeNo.length !== EMPLOYEE_NO_LENGTH) {
+      setAssignEmployeeNoError(`Employee No must be ${EMPLOYEE_NO_LENGTH} digits.`);
+      setLearners([]);
+      setAssignForm((prev) => ({ ...prev, selectedLearnerEmployeeNumbers: [] }));
+      return;
+    }
+    if (employeeNo && (assignEmployeeNoChecking || assignEmployeeNoError)) {
+      return;
+    }
+
     try {
       setAssignSearchLoading(true);
+      setAssignEmployeeNoError('');
       const token = await getAccessToken();
       if (!token) {
         showToast('Session expired. Please login again.', 'error');
@@ -1016,6 +1084,9 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
 
       setLearners(response.employees);
       setAssignForm((prev) => ({ ...prev, selectedLearnerEmployeeNumbers: [] }));
+      if (employeeNo && response.employees.length === 0) {
+        setAssignEmployeeNoError('Incorrect employee number.');
+      }
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to search ERP employees.', 'error');
     } finally {
@@ -1300,12 +1371,16 @@ export function LearningPathManagement({ section }: { section: LearningPathManag
                     onClick={handleAssignSearch}
                     isLoading={assignSearchLoading}
                     disabled={
-                      !assignEmployeeNoSearch.trim() &&
-                      !assignSurnameSearch.trim() &&
-                      !assignDesignationFilter &&
-                      !assignGradeFilter &&
-                      !assignOrganizationFilter &&
-                      !assignPayrollFilter
+                      (
+                        !assignEmployeeNoSearch.trim() &&
+                        !assignSurnameSearch.trim() &&
+                        !assignDesignationFilter &&
+                        !assignGradeFilter &&
+                        !assignOrganizationFilter &&
+                        !assignPayrollFilter
+                      ) ||
+                      assignEmployeeNoChecking ||
+                      Boolean(assignEmployeeNoError)
                     }
                   >
                     Search
