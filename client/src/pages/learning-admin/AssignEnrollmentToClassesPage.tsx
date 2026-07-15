@@ -485,6 +485,8 @@ export function AssignEnrollmentToClassesPage() {
   >("notCompleted");
   const [setupCourseStatusSearch, setSetupCourseStatusSearch] = useState("");
   const [learnerSearch, setLearnerSearch] = useState("");
+  const [designationFilter, setDesignationFilter] = useState("");
+  const [gradeFilter, setGradeFilter] = useState("");
   const [batchSize, setBatchSize] = useState("50");
   const [pathsLoading, setPathsLoading] = useState(true);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -609,15 +611,41 @@ export function AssignEnrollmentToClassesPage() {
           ? statusTransferLearners
           : unassignedLearners;
 
+  const designationOptions = useMemo(() => {
+    const opts = new Set(learners.map((l) => l.designation).filter(Boolean));
+    return Array.from(opts) as string[];
+  }, [learners]);
+
+  const gradeOptions = useMemo(() => {
+    const opts = new Set(learners.map((l) => l.gradeName).filter(Boolean));
+    return Array.from(opts) as string[];
+  }, [learners]);
+
   const filteredLearners = useMemo(() => {
+    let result = selectableLearners;
+
+    if (designationFilter) {
+      result = result.filter((l) => l.designation === designationFilter);
+    }
+    if (gradeFilter) {
+      result = result.filter((l) => l.gradeName === gradeFilter);
+    }
+
     const search = learnerSearch.trim().toLowerCase();
     if (!search) {
-      return selectableLearners;
+      return result;
     }
-    return selectableLearners.filter((learner) =>
+
+    return result.filter((learner) =>
       learnerMatchesSearch(learner, search, selectedCourseCode),
     );
-  }, [learnerSearch, selectableLearners, selectedCourseCode]);
+  }, [
+    learnerSearch,
+    selectableLearners,
+    selectedCourseCode,
+    designationFilter,
+    gradeFilter,
+  ]);
 
   const selectedLearnersForCourse = useMemo(
     () =>
@@ -1687,48 +1715,79 @@ export function AssignEnrollmentToClassesPage() {
               </div>
             ) : null}
 
-            <div className="mb-4 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
-              <Input
-                value={learnerSearch}
-                onChange={(event) => setLearnerSearch(event.target.value)}
-                placeholder="Search by Employee ID or Name"
-                aria-label="Search learners"
-              />
-              <Input
-                type="number"
-                min="1"
-                value={batchSize}
-                onChange={(event) => setBatchSize(event.target.value)}
-                aria-label="Batch size"
-              />
-              <Button
-                variant="outline"
-                onClick={selectNextBatch}
-                disabled={
-                  assignmentMode === "completion" ||
-                  !selectedCourseCode ||
-                  selectableLearners.length === 0
-                }
-              >
-                Select
-              </Button>
-              <Button
-                variant="outline"
-                onClick={selectVisibleLearners}
-                disabled={
-                  assignmentMode === "completion" ||
-                  filteredLearners.length === 0
-                }
-              >
-                Select All
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={clearSelection}
-                disabled={selectedEnrollmentIds.length === 0}
-              >
-                Clear
-              </Button>
+            <div className="mb-4 space-y-3">
+              {/* Search and Batch Actions */}
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
+                <Input
+                  value={learnerSearch}
+                  onChange={(event) => setLearnerSearch(event.target.value)}
+                  placeholder="Search by Employee ID or Name"
+                  aria-label="Search learners"
+                />
+                <Input
+                  type="number"
+                  min="1"
+                  value={batchSize}
+                  onChange={(event) => setBatchSize(event.target.value)}
+                  aria-label="Batch size"
+                />
+                <Button
+                  variant="outline"
+                  onClick={selectNextBatch}
+                  disabled={
+                    assignmentMode === "completion" ||
+                    !selectedCourseCode ||
+                    selectableLearners.length === 0
+                  }
+                >
+                  Select
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={selectVisibleLearners}
+                  disabled={
+                    assignmentMode === "completion" ||
+                    filteredLearners.length === 0
+                  }
+                >
+                  Select All
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={clearSelection}
+                  disabled={selectedEnrollmentIds.length === 0}
+                >
+                  Clear
+                </Button>
+              </div>
+
+              {/* Filter Options */}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-2">
+                <Select
+                  label="Filter by Designation"
+                  value={designationFilter}
+                  onChange={(event) => setDesignationFilter(event.target.value)}
+                  options={[
+                    { value: "", label: "All Designations" },
+                    ...designationOptions.map((opt) => ({
+                      value: opt,
+                      label: opt,
+                    })),
+                  ]}
+                />
+                <Select
+                  label="Filter by Grade"
+                  value={gradeFilter}
+                  onChange={(event) => setGradeFilter(event.target.value)}
+                  options={[
+                    { value: "", label: "All Grades" },
+                    ...gradeOptions.map((opt) => ({
+                      value: opt,
+                      label: opt,
+                    })),
+                  ]}
+                />
+              </div>
             </div>
 
             <div className="mb-3 flex items-center gap-2 text-sm text-secondary-600">
