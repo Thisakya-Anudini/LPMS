@@ -175,11 +175,7 @@ const isLearnerCourseCompleted = (
   return Number(progress?.progress || 0) >= 100;
 };
 
-const learnerMatchesSearch = (
-  learner: EnrolledLearner,
-  search: string,
-  selectedCourseCode: string,
-) =>
+const learnerMatchesSearch = (learner: EnrolledLearner, search: string) =>
   [learner.name, learner.employeeNumber]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(search));
@@ -608,7 +604,7 @@ export function AssignEnrollmentToClassesPage() {
       return completedCourseLearners;
     }
     return completedCourseLearners.filter((learner) =>
-      learnerMatchesSearch(learner, search, selectedCourseCode),
+      learnerMatchesSearch(learner, search),
     );
   }, [completedCourseLearners, learnerSearch, selectedCourseCode]);
 
@@ -618,7 +614,7 @@ export function AssignEnrollmentToClassesPage() {
       return notCompletedCourseLearners;
     }
     return notCompletedCourseLearners.filter((learner) =>
-      learnerMatchesSearch(learner, search, selectedCourseCode),
+      learnerMatchesSearch(learner, search),
     );
   }, [notCompletedCourseLearners, selectedCourseCode, setupCourseStatusSearch]);
 
@@ -628,7 +624,7 @@ export function AssignEnrollmentToClassesPage() {
       return completedCourseLearners;
     }
     return completedCourseLearners.filter((learner) =>
-      learnerMatchesSearch(learner, search, selectedCourseCode),
+      learnerMatchesSearch(learner, search),
     );
   }, [completedCourseLearners, selectedCourseCode, setupCourseStatusSearch]);
 
@@ -682,9 +678,7 @@ export function AssignEnrollmentToClassesPage() {
       return result;
     }
 
-    return result.filter((learner) =>
-      learnerMatchesSearch(learner, search, selectedCourseCode),
-    );
+    return result.filter((learner) => learnerMatchesSearch(learner, search));
   }, [
     learnerSearch,
     selectableLearners,
