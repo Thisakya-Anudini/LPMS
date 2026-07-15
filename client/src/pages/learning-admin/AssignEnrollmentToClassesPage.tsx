@@ -1366,7 +1366,7 @@ export function AssignEnrollmentToClassesPage() {
               setActiveWorkspaceTab("assign");
               setIsReportModalOpen(true);
             }}
-            className="min-h-10 rounded-xl bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-5 font-semibold text-white shadow-medium hover:brightness-105"
+            className="min-h-10 rounded-xl px-5 font-semibold"
           >
             <FileText className="h-4 w-4" />
             Report
