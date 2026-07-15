@@ -989,7 +989,7 @@ export function AssignEnrollmentToClassesPage() {
 
   const selectNextBatch = () => {
     const count = Math.max(1, Number(batchSize) || 50);
-    const nextLearners = selectableLearners
+    const nextLearners = filteredLearners
       .slice(0, count)
       .map((learner) => learner.enrollmentId);
     setSelectedEnrollmentIds(nextLearners);
