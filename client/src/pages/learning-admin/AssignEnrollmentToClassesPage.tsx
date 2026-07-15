@@ -1366,7 +1366,7 @@ export function AssignEnrollmentToClassesPage() {
               setActiveWorkspaceTab("assign");
               setIsReportModalOpen(true);
             }}
-            className="min-h-10 rounded-xl bg-slate-950 px-5 font-semibold text-white shadow-medium hover:bg-slate-800"
+            className="min-h-10 rounded-xl px-5 font-semibold"
           >
             <FileText className="h-4 w-4" />
             Report
@@ -1943,21 +1943,21 @@ export function AssignEnrollmentToClassesPage() {
       ) : null}
 
       {isReportModalOpen ? (
-        <ModalOverlay className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+        <ModalOverlay className="fixed inset-0 z-[65] flex items-center justify-center bg-[#034c96]/70 p-4 backdrop-blur-sm">
           <div
             className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-large ring-1 ring-white/20 animate-slide-in"
             role="dialog"
             aria-modal="true"
             aria-labelledby="class-assignment-report-title"
           >
-            <div className="bg-slate-950 px-5 py-5 text-white">
+            <div className="bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-5 py-5 text-white">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 gap-3">
-                  <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/10 text-sky-200 ring-1 ring-white/15">
+                  <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/30">
                     <FileText className="h-6 w-6" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase text-sky-200">
+                    <p className="text-xs font-semibold uppercase text-white/75">
                       Class Assignment Report
                     </p>
                     <h2
@@ -1982,24 +1982,24 @@ export function AssignEnrollmentToClassesPage() {
                 </button>
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
-                  <p className="text-xs font-semibold uppercase text-slate-300">
+                <div className="rounded-xl border border-white/20 bg-white/15 p-3 text-white">
+                  <p className="text-xs font-semibold uppercase text-white/70">
                     Learning Path
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold text-white">
                     {selectedPath?.title || "Not selected"}
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
-                  <p className="text-xs font-semibold uppercase text-slate-300">
+                <div className="rounded-xl border border-white/20 bg-white/15 p-3 text-white">
+                  <p className="text-xs font-semibold uppercase text-white/70">
                     Report Boxes
                   </p>
                   <p className="mt-1 text-sm font-semibold text-white">
                     {classReportGroups.length} ready
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/10 p-3">
-                  <p className="text-xs font-semibold uppercase text-slate-300">
+                <div className="rounded-xl border border-white/20 bg-white/15 p-3 text-white">
+                  <p className="text-xs font-semibold uppercase text-white/70">
                     Learners
                   </p>
                   <p className="mt-1 text-sm font-semibold text-white">
@@ -2041,8 +2041,8 @@ export function AssignEnrollmentToClassesPage() {
                           }}
                           className={`cursor-pointer rounded-xl border p-4 text-left transition ${
                             active
-                              ? "border-primary-500 bg-white shadow-medium ring-2 ring-primary-100"
-                              : "border-secondary-200 bg-white shadow-soft hover:border-primary-300 hover:bg-primary-50/40"
+                              ? "border-[#034c96] bg-white shadow-medium ring-2 ring-[#034c96]/15"
+                              : "border-secondary-200 bg-white shadow-soft hover:border-[#0563bb] hover:bg-secondary-50"
                           }`}
                         >
                           <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
@@ -2070,7 +2070,7 @@ export function AssignEnrollmentToClassesPage() {
                               </p>
                             </div>
                           </div>
-                          <p className="mt-3 text-sm font-semibold text-primary-700">
+                          <p className="mt-3 text-sm font-semibold text-[#034c96]">
                             {group.learners.length} learner(s)
                           </p>
                           <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -2078,7 +2078,7 @@ export function AssignEnrollmentToClassesPage() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="h-auto min-h-9 w-full whitespace-normal px-3 py-2"
+                              className="h-auto min-h-9 w-full whitespace-normal px-3 py-2 !border-[#034c96] !bg-white !text-[#034c96] hover:!bg-[#034c96]/10"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setSelectedReportGroupKey(group.key);
@@ -2091,7 +2091,7 @@ export function AssignEnrollmentToClassesPage() {
                             <Button
                               type="button"
                               size="sm"
-                              className="h-auto min-h-9 w-full whitespace-normal rounded-xl bg-slate-950 px-3 py-2 shadow-sm hover:bg-slate-800"
+                              className="h-auto min-h-9 w-full whitespace-normal rounded-xl px-3 py-2 !bg-[#034c96] !text-white shadow-sm hover:!bg-[#0563bb]"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setSelectedReportGroupKey(group.key);
@@ -2149,7 +2149,7 @@ export function AssignEnrollmentToClassesPage() {
                           {selectedReportGroup.learners.length} learner(s)
                         </span>
                       </div>
-                      <div className="grid grid-cols-[160px_1fr] border-b border-secondary-100 bg-secondary-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                      <div className="grid grid-cols-[160px_1fr] border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
                         <span>ID</span>
                         <span>Name</span>
                       </div>
@@ -2188,13 +2188,13 @@ export function AssignEnrollmentToClassesPage() {
       ) : null}
 
       {classDetailGroup ? (
-        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
+        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-[#034c96]/50 p-4">
           <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl bg-white shadow-xl">
-            <div className="border-b border-secondary-200 px-5 py-4">
-              <h2 className="text-lg font-semibold text-secondary-900">
+            <div className="border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-5 py-4">
+              <h2 className="text-lg font-semibold text-white">
                 Class Details
               </h2>
-              <p className="mt-1 text-sm text-secondary-500">
+              <p className="mt-1 text-sm text-white/75">
                 {classDetailGroup.courseCode} - {classDetailGroup.classCode}
               </p>
             </div>
