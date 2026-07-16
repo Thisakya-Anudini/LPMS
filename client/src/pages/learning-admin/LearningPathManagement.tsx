@@ -5,7 +5,16 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { ArrowDown, ArrowUp, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Globe,
+  Lock,
+} from "lucide-react";
 import { ApiRequestError, courseApi, learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -1933,7 +1942,14 @@ export function LearningPathManagement({
                               : "success"
                           }
                         >
-                          {path.category.replace("_", " ")}
+                          <span className="flex items-center gap-1.5">
+                            {path.category === "RESTRICTED" ? (
+                              <Lock className="h-3 w-3 text-black" />
+                            ) : (
+                              <Globe className="h-3 w-3 text-blue-500" />
+                            )}
+                            {path.category.replace("_", " ")}
+                          </span>
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
