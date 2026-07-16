@@ -183,6 +183,8 @@ export function LearningPathManagement({
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<Category | "">("");
+  const [statusFilter, setStatusFilter] = useState<PathStatus | "">("");
 
   const [pathForm, setPathForm] = useState(initialPathForm);
   const [pathDuplicateWarning, setPathDuplicateWarning] = useState<null | {
@@ -384,16 +386,25 @@ export function LearningPathManagement({
   }, [loadData]);
 
   const filteredPaths = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) {
-      return paths;
+    let result = paths;
+
+    if (categoryFilter) {
+      result = result.filter((path) => path.category === categoryFilter);
     }
-    return paths.filter(
-      (path) =>
-        path.title.toLowerCase().includes(normalized) ||
-        path.description.toLowerCase().includes(normalized),
-    );
-  }, [paths, query]);
+    if (statusFilter) {
+      result = result.filter((path) => path.status === statusFilter);
+    }
+
+    const normalized = query.trim().toLowerCase();
+    if (normalized) {
+      result = result.filter(
+        (path) =>
+          path.title.toLowerCase().includes(normalized) ||
+          path.description.toLowerCase().includes(normalized),
+      );
+    }
+    return result;
+  }, [paths, query, categoryFilter, statusFilter]);
 
   const toStages = (stages: StageForm[]) =>
     stages
@@ -1837,14 +1848,43 @@ export function LearningPathManagement({
       {section === "manage" ? (
         <Card className="p-0 overflow-hidden">
           <div className="p-4 border-b border-slate-200 bg-slate-50">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search paths..."
-                className="pl-10"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative w-full max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  placeholder="Search paths..."
+                  className="pl-10"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </div>
+              <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
+                <Select
+                  value={categoryFilter}
+                  onChange={(event) =>
+                    setCategoryFilter(event.target.value as Category | "")
+                  }
+                  options={[
+                    { value: "", label: "All Categories" },
+                    { value: "PUBLIC", label: "Public" },
+                    { value: "RESTRICTED", label: "Restricted" },
+                  ]}
+                  className="min-w-[180px]"
+                />
+                <Select
+                  value={statusFilter}
+                  onChange={(event) =>
+                    setStatusFilter(event.target.value as PathStatus | "")
+                  }
+                  options={[
+                    { value: "", label: "All Statuses" },
+                    { value: "ACTIVE", label: "Active" },
+                    { value: "DRAFT", label: "Draft" },
+                    { value: "ARCHIVED", label: "Archived" },
+                  ]}
+                  className="min-w-[180px]"
+                />
+              </div>
             </div>
           </div>
 
