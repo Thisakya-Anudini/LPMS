@@ -35,8 +35,8 @@ const formatStatusLabel = (value: AssignmentReport['report_status']) =>
 
 const getStatusSelectClassName = (value: AssignmentReport['report_status']) =>
   value === 'ASSIGNED_IN_LPMS'
-    ? 'border border-amber-200 bg-amber-50 text-amber-800 focus:ring-amber-200'
-    : 'border border-emerald-200 bg-emerald-50 text-emerald-800 focus:ring-emerald-200';
+    ? 'border border-[#034c96] bg-[#034c96] text-white focus:ring-[#034c96]'
+    : 'border border-[#3faa45] bg-[#3faa45] text-white focus:ring-[#3faa45]';
 
 function StatusSelect({
   value,
@@ -232,7 +232,11 @@ export function AssignmentReportsPage() {
             {loading ? (
               <Skeleton className="mt-2 h-8 w-16" />
             ) : (
-              <p className={`text-2xl font-bold ${index === 1 ? 'text-amber-700' : index === 2 ? 'text-emerald-700' : 'text-slate-900'}`}>
+              <p
+                className={`text-2xl font-bold ${
+                  index === 1 ? 'text-[#034c96]' : index === 2 ? 'text-[#3faa45]' : 'text-slate-900'
+                }`}
+              >
                 {index === 0 ? stats.totalReports : index === 1 ? stats.assignedInLpms : stats.enrolledInErp}
               </p>
             )}
@@ -255,7 +259,7 @@ export function AssignmentReportsPage() {
             {loading ? (
               <Skeleton className="h-8 w-28 rounded-full" />
             ) : (
-              <span className="rounded-full bg-white px-3 py-1 font-medium text-slate-700 shadow-sm ring-1 ring-slate-200">
+              <span className="rounded-full bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-3 py-1 font-medium text-white shadow-sm">
                 Page {reports.length === 0 ? 0 : page} of {totalPages}
               </span>
             )}
@@ -264,7 +268,7 @@ export function AssignmentReportsPage() {
 
         <div className="max-h-[420px] overflow-y-auto overflow-x-auto pb-2">
           <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+            <thead className="border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] text-white">
               <tr>
                 <th className="px-4 py-3 font-semibold">Learning Path</th>
                 <th className="px-4 py-3 font-semibold">Learners</th>
@@ -396,17 +400,22 @@ export function AssignmentReportsPage() {
       </Card>
 
       {selectedReport ? (
-        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
+        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-[#034c96]/50 p-4">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-xl">
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-6 py-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">{selectedReport.learning_path_title}</h2>
-                <p className="text-sm text-slate-500">
+                <h2 className="text-lg font-semibold text-white">{selectedReport.learning_path_title}</h2>
+                <p className="text-sm text-white/75">
                   Assigned by {selectedReport.assigned_by_name} on{' '}
                   {new Date(selectedReport.assigned_at).toLocaleString()}
                 </p>
               </div>
-              <Button type="button" variant="outline" onClick={() => setSelectedReport(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-white bg-white text-[#034c96] hover:bg-white/90"
+                onClick={() => setSelectedReport(null)}
+              >
                 Close
               </Button>
             </div>

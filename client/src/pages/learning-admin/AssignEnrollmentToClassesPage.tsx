@@ -434,17 +434,14 @@ export function AssignEnrollmentToClassesPage() {
     [learners, statusTransferEnrollmentIds]
   );
 
-  const selectableLearners = useMemo(
-    () =>
-      assignmentMode === 'completion'
-        ? []
-        : assignmentMode === 'reassign'
-          ? reassignableLearners
-          : statusTransferLearners.length > 0
-            ? statusTransferLearners
-            : unassignedLearners,
-    [assignmentMode, reassignableLearners, statusTransferLearners, unassignedLearners]
-  );
+  const selectableLearners =
+    assignmentMode === 'completion'
+      ? []
+      : assignmentMode === 'reassign'
+        ? reassignableLearners
+        : statusTransferLearners.length > 0
+          ? statusTransferLearners
+          : unassignedLearners;
 
   const filteredLearners = useMemo(() => {
     const search = learnerSearch.trim().toLowerCase();
@@ -1370,7 +1367,10 @@ export function AssignEnrollmentToClassesPage() {
         <div className="mb-4 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
           <Input
             value={learnerSearch}
-            onChange={(event) => setLearnerSearch(event.target.value)}
+            onChange={(event) => {
+              const nextValue = event.target.value.replace(/\D/g, '');
+              setLearnerSearch(nextValue);
+            }}
             placeholder="Search learners, employee no, designation, class"
             aria-label="Search learners"
           />
