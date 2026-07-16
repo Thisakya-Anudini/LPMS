@@ -168,40 +168,53 @@ function CompletionPreview() {
         <div className="absolute inset-4 animate-pulse rounded-full bg-primary-100/70 blur-xl" />
         <svg viewBox="0 0 140 140" className="relative h-full w-full" role="img" aria-label="Learning path completion preview">
           <circle cx="70" cy="70" r="60" fill="none" stroke="#e2e8f0" strokeWidth="12" />
+          {/* three equal arcs with small gaps, animated rotation */}
           <g className="origin-center animate-spin [animation-duration:6s]">
-            <circle
-              cx="70"
-              cy="70"
-              r="60"
-              fill="none"
-              stroke="#0ea5e9"
-              strokeLinecap="round"
-              strokeWidth="12"
-              strokeDasharray="110 220"
-              strokeDashoffset="14"
-            />
-            <circle
-              cx="70"
-              cy="70"
-              r="60"
-              fill="none"
-              stroke="#22c55e"
-              strokeLinecap="round"
-              strokeWidth="12"
-              strokeDasharray="72 238"
-              strokeDashoffset="-120"
-            />
-            <circle
-              cx="70"
-              cy="70"
-              r="60"
-              fill="none"
-              stroke="#f59e0b"
-              strokeLinecap="round"
-              strokeWidth="12"
-              strokeDasharray="40 260"
-              strokeDashoffset="-210"
-            />
+            {(() => {
+              const radius = 60;
+              const circumference = 2 * Math.PI * radius;
+              const gap = 6; // small blank between arcs
+              const segment = (circumference - 3 * gap) / 3;
+              const offsetUnit = segment + gap;
+
+              return (
+                <>
+                  <circle
+                    cx="70"
+                    cy="70"
+                    r="60"
+                    fill="none"
+                    stroke="#0ea5e9"
+                    strokeLinecap="round"
+                    strokeWidth="12"
+                    strokeDasharray={`${segment} ${circumference - segment}`}
+                    strokeDashoffset={0}
+                  />
+                  <circle
+                    cx="70"
+                    cy="70"
+                    r="60"
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeLinecap="round"
+                    strokeWidth="12"
+                    strokeDasharray={`${segment} ${circumference - segment}`}
+                    strokeDashoffset={-offsetUnit}
+                  />
+                  <circle
+                    cx="70"
+                    cy="70"
+                    r="60"
+                    fill="none"
+                    stroke="#22c55e"
+                    strokeLinecap="round"
+                    strokeWidth="12"
+                    strokeDasharray={`${segment} ${circumference - segment}`}
+                    strokeDashoffset={-offsetUnit * 2}
+                  />
+                </>
+              );
+            })()}
           </g>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
