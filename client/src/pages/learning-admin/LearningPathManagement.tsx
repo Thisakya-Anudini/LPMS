@@ -1936,8 +1936,18 @@ export function LearningPathManagement({
                           {path.category.replace("_", " ")}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {path.status}
+                      <td className="px-6 py-4">
+                        <Badge
+                          variant={
+                            path.status === "ACTIVE"
+                              ? "success"
+                              : path.status === "DRAFT"
+                                ? "warning"
+                                : "default"
+                          }
+                        >
+                          {path.status}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
