@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
@@ -204,9 +204,13 @@ function CompletionPreview() {
             />
           </g>
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <Sparkles className="h-8 w-8 animate-bounce-subtle text-primary-600" />
-          <span className="mt-2 text-xs font-semibold uppercase text-secondary-500">Select A LP</span>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/90 shadow-lg ring-1 ring-primary-100">
+            <img src="/assets/ShortLogo2.png" alt="LPMS emblem" className="h-12 w-12 object-contain" />
+          </div>
+        </div>
+        <div className="absolute inset-x-0 bottom-4 flex justify-center">
+          <span className="text-xs font-semibold uppercase text-secondary-500">Select A LP</span>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
