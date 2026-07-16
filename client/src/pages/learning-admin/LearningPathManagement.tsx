@@ -1965,21 +1965,23 @@ export function LearningPathManagement({
                           {path.status}
                         </Badge>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 w-[1%]">
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            className="p-1 text-slate-500 hover:text-blue-600"
+                            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
                             onClick={() => startEdit(path)}
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-3.5 w-3.5" />
+                            Edit
                           </button>
                           <button
                             type="button"
-                            className="p-1 text-slate-500 hover:text-red-600"
+                            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-100"
                             onClick={() => setPendingDeletePath(path)}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Delete
                           </button>
                         </div>
                       </td>
