@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
@@ -164,49 +164,51 @@ function DistributionDonut({ data }: { data: ChartDatum[] }) {
 function CompletionPreview() {
   return (
     <div className="grid gap-6 md:grid-cols-[220px_1fr] md:items-center">
-      <div className="relative mx-auto h-44 w-44">
-        <div className="absolute inset-2 animate-pulse rounded-full bg-primary-100/70 blur-xl" />
+      <div className="relative mx-auto h-52 w-52">
+        <div className="absolute inset-4 animate-pulse rounded-full bg-primary-100/70 blur-xl" />
         <svg viewBox="0 0 140 140" className="relative h-full w-full" role="img" aria-label="Learning path completion preview">
-          <circle cx="70" cy="70" r="54" fill="none" stroke="#e2e8f0" strokeWidth="14" />
+          <circle cx="70" cy="70" r="60" fill="none" stroke="#e2e8f0" strokeWidth="12" />
           <g className="origin-center animate-spin [animation-duration:6s]">
             <circle
               cx="70"
               cy="70"
-              r="54"
+              r="60"
               fill="none"
               stroke="#0ea5e9"
               strokeLinecap="round"
-              strokeWidth="14"
-              strokeDasharray="112 228"
+              strokeWidth="12"
+              strokeDasharray="110 220"
               strokeDashoffset="14"
             />
             <circle
               cx="70"
               cy="70"
-              r="54"
+              r="60"
               fill="none"
               stroke="#22c55e"
               strokeLinecap="round"
-              strokeWidth="14"
-              strokeDasharray="72 268"
-              strokeDashoffset="-118"
+              strokeWidth="12"
+              strokeDasharray="72 238"
+              strokeDashoffset="-120"
             />
             <circle
               cx="70"
               cy="70"
-              r="54"
+              r="60"
               fill="none"
               stroke="#f59e0b"
               strokeLinecap="round"
-              strokeWidth="14"
-              strokeDasharray="42 298"
+              strokeWidth="12"
+              strokeDasharray="40 260"
               strokeDashoffset="-210"
             />
           </g>
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <Sparkles className="h-8 w-8 animate-bounce-subtle text-primary-600" />
-          <span className="mt-2 text-xs font-semibold uppercase text-secondary-500">Select A LP</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+          <div className="flex h-18 w-18 items-center justify-center rounded-full bg-white/95 shadow-lg ring-1 ring-primary-100">
+            <img src="/assets/ShortLogo2.png" alt="LPMS emblem" className="h-10 w-10 object-contain" />
+          </div>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary-500">Select A LP</span>
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
