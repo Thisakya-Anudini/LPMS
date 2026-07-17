@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, Globe, Lock } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
+import { Badge } from "../../components/ui/Badge";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { useAuth } from "../../contexts/useAuth";
 import { useToast } from "../../contexts/useToast";
-
-type CategoryFilter = "ALL" | "PUBLIC" | "RESTRICTED";
 
 type LearningPathRow = {
   id: string;
@@ -158,13 +157,38 @@ export function AdminLearningPathsPage() {
                     <td className="px-3 py-2 font-medium text-slate-900">
                       {path.title}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {path.category.replace("_", " ")}
+                    <td className="px-3 py-2">
+                      <Badge
+                        variant={
+                          path.category === "RESTRICTED" ? "danger" : "success"
+                        }
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {path.category === "RESTRICTED" ? (
+                            <Lock className="h-3 w-3 text-black" />
+                          ) : (
+                            <Globe className="h-3 w-3 text-blue-500" />
+                          )}
+                          {path.category.replace("_", " ")}
+                        </span>
+                      </Badge>
                     </td>
                     <td className="px-3 py-2 text-slate-700">
                       {path.total_duration}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">{path.status}</td>
+                    <td className="px-3 py-2">
+                      <Badge
+                        variant={
+                          path.status === "ACTIVE"
+                            ? "success"
+                            : path.status === "DRAFT"
+                              ? "warning"
+                              : "default"
+                        }
+                      >
+                        {path.status}
+                      </Badge>
+                    </td>
                   </tr>
                 ))
               )}
