@@ -514,7 +514,7 @@ export function AssignEnrollmentToClassesPage() {
   }, []);
 
   useEffect(() => {
-    if (!isReportModalOpen && !classDetailGroup) {
+    if (!isReportModalOpen && !classDetailGroup && !showCourseStatusPanel) {
       return undefined;
     }
 
@@ -528,6 +528,11 @@ export function AssignEnrollmentToClassesPage() {
         return;
       }
 
+      if (showCourseStatusPanel) {
+        setShowCourseStatusPanel(false);
+        return;
+      }
+
       closeReportModal();
     };
 
@@ -538,6 +543,7 @@ export function AssignEnrollmentToClassesPage() {
     closeClassDetailModal,
     closeReportModal,
     isReportModalOpen,
+    showCourseStatusPanel,
   ]);
 
   const selectedPath = useMemo(
@@ -858,6 +864,10 @@ export function AssignEnrollmentToClassesPage() {
       setLearners([]);
       setCourseClassCounts({});
       setStatusTransferEnrollmentIds([]);
+      setSelectedCourseCode("");
+      setSelectedEnrollmentIds([]);
+      setShowCourseStatusPanel(false);
+      setSetupCourseStatusSearch("");
       return;
     }
 
@@ -876,14 +886,11 @@ export function AssignEnrollmentToClassesPage() {
       setLearners(response.learners);
       setCourseClassCounts({});
       setStatusTransferEnrollmentIds([]);
-      setSelectedCourseCode((currentCourseCode) =>
-        response.courses.some(
-          (course) => course.courseCode === currentCourseCode,
-        )
-          ? currentCourseCode
-          : response.courses[0]?.courseCode || "",
-      );
+      setSelectedCourseCode("");
       setSelectedEnrollmentIds([]);
+      setSelectedClassId("");
+      setShowCourseStatusPanel(false);
+      setSetupCourseStatusSearch("");
     } catch (error) {
       showToast(
         error instanceof Error
@@ -1379,7 +1386,14 @@ export function AssignEnrollmentToClassesPage() {
             value={selectedPathId}
             options={pathOptions}
             isLoading={pathsLoading}
-            onChange={(event) => setSelectedPathId(event.target.value)}
+            onChange={(event) => {
+              setSelectedPathId(event.target.value);
+              setSelectedCourseCode("");
+              setSelectedClassId("");
+              setSelectedEnrollmentIds([]);
+              setShowCourseStatusPanel(false);
+              setSetupCourseStatusSearch("");
+            }}
           />
           <Select
             label="Course in Learning Path"
@@ -1387,195 +1401,43 @@ export function AssignEnrollmentToClassesPage() {
             options={courseOptions}
             disabled={!selectedPathId || optionsLoading || courses.length === 0}
             onChange={(event) => {
-              setSelectedCourseCode(event.target.value);
+              const courseCode = event.target.value;
+              setSelectedCourseCode(courseCode);
               setSelectedClassId("");
               setSelectedEnrollmentIds([]);
               setAssignmentMode("assign");
-              setShowCourseStatusPanel(false);
+              setShowCourseStatusPanel(Boolean(courseCode));
+              setSetupCourseStatusTab("notCompleted");
               setSetupCourseStatusSearch("");
             }}
           />
         </div>
         {selectedPath ? (
-          <div className="mt-4">
+          <div className="mt-4 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3">
             <button
               type="button"
               onClick={() => {
                 if (selectedCourse) {
-                  setShowCourseStatusPanel((current) => !current);
+                  setShowCourseStatusPanel(true);
                 }
               }}
               disabled={!selectedCourse}
-              className="flex w-full items-center justify-between gap-3 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 text-left text-sm text-primary-900 transition hover:border-primary-300 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex w-full items-center justify-between gap-3 text-left text-sm text-primary-900 transition disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <span className="font-semibold">
-                {selectedPath.title}
-                {selectedCourse ? ` / ${selectedCourse.courseCode}` : ""}
+              <span>
+                <span className="block text-xs font-semibold uppercase tracking-wide text-primary-700">
+                  Selected setup
+                </span>
+                <span className="mt-1 block font-semibold">
+                  {selectedCourse
+                    ? `${selectedCourse.courseCode} - ${selectedCourse.title}`
+                    : `${selectedPath.title} / Select course`}
+                </span>
               </span>
-              <span className="text-xs font-semibold uppercase tracking-wide text-primary-700">
-                {selectedCourse
-                  ? showCourseStatusPanel
-                    ? "Hide status"
-                    : "Show status"
-                  : "Select course"}
+              <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-primary-700">
+                {selectedCourse ? "View course status" : "Select course"}
               </span>
             </button>
-
-            {showCourseStatusPanel && selectedCourse ? (
-              <div className="mt-3 rounded-lg border border-secondary-200 bg-white p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                      Course Status
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-secondary-900">
-                      {selectedCourse.courseCode} - {selectedCourse.title}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:w-fit">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSetupCourseStatusTab("notCompleted");
-                        setSelectedEnrollmentIds([]);
-                      }}
-                      className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-                        setupCourseStatusTab === "notCompleted"
-                          ? "bg-red-600 text-white shadow-sm"
-                          : "text-red-700 hover:bg-red-50"
-                      }`}
-                    >
-                      Not Completed ({notCompletedCourseLearners.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSetupCourseStatusTab("completed");
-                        setSelectedEnrollmentIds([]);
-                      }}
-                      className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-                        setupCourseStatusTab === "completed"
-                          ? "bg-emerald-600 text-white shadow-sm"
-                          : "text-emerald-700 hover:bg-emerald-50"
-                      }`}
-                    >
-                      Completed ({completedCourseLearners.length})
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <Input
-                    value={setupCourseStatusSearch}
-                    onChange={(event) =>
-                      setSetupCourseStatusSearch(event.target.value)
-                    }
-                    placeholder="Search learners by name or ID"
-                    aria-label="Search course status learners"
-                  />
-                </div>
-
-                <div className="mt-4 overflow-x-auto rounded-lg border border-secondary-200">
-                  {setupCourseStatusTab === "notCompleted" ? (
-                    <>
-                      <div className="grid min-w-[760px] grid-cols-[48px_1.4fr_140px_1.4fr] bg-red-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-red-700">
-                        <span />
-                        <span>Name</span>
-                        <span>ID</span>
-                        <span>Email</span>
-                      </div>
-                      {filteredSetupNotCompletedLearners.length === 0 ? (
-                        <p className="p-4 text-sm text-secondary-500">
-                          No not completed learners found for this course.
-                        </p>
-                      ) : (
-                        <div className="max-h-80 min-w-[760px] divide-y divide-red-100 overflow-auto">
-                          {filteredSetupNotCompletedLearners.map((learner) => {
-                            const checked = selectedEnrollmentIds.includes(
-                              learner.enrollmentId,
-                            );
-                            return (
-                              <label
-                                key={`setup-not-completed-${learner.enrollmentId}`}
-                                className={`grid cursor-pointer grid-cols-[48px_1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm transition ${
-                                  checked
-                                    ? "bg-red-100"
-                                    : "bg-white hover:bg-red-50"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() =>
-                                    toggleLearner(learner.enrollmentId)
-                                  }
-                                  className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
-                                />
-                                <span className="flex items-center gap-2 font-medium text-red-900">
-                                  <X className="h-4 w-4 text-red-600" />
-                                  {learner.name || "-"}
-                                </span>
-                                <span className="text-red-800">
-                                  {learner.employeeNumber || "-"}
-                                </span>
-                                <span className="text-red-800">
-                                  {learner.email || "-"}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                        <span>Name</span>
-                        <span>ID</span>
-                        <span>Email</span>
-                      </div>
-                      {filteredSetupCompletedLearners.length === 0 ? (
-                        <p className="p-4 text-sm text-secondary-500">
-                          No completed learners found for this course.
-                        </p>
-                      ) : (
-                        <div className="max-h-80 min-w-[712px] divide-y divide-emerald-100 overflow-auto">
-                          {filteredSetupCompletedLearners.map((learner) => (
-                            <div
-                              key={`setup-completed-${learner.enrollmentId}`}
-                              className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm"
-                            >
-                              <span className="flex items-center gap-2 font-medium text-emerald-900">
-                                <Check className="h-4 w-4 text-emerald-600" />
-                                {learner.name || "-"}
-                              </span>
-                              <span className="text-emerald-800">
-                                {learner.employeeNumber || "-"}
-                              </span>
-                              <span className="text-emerald-800">
-                                {learner.email || "-"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {setupCourseStatusTab === "notCompleted" ? (
-                  <div className="mt-4 flex justify-end">
-                    <Button
-                      type="button"
-                      onClick={handleAssignAnotherClassFromStatus}
-                      disabled={selectedEnrollmentIds.length === 0}
-                    >
-                      Assign Another Class
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
         ) : null}
       </Card>
@@ -1940,6 +1802,190 @@ export function AssignEnrollmentToClassesPage() {
             )}
           </Card>
         </div>
+      ) : null}
+
+      {showCourseStatusPanel && selectedCourse ? (
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div
+            className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-large animate-slide-in"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="setup-course-status-title"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-secondary-200 px-5 py-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                  Course Status
+                </p>
+                <h2
+                  id="setup-course-status-title"
+                  className="mt-1 text-lg font-semibold text-secondary-900"
+                >
+                  {selectedCourse.courseCode} - {selectedCourse.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCourseStatusPanel(false)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-secondary-500 transition hover:bg-secondary-100 hover:text-secondary-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                aria-label="Close course status"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-5">
+              <div className="grid grid-cols-2 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupCourseStatusTab("notCompleted");
+                    setSelectedEnrollmentIds([]);
+                  }}
+                  className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                    setupCourseStatusTab === "notCompleted"
+                      ? "bg-red-600 text-white shadow-sm"
+                      : "text-red-700 hover:bg-red-50"
+                  }`}
+                >
+                  Not Completed ({notCompletedCourseLearners.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetupCourseStatusTab("completed");
+                    setSelectedEnrollmentIds([]);
+                  }}
+                  className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                    setupCourseStatusTab === "completed"
+                      ? "bg-emerald-600 text-white shadow-sm"
+                      : "text-emerald-700 hover:bg-emerald-50"
+                  }`}
+                >
+                  Completed ({completedCourseLearners.length})
+                </button>
+              </div>
+
+              <div className="mt-4">
+                <Input
+                  value={setupCourseStatusSearch}
+                  onChange={(event) =>
+                    setSetupCourseStatusSearch(event.target.value)
+                  }
+                  placeholder="Search learners by name or ID"
+                  aria-label="Search course status learners"
+                />
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-lg border border-secondary-200">
+                {setupCourseStatusTab === "notCompleted" ? (
+                  <>
+                    <div className="grid min-w-[760px] grid-cols-[48px_1.4fr_140px_1.4fr] bg-red-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-red-700">
+                      <span />
+                      <span>Name</span>
+                      <span>ID</span>
+                      <span>Email</span>
+                    </div>
+                    {filteredSetupNotCompletedLearners.length === 0 ? (
+                      <p className="p-4 text-sm text-secondary-500">
+                        No not completed learners found for this course.
+                      </p>
+                    ) : (
+                      <div className="max-h-80 min-w-[760px] divide-y divide-red-100 overflow-auto">
+                        {filteredSetupNotCompletedLearners.map((learner) => {
+                          const checked = selectedEnrollmentIds.includes(
+                            learner.enrollmentId,
+                          );
+                          return (
+                            <label
+                              key={`setup-not-completed-${learner.enrollmentId}`}
+                              className={`grid cursor-pointer grid-cols-[48px_1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm transition ${
+                                checked
+                                  ? "bg-red-100"
+                                  : "bg-white hover:bg-red-50"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() =>
+                                  toggleLearner(learner.enrollmentId)
+                                }
+                                className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                              />
+                              <span className="flex items-center gap-2 font-medium text-red-900">
+                                <X className="h-4 w-4 text-red-600" />
+                                {learner.name || "-"}
+                              </span>
+                              <span className="text-red-800">
+                                {learner.employeeNumber || "-"}
+                              </span>
+                              <span className="text-red-800">
+                                {learner.email || "-"}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                      <span>Name</span>
+                      <span>ID</span>
+                      <span>Email</span>
+                    </div>
+                    {filteredSetupCompletedLearners.length === 0 ? (
+                      <p className="p-4 text-sm text-secondary-500">
+                        No completed learners found for this course.
+                      </p>
+                    ) : (
+                      <div className="max-h-80 min-w-[712px] divide-y divide-emerald-100 overflow-auto">
+                        {filteredSetupCompletedLearners.map((learner) => (
+                          <div
+                            key={`setup-completed-${learner.enrollmentId}`}
+                            className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm"
+                          >
+                            <span className="flex items-center gap-2 font-medium text-emerald-900">
+                              <Check className="h-4 w-4 text-emerald-600" />
+                              {learner.name || "-"}
+                            </span>
+                            <span className="text-emerald-800">
+                              {learner.employeeNumber || "-"}
+                            </span>
+                            <span className="text-emerald-800">
+                              {learner.email || "-"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-secondary-200 bg-secondary-50 px-5 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCourseStatusPanel(false)}
+              >
+                Close
+              </Button>
+              {setupCourseStatusTab === "notCompleted" ? (
+                <Button
+                  type="button"
+                  onClick={handleAssignAnotherClassFromStatus}
+                  disabled={selectedEnrollmentIds.length === 0}
+                >
+                  Assign Another Class
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </ModalOverlay>
       ) : null}
 
       {isReportModalOpen ? (

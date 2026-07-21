@@ -163,8 +163,8 @@ function DistributionDonut({ data }: { data: ChartDatum[] }) {
 
 function CompletionPreview() {
   return (
-    <div className="grid gap-6 md:grid-cols-[220px_1fr] md:items-center">
-      <div className="relative mx-auto h-52 w-52">
+    <div className="grid gap-6 md:grid-cols-[200px_1fr] md:items-center">
+      <div className="relative mx-auto h-48 w-48">
         <div className="absolute inset-4 animate-pulse rounded-full bg-primary-100/70 blur-xl" />
         <svg viewBox="0 0 140 140" className="relative h-full w-full" role="img" aria-label="Learning path completion preview">
           <circle cx="70" cy="70" r="60" fill="none" stroke="#e2e8f0" strokeWidth="12" />
@@ -218,7 +218,7 @@ function CompletionPreview() {
           </g>
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-          <div className="flex h-18 w-18 items-center justify-center rounded-full bg-white/95 shadow-lg ring-1 ring-primary-100">
+          <div className="flex h-18 w-18 items-center justify-center rounded-full bg-sky-100/95 shadow-lg ring-1 ring-sky-200">
             <img src="/assets/ShortLogo2.png" alt="LPMS emblem" className="h-10 w-10 object-contain" />
           </div>
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary-500">Select A LP</span>
