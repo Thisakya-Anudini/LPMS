@@ -232,6 +232,8 @@ export function LearningPathManagement({
   const [assignEmployeeNoChecking, setAssignEmployeeNoChecking] =
     useState(false);
   const [assignSurnameSearch, setAssignSurnameSearch] = useState("");
+  const [assignNameError, setAssignNameError] = useState("");
+  const [assignNameChecking, setAssignNameChecking] = useState(false);
   const [assignDesignationFilter, setAssignDesignationFilter] = useState("");
   const [assignGradeFilter, setAssignGradeFilter] = useState("");
   const [assignOrganizationFilter, setAssignOrganizationFilter] = useState("");
@@ -249,6 +251,7 @@ export function LearningPathManagement({
     Set<string>
   >(new Set());
   const assignEmployeeNoValidationRequestId = useRef(0);
+  const assignNameValidationRequestId = useRef(0);
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
   const hasAssignNameSearch = assignSurnameSearch.trim().length > 0;
   const hasAssignFilterSearch =
@@ -261,11 +264,14 @@ export function LearningPathManagement({
     (assignEmployeeNoSearch.trim().length !== EMPLOYEE_NO_LENGTH ||
       assignEmployeeNoChecking ||
       Boolean(assignEmployeeNoError));
+  const hasInvalidAssignNameSearch =
+    hasAssignNameSearch && (assignNameChecking || Boolean(assignNameError));
   const isAssignLearnerSearchDisabled =
     (!hasAssignEmployeeNoSearch &&
       !hasAssignNameSearch &&
       !hasAssignFilterSearch) ||
-    hasInvalidAssignEmployeeNoSearch;
+    hasInvalidAssignEmployeeNoSearch ||
+    hasInvalidAssignNameSearch;
   const assignEmployeeNoPlaceholder = `e.g. ${user?.employeeNo?.trim() || "employee number"}`;
   const assignNamePlaceholder = `e.g. ${user?.name?.trim() || "name"}`;
 
@@ -279,6 +285,8 @@ export function LearningPathManagement({
   const activateAssignEmployeeSearch = () => {
     setAssignEmployeeNoError("");
     setAssignEmployeeNoChecking(false);
+    setAssignNameError("");
+    setAssignNameChecking(false);
     if (hasAssignNameSearch) {
       setAssignSurnameSearch("");
     }
@@ -290,6 +298,8 @@ export function LearningPathManagement({
   const activateAssignNameSearch = () => {
     setAssignEmployeeNoError("");
     setAssignEmployeeNoChecking(false);
+    setAssignNameError("");
+    setAssignNameChecking(false);
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch("");
     }
@@ -301,6 +311,8 @@ export function LearningPathManagement({
   const activateAssignFilterSearch = () => {
     setAssignEmployeeNoError("");
     setAssignEmployeeNoChecking(false);
+    setAssignNameError("");
+    setAssignNameChecking(false);
     if (hasAssignEmployeeNoSearch) {
       setAssignEmployeeNoSearch("");
     }
@@ -324,6 +336,8 @@ export function LearningPathManagement({
       /[^A-Za-z\s!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/g,
       "",
     );
+    setAssignNameError("");
+    setAssignNameChecking(false);
     if (sanitizedValue.trim()) {
       activateAssignNameSearch();
     }
@@ -1328,8 +1342,53 @@ export function LearningPathManagement({
     };
   }, [assignEmployeeNoSearch, getAccessToken, section]);
 
+  useEffect(() => {
+    const name = assignSurnameSearch.trim();
+    const requestId = assignNameValidationRequestId.current + 1;
+    assignNameValidationRequestId.current = requestId;
+
+    if (section !== "assign" || !name) {
+      setAssignNameChecking(false);
+      return;
+    }
+
+    setAssignNameChecking(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const token = await getAccessToken();
+        if (!token || assignNameValidationRequestId.current !== requestId) {
+          return;
+        }
+
+        const response = await learningApi.searchAssignableEmployees(token, {
+          surname: name,
+        });
+        if (assignNameValidationRequestId.current !== requestId) {
+          return;
+        }
+
+        setAssignNameError(
+          response.employees.length > 0 ? "" : "Incorrect employee name.",
+        );
+      } catch {
+        if (assignNameValidationRequestId.current === requestId) {
+          setAssignNameError("Unable to validate employee name.");
+        }
+      } finally {
+        if (assignNameValidationRequestId.current === requestId) {
+          setAssignNameChecking(false);
+        }
+      }
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [assignSurnameSearch, getAccessToken, section]);
+
   const handleAssignSearch = async () => {
     const employeeNo = assignEmployeeNoSearch.trim();
+    const name = assignSurnameSearch.trim();
     if (employeeNo && employeeNo.length !== EMPLOYEE_NO_LENGTH) {
       setAssignEmployeeNoError(
         `Employee No must be ${EMPLOYEE_NO_LENGTH} digits.`,
@@ -1344,10 +1403,14 @@ export function LearningPathManagement({
     if (employeeNo && (assignEmployeeNoChecking || assignEmployeeNoError)) {
       return;
     }
+    if (name && (assignNameChecking || assignNameError)) {
+      return;
+    }
 
     try {
       setAssignSearchLoading(true);
       setAssignEmployeeNoError("");
+      setAssignNameError("");
       const token = await getAccessToken();
       if (!token) {
         showToast("Session expired. Please login again.", "error");
@@ -1370,6 +1433,9 @@ export function LearningPathManagement({
       }));
       if (employeeNo && response.employees.length === 0) {
         setAssignEmployeeNoError("Incorrect employee number.");
+      }
+      if (name && response.employees.length === 0) {
+        setAssignNameError("Incorrect employee name.");
       }
     } catch (err) {
       showToast(
@@ -1676,6 +1742,7 @@ export function LearningPathManagement({
                       handleAssignNameSearchChange(event.target.value)
                     }
                     placeholder={assignNamePlaceholder}
+                    error={assignNameError}
                   />
                   <Select
                     label="Filter by Designation"
