@@ -256,6 +256,16 @@ export function LearningPathManagement({
     Boolean(assignGradeFilter) ||
     Boolean(assignOrganizationFilter) ||
     Boolean(assignPayrollFilter);
+  const hasInvalidAssignEmployeeNoSearch =
+    hasAssignEmployeeNoSearch &&
+    (assignEmployeeNoSearch.trim().length !== EMPLOYEE_NO_LENGTH ||
+      assignEmployeeNoChecking ||
+      Boolean(assignEmployeeNoError));
+  const isAssignLearnerSearchDisabled =
+    (!hasAssignEmployeeNoSearch &&
+      !hasAssignNameSearch &&
+      !hasAssignFilterSearch) ||
+    hasInvalidAssignEmployeeNoSearch;
   const assignEmployeeNoPlaceholder = `e.g. ${user?.employeeNo?.trim() || "employee number"}`;
   const assignNamePlaceholder = `e.g. ${user?.name?.trim() || "name"}`;
 
@@ -1656,6 +1666,7 @@ export function LearningPathManagement({
                       handleAssignEmployeeNoChange(event.target.value)
                     }
                     placeholder={assignEmployeeNoPlaceholder}
+                    error={assignEmployeeNoError}
                   />
                   <Input
                     label="Search by Name"
@@ -1737,16 +1748,7 @@ export function LearningPathManagement({
                     type="button"
                     onClick={handleAssignSearch}
                     isLoading={assignSearchLoading}
-                    disabled={
-                      (!assignEmployeeNoSearch.trim() &&
-                        !assignSurnameSearch.trim() &&
-                        !assignDesignationFilter &&
-                        !assignGradeFilter &&
-                        !assignOrganizationFilter &&
-                        !assignPayrollFilter) ||
-                      assignEmployeeNoChecking ||
-                      Boolean(assignEmployeeNoError)
-                    }
+                    disabled={isAssignLearnerSearchDisabled}
                   >
                     Search
                   </Button>
