@@ -173,7 +173,7 @@ export function LearnerCertificatesPage() {
             certificates.map((certificate) => (
               <div
                 key={certificate.id}
-                className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
+                className="p-3 rounded-lg border border-slate-200 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-3 transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-medium"
               >
                 <div>
                   <p className="font-semibold text-slate-900">{certificate.learning_path_title}</p>
