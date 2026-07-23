@@ -1996,23 +1996,23 @@ export function AssignEnrollmentToClassesPage() {
             aria-modal="true"
             aria-labelledby="class-assignment-report-title"
           >
-            <div className="bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-5 py-5 text-white">
+            <div className="bg-white border-b border-secondary-200 px-5 py-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex min-w-0 gap-3">
-                  <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/30">
+                  <span className="mt-0.5 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#034c96]/10 text-[#034c96] ring-1 ring-[#034c96]/20">
                     <FileText className="h-6 w-6" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold uppercase text-white/75">
+                    <p className="text-xs font-semibold uppercase text-secondary-500">
                       Class Assignment Report
                     </p>
                     <h2
                       id="class-assignment-report-title"
-                      className="mt-1 text-2xl font-bold text-white"
+                      className="mt-1 text-2xl font-bold text-secondary-900"
                     >
                       Course/Class Learner Reports
                     </h2>
-                    <p className="mt-1 text-sm text-slate-300">
+                    <p className="mt-1 text-sm text-secondary-500">
                       Select a course class box to view learner details and
                       download the Excel report.
                     </p>
@@ -2021,34 +2021,34 @@ export function AssignEnrollmentToClassesPage() {
                 <button
                   type="button"
                   onClick={closeReportModal}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-secondary-200 bg-white text-secondary-500 transition hover:bg-secondary-50 hover:text-secondary-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-300"
                   aria-label="Close report window"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
               <div className="mt-5 grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border border-white/20 bg-white/15 p-3 text-white">
-                  <p className="text-xs font-semibold uppercase text-white/70">
+                <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3">
+                  <p className="text-xs font-semibold uppercase text-secondary-500">
                     Learning Path
                   </p>
-                  <p className="mt-1 truncate text-sm font-semibold text-white">
+                  <p className="mt-1 truncate text-sm font-semibold text-secondary-900">
                     {selectedPath?.title || "Not selected"}
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/20 bg-white/15 p-3 text-white">
-                  <p className="text-xs font-semibold uppercase text-white/70">
+                <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3">
+                  <p className="text-xs font-semibold uppercase text-secondary-500">
                     Report Boxes
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-white">
+                  <p className="mt-1 text-sm font-semibold text-secondary-900">
                     {classReportGroups.length} ready
                   </p>
                 </div>
-                <div className="rounded-xl border border-white/20 bg-white/15 p-3 text-white">
-                  <p className="text-xs font-semibold uppercase text-white/70">
+                <div className="rounded-xl border border-secondary-200 bg-secondary-50 p-3">
+                  <p className="text-xs font-semibold uppercase text-secondary-500">
                     Learners
                   </p>
-                  <p className="mt-1 text-sm font-semibold text-white">
+                  <p className="mt-1 text-sm font-semibold text-secondary-900">
                     {learners.length} enrolled
                   </p>
                 </div>
