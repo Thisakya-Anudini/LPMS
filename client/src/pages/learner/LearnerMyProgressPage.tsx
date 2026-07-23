@@ -333,7 +333,10 @@ export function LearnerMyProgressPage() {
         <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {statSkeletons.map((index) => (
-              <Card key={`progress-stat-${index}`} className="px-4 py-1.5">
+              <Card
+                key={`progress-stat-${index}`}
+                className="px-4 py-1.5 transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-medium"
+              >
                 <p className="text-lg font-medium text-secondary-600">
                   {index === 0 ? 'Assigned Learning Paths' : index === 1 ? 'Completed Learning Paths' : 'Pending Learning Paths'}
                 </p>
