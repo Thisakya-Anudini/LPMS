@@ -55,7 +55,10 @@ export function MyLearningPaths() {
           <Card>No certificates issued yet.</Card>
         ) : (
           certificates.map((certificate) => (
-            <Card key={certificate.id} className="border-green-200 bg-green-50/30">
+            <Card
+              key={certificate.id}
+              className="border-green-200 bg-green-50/30 transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-medium"
+            >
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <Badge variant="success" className="mb-2">

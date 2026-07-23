@@ -190,6 +190,7 @@ export function SupervisorDashboard() {
         {statSkeletons.map((index) => (
           <Card
             key={`supervisor-stat-${index}`}
+            className="transition-all duration-200 hover:-translate-y-1 hover:border-primary-300 hover:shadow-medium"
             bodyClassName="h-24 px-6 py-4 flex flex-col justify-center"
           >
             <p className="text-sm text-slate-500">
