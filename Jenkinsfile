@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        // Database credentials used during unit tests
+        // Environment variables for Backend CI Tests
         DATABASE_URL = 'postgresql://user:password@localhost:5432/lpms_db'
         SECRET_KEY   = 'test-secret'
     }
@@ -14,20 +14,18 @@ pipeline {
             }
         }
 
-        stage('Frontend CI (Lint & Build)') {
+        stage('Frontend CI (React + Vite)') {
             steps {
                 dir('client') {
-                    echo 'Installing Frontend Dependencies...'
-                    sh 'npm install --legacy-peer-deps'
-                    
-                    echo 'Fixing ESLint Version...'
-                    sh 'npm install eslint@8.57.0 --no-save --legacy-peer-deps'
-                    
-                    echo 'Running Code Quality Checks (Lint)...'
-                    sh 'npm run lint'
-                    
-                    echo 'Testing Production Build...'
-                    sh 'npm run build'
+                    echo 'Running Frontend Lint & Build inside Node 20 Docker container...'
+                    sh '''
+                        docker run --rm -v $PWD:/app -w /app node:20 sh -c "
+                          npm install --legacy-peer-deps && \
+                          npm install eslint@8.57.0 --no-save --legacy-peer-deps && \
+                          npm run lint && \
+                          npm run build
+                        "
+                    '''
                 }
             }
         }
@@ -35,10 +33,7 @@ pipeline {
         stage('Backend CI (Unit Tests)') {
             steps {
                 dir('server') {
-                    echo 'Installing Backend Dependencies...'
-                    sh 'npm install --legacy-peer-deps'
-
-                    echo 'Starting temporary PostgreSQL for testing...'
+                    echo 'Starting temporary PostgreSQL container...'
                     sh '''
                         docker run -d --name jenkins-test-postgres \
                           -e POSTGRES_USER=user \
@@ -46,15 +41,17 @@ pipeline {
                           -e POSTGRES_DB=lpms_db \
                           -p 5432:5432 postgres:15 || true
                         
-                        # Wait 5 seconds for Postgres to start
                         sleep 5
                     '''
-                    
-                    echo 'Running Database Migrations...'
-                    sh 'npm run migrate'
-                    
-                    echo 'Running Unit Tests...'
-                    sh 'npm test'
+
+                    echo 'Running Backend Migrations & Tests inside Node 20 Docker container...'
+                    sh '''
+                        docker run --rm --network host -v $PWD:/app -w /app node:20 sh -c "
+                          npm install --legacy-peer-deps && \
+                          npm run migrate && \
+                          npm test
+                        "
+                    '''
                 }
             }
         }
