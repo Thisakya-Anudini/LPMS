@@ -88,7 +88,13 @@ type ClassReportGroup = {
   endDate: string;
   classPayload?: Record<string, unknown>;
   hasClassAssignment: boolean;
-  learners: Array<{ id: string; name: string }>;
+  learners: Array<{
+    id: string;
+    name: string;
+    email: string;
+    designation: string;
+    gradeName: string;
+  }>;
 };
 
 type ClassDetailFieldKey =
@@ -795,6 +801,9 @@ export function AssignEnrollmentToClassesPage() {
       const learner = {
         id: row.employeeNumber || "",
         name: row.learnerName,
+        email: row.email || "",
+        designation: row.designation || "",
+        gradeName: row.gradeName || "",
       };
 
       if (existing) {
@@ -2195,24 +2204,57 @@ export function AssignEnrollmentToClassesPage() {
                           {selectedReportGroup.learners.length} learner(s)
                         </span>
                       </div>
-                      <div className="grid grid-cols-[160px_1fr] border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white">
-                        <span>ID</span>
-                        <span>Name</span>
-                      </div>
-                      <div className="max-h-80 divide-y divide-secondary-100 overflow-auto">
-                        {selectedReportGroup.learners.map((learner) => (
-                          <div
-                            key={`${selectedReportGroup.key}-${learner.id}`}
-                            className="grid grid-cols-[160px_1fr] px-4 py-2 text-sm"
-                          >
-                            <span className="text-secondary-700">
-                              {learner.id || "-"}
-                            </span>
-                            <span className="font-medium text-secondary-900">
-                              {learner.name || "-"}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="max-h-80 overflow-auto">
+                        <table className="w-full min-w-[800px] table-fixed text-left text-sm">
+                          <thead className="sticky top-0 z-10 border-b border-secondary-200 bg-secondary-50 text-xs font-semibold uppercase tracking-wide text-secondary-500">
+                            <tr>
+                              <th className="w-[120px] px-4 py-3">ID</th>
+                              <th className="w-[30%] px-4 py-3">Name</th>
+                              <th className="w-[30%] px-4 py-3">Email</th>
+                              <th className="w-[20%] px-4 py-3">Designation</th>
+                              <th className="w-[20%] px-4 py-3">Grade</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-secondary-100 bg-white">
+                            {selectedReportGroup.learners.map((learner) => (
+                              <tr
+                                key={`${selectedReportGroup.key}-${learner.id}`}
+                                className="transition-colors hover:bg-secondary-50/50"
+                              >
+                                <td
+                                  className="truncate px-4 py-3 text-secondary-700"
+                                  title={learner.id}
+                                >
+                                  {learner.id || "-"}
+                                </td>
+                                <td
+                                  className="truncate px-4 py-3 font-medium text-secondary-900"
+                                  title={learner.name}
+                                >
+                                  {learner.name || "-"}
+                                </td>
+                                <td
+                                  className="truncate px-4 py-3 text-secondary-500"
+                                  title={learner.email}
+                                >
+                                  {learner.email || "-"}
+                                </td>
+                                <td
+                                  className="truncate px-4 py-3 text-secondary-500"
+                                  title={learner.designation}
+                                >
+                                  {learner.designation || "-"}
+                                </td>
+                                <td
+                                  className="truncate px-4 py-3 text-secondary-500"
+                                  title={learner.gradeName}
+                                >
+                                  {learner.gradeName || "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   ) : null}
