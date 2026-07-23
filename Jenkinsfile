@@ -1,12 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        // Environment variables for Backend CI Tests
-        DATABASE_URL = 'postgresql://user:password@localhost:5432/lpms_db'
-        SECRET_KEY   = 'test-secret'
-    }
-
     stages {
         stage('Checkout Code') {
             steps {
@@ -17,14 +11,17 @@ pipeline {
         stage('Frontend CI (React + Vite)') {
             steps {
                 dir('client') {
-                    echo 'Running Frontend Lint & Build inside Node 20 Docker container...'
+                    echo 'Linting and Building Frontend in Node 20 container...'
                     sh '''
-                        docker run --rm -v $PWD:/app -w /app node:20 sh -c "
-                          npm install --legacy-peer-deps && \
-                          npm install eslint@8.57.0 --no-save --legacy-peer-deps && \
-                          npm run lint && \
-                          npm run build
-                        "
+                        docker build -t lpms-frontend-ci -f - . << 'EOF'
+                        FROM node:20
+                        WORKDIR /app
+                        COPY . .
+                        RUN npm install --legacy-peer-deps
+                        RUN npm install eslint@8.57.0 --no-save --legacy-peer-deps
+                        RUN npm run lint
+                        RUN npm run build
+                        EOF
                     '''
                 }
             }
@@ -33,7 +30,7 @@ pipeline {
         stage('Backend CI (Unit Tests)') {
             steps {
                 dir('server') {
-                    echo 'Starting temporary PostgreSQL container...'
+                    echo 'Starting temporary PostgreSQL test database...'
                     sh '''
                         docker run -d --name jenkins-test-postgres \
                           -e POSTGRES_USER=user \
@@ -44,13 +41,18 @@ pipeline {
                         sleep 5
                     '''
 
-                    echo 'Running Backend Migrations & Tests inside Node 20 Docker container...'
+                    echo 'Running Backend Migrations & Unit Tests...'
                     sh '''
-                        docker run --rm --network host -v $PWD:/app -w /app node:20 sh -c "
-                          npm install --legacy-peer-deps && \
-                          npm run migrate && \
-                          npm test
-                        "
+                        docker build -t lpms-backend-ci --network host -f - . << 'EOF'
+                        FROM node:20
+                        WORKDIR /app
+                        COPY . .
+                        ENV DATABASE_URL=postgresql://user:password@localhost:5432/lpms_db
+                        ENV SECRET_KEY=test-secret
+                        RUN npm install --legacy-peer-deps
+                        RUN npm run migrate
+                        RUN npm test
+                        EOF
                     '''
                 }
             }
@@ -59,8 +61,11 @@ pipeline {
 
     post {
         always {
-            echo 'Cleaning up temporary test database...'
-            sh 'docker stop jenkins-test-postgres && docker rm jenkins-test-postgres || true'
+            echo 'Cleaning up test database and images...'
+            sh '''
+                docker stop jenkins-test-postgres && docker rm jenkins-test-postgres || true
+                docker rmi lpms-frontend-ci lpms-backend-ci || true
+            '''
         }
         success {
             echo '==========================================='
