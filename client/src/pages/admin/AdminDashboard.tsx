@@ -361,6 +361,17 @@ export function AdminDashboard() {
     }
   };
 
+  const handleAssignReset = () => {
+    setAssignEmployeeNoSearch("");
+    setAssignSurnameSearch("");
+    setAssignDesignationFilter("");
+    setAssignGradeFilter("");
+    setAssignOrganizationFilter("");
+    setAssignPayrollFilter("");
+    setAssignSearchErrors({});
+    setErpEmployees([]);
+  };
+
   const handleAssignSearch = async () => {
     const employeeNo = assignEmployeeNoSearch.trim();
     const name = assignSurnameSearch.trim().replace(/\s+/g, " ");
@@ -672,24 +683,42 @@ export function AdminDashboard() {
             <p className="text-xs font-medium text-slate-500">
               ERP results: {erpEmployees.length}
             </p>
-            <Button
-              type="button"
-              onClick={handleAssignSearch}
-              isLoading={assignSearchLoading}
-              disabled={
-                Boolean(
-                  assignSearchErrors.employeeNo || assignSearchErrors.name,
-                ) ||
-                (!assignEmployeeNoSearch.trim() &&
-                  !assignSurnameSearch.trim() &&
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAssignReset}
+                disabled={
+                  !assignEmployeeNoSearch &&
+                  !assignSurnameSearch &&
                   !assignDesignationFilter &&
                   !assignGradeFilter &&
                   !assignOrganizationFilter &&
-                  !assignPayrollFilter)
-              }
-            >
-              Search
-            </Button>
+                  !assignPayrollFilter &&
+                  erpEmployees.length === 0
+                }
+              >
+                Reset
+              </Button>
+              <Button
+                type="button"
+                onClick={handleAssignSearch}
+                isLoading={assignSearchLoading}
+                disabled={
+                  Boolean(
+                    assignSearchErrors.employeeNo || assignSearchErrors.name,
+                  ) ||
+                  (!assignEmployeeNoSearch.trim() &&
+                    !assignSurnameSearch.trim() &&
+                    !assignDesignationFilter &&
+                    !assignGradeFilter &&
+                    !assignOrganizationFilter &&
+                    !assignPayrollFilter)
+                }
+              >
+                Search
+              </Button>
+            </div>
           </div>
 
           <div className="max-h-[26rem] overflow-auto">

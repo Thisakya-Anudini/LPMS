@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Search, Globe, Lock } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
+import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -74,6 +75,12 @@ export function AdminLearningPathsPage() {
     return result;
   }, [paths, query, categoryFilter, statusFilter]);
 
+  const handleResetFilters = () => {
+    setQuery("");
+    setCategoryFilter("");
+    setStatusFilter("");
+  };
+
   const openPathDetail = (pathId: string) => {
     navigate(`/admin/learning-paths/${pathId}`);
   };
@@ -99,7 +106,7 @@ export function AdminLearningPathsPage() {
               onChange={(event) => setQuery(event.target.value)}
             />
           </div>
-          <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
+          <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row sm:items-center">
             <Select
               value={categoryFilter}
               onChange={(event) => setCategoryFilter(event.target.value)}
@@ -121,6 +128,14 @@ export function AdminLearningPathsPage() {
               ]}
               className="min-w-[180px]"
             />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleResetFilters}
+              disabled={!query && !categoryFilter && !statusFilter}
+            >
+              Reset
+            </Button>
           </div>
         </div>
 

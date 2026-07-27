@@ -1318,6 +1318,12 @@ export function AssignEnrollmentToClassesPage() {
     })),
   ];
 
+  const handleResetFilters = () => {
+    setLearnerSearch("");
+    setDesignationFilter("");
+    setGradeFilter("");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1655,31 +1661,50 @@ export function AssignEnrollmentToClassesPage() {
               </div>
 
               {/* Filter Options */}
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-2">
-                <Select
-                  label="Filter by Designation"
-                  value={designationFilter}
-                  onChange={(event) => setDesignationFilter(event.target.value)}
-                  options={[
-                    { value: "", label: "All Designations" },
-                    ...designationOptions.map((opt) => ({
-                      value: opt,
-                      label: opt,
-                    })),
-                  ]}
-                />
-                <Select
-                  label="Filter by Grade"
-                  value={gradeFilter}
-                  onChange={(event) => setGradeFilter(event.target.value)}
-                  options={[
-                    { value: "", label: "All Grades" },
-                    ...gradeOptions.map((opt) => ({
-                      value: opt,
-                      label: opt,
-                    })),
-                  ]}
-                />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="w-full sm:flex-1">
+                  <Select
+                    label="Filter by Designation"
+                    value={designationFilter}
+                    onChange={(event) =>
+                      setDesignationFilter(event.target.value)
+                    }
+                    options={[
+                      { value: "", label: "All Designations" },
+                      ...designationOptions.map((opt) => ({
+                        value: opt,
+                        label: opt,
+                      })),
+                    ]}
+                  />
+                </div>
+                <div className="w-full sm:flex-1">
+                  <Select
+                    label="Filter by Grade"
+                    value={gradeFilter}
+                    onChange={(event) => setGradeFilter(event.target.value)}
+                    options={[
+                      { value: "", label: "All Grades" },
+                      ...gradeOptions.map((opt) => ({
+                        value: opt,
+                        label: opt,
+                      })),
+                    ]}
+                  />
+                </div>
+                <div className="flex pb-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetFilters}
+                    disabled={
+                      !learnerSearch && !designationFilter && !gradeFilter
+                    }
+                    className="w-full sm:w-auto"
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
               </div>
             </div>
 

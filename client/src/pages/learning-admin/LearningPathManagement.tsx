@@ -1386,6 +1386,24 @@ export function LearningPathManagement({
     };
   }, [assignSurnameSearch, getAccessToken, section]);
 
+  const handleAssignReset = () => {
+    setAssignEmployeeNoSearch("");
+    setAssignEmployeeNoError("");
+    setAssignSurnameSearch("");
+    setAssignNameError("");
+    setAssignDesignationFilter("");
+    setAssignGradeFilter("");
+    setAssignOrganizationFilter("");
+    setAssignPayrollFilter("");
+    setLearners([]);
+  };
+
+  const handleManageReset = () => {
+    setQuery("");
+    setCategoryFilter("");
+    setStatusFilter("");
+  };
+
   const handleAssignSearch = async () => {
     const employeeNo = assignEmployeeNoSearch.trim();
     const name = assignSurnameSearch.trim();
@@ -1810,7 +1828,23 @@ export function LearningPathManagement({
                   />
                 </div>
 
-                <div className="flex justify-end px-3 py-2 border-b border-slate-200 bg-slate-50/70">
+                <div className="flex justify-end gap-2 px-3 py-2 border-b border-slate-200 bg-slate-50/70">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleAssignReset}
+                    disabled={
+                      !assignEmployeeNoSearch &&
+                      !assignSurnameSearch &&
+                      !assignDesignationFilter &&
+                      !assignGradeFilter &&
+                      !assignOrganizationFilter &&
+                      !assignPayrollFilter &&
+                      learners.length === 0
+                    }
+                  >
+                    Reset
+                  </Button>
                   <Button
                     type="button"
                     onClick={handleAssignSearch}
@@ -1936,7 +1970,7 @@ export function LearningPathManagement({
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </div>
-              <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
+              <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row sm:items-center">
                 <Select
                   value={categoryFilter}
                   onChange={(event) =>
@@ -1962,6 +1996,14 @@ export function LearningPathManagement({
                   ]}
                   className="min-w-[180px]"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleManageReset}
+                  disabled={!query && !categoryFilter && !statusFilter}
+                >
+                  Reset
+                </Button>
               </div>
             </div>
           </div>
