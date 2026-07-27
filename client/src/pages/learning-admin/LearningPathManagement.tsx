@@ -1398,6 +1398,12 @@ export function LearningPathManagement({
     setLearners([]);
   };
 
+  const handleManageReset = () => {
+    setQuery("");
+    setCategoryFilter("");
+    setStatusFilter("");
+  };
+
   const handleAssignSearch = async () => {
     const employeeNo = assignEmployeeNoSearch.trim();
     const name = assignSurnameSearch.trim();
@@ -1964,7 +1970,7 @@ export function LearningPathManagement({
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </div>
-              <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row">
+              <div className="flex w-full flex-col gap-4 sm:w-auto sm:flex-row sm:items-center">
                 <Select
                   value={categoryFilter}
                   onChange={(event) =>
@@ -1990,6 +1996,14 @@ export function LearningPathManagement({
                   ]}
                   className="min-w-[180px]"
                 />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleManageReset}
+                  disabled={!query && !categoryFilter && !statusFilter}
+                >
+                  Reset
+                </Button>
               </div>
             </div>
           </div>
