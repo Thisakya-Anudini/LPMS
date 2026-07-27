@@ -29,13 +29,15 @@ RUN npm run build
         stage('Backend CI (Unit Tests)') {
             steps {
                 dir('server') {
-                    echo 'Starting temporary PostgreSQL test database...'
+                    echo 'Starting temporary PostgreSQL test database on port 5433...'
                     sh '''
+                        docker stop jenkins-test-postgres || true
+                        docker rm jenkins-test-postgres || true
                         docker run -d --name jenkins-test-postgres \
                           -e POSTGRES_USER=user \
                           -e POSTGRES_PASSWORD=password \
                           -e POSTGRES_DB=lpms_db \
-                          -p 5432:5432 postgres:15 || true
+                          -p 5433:5432 postgres:15
                         
                         sleep 5
                     '''
@@ -44,7 +46,7 @@ RUN npm run build
                     writeFile file: 'Dockerfile.ci', text: '''FROM node:20
 WORKDIR /app
 COPY . .
-ENV DATABASE_URL=postgresql://user:password@localhost:5432/lpms_db
+ENV DATABASE_URL=postgresql://user:password@localhost:5433/lpms_db
 ENV SECRET_KEY=test-secret
 RUN npm install --legacy-peer-deps
 RUN npm run migrate
