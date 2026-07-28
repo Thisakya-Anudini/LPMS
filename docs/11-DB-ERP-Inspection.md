@@ -236,6 +236,58 @@
 - **What it Does**: Recreates the `course_type` enum and the `employees` and `courses` tables if absent. It restores `course_id` relationships on `stage_courses` and `enrollment_progress`, rebuilds course records from the snapshot columns introduced by migration `014`, reconnects stage and progress records to those courses, reconstructs employee records from enrollment, certificate, notification, and active principal data, and restores the foreign key from `learning_admin_assignments` to `employees`.
 - **Is it Actually Needed?**: Yes. It reconciles the ERP snapshot data with the local relational model expected by the application, retaining ERP-derived values while restoring foreign keys, normalized queries, and compatibility with existing controllers.
 
+### 23. Assignment Reports (016_create_assignment_reports.sql)
+
+- **Importance to the Project**: High - Captures assignment activity for reporting and ERP enrollment follow-up.
+- **Where it is Important**: Learning Admin assignment reports, assignment audit/history, and ERP enrollment tracking.
+- **Frontend Pages Used**:
+  - `AssignmentReportsPage` (`/learning-admin/assignment-reports`)
+  - `LearningPathManagement`
+- **What it Does**: Creates `assignment_reports` to store the assignment event summary and `assignment_report_learners` to store the learners included in each assignment report. It records the learning path title, assigning user details, assignment source (`LEARNING_ADMIN` or `SUPERVISOR`), report status (`ASSIGNED_IN_LPMS` or `ENROLLED_IN_ERP`), learner employee numbers, names, emails, designations, and grades.
+- **Database Objects Added**:
+  - `assignment_reports` table.
+  - `assignment_report_learners` table.
+  - `idx_assignment_reports_assigned_at`, `idx_assignment_reports_status`, and `idx_assignment_report_learners_report_id`.
+- **Is it Actually Needed?**: Yes. It gives the LPMS a local reporting record of who was assigned, by whom, from which source, and whether the assignment has progressed to ERP enrollment.
+
+### 24. Class Enrollments (017_create_class_enrollments.sql)
+
+- **Importance to the Project**: High - Links LPMS enrollments to specific ERP class sessions.
+- **Where it is Important**: Class assignment workflows, ERP class allocation, and course enrollment reporting.
+- **Frontend Pages Used**:
+  - `AssignEnrollmentToClassesPage` (`/learning-admin/classes/assign`)
+- **What it Does**: Creates `class_enrollments` to store the selected ERP class for each learner enrollment and course. It keeps the LPMS `enrollment_id`, `learning_path_id`, ERP `course_code`, `class_id`, optional class code/title, raw `class_payload`, assigning user, and assignment timestamps.
+- **Database Objects Added**:
+  - `class_enrollments` table.
+  - Unique constraint on `(enrollment_id, course_code)` so one learner enrollment can only have one class assignment per course.
+  - `idx_class_enrollments_learning_path_course` and `idx_class_enrollments_class_id`.
+- **Is it Actually Needed?**: Yes. The LPMS must remember which ERP class a learner was assigned to; without this table, class assignment would be temporary UI state or would need to be fetched from ERP every time.
+
+### 25. Assignment Report De-duplication (018_dedupe_assignment_reports.sql)
+
+- **Importance to the Project**: Medium to High - Protects assignment report data from duplicated report and learner rows.
+- **Where it is Important**: Assignment report accuracy, reporting filters, and ERP enrollment status tracking.
+- **Frontend Pages Used**:
+  - `AssignmentReportsPage` (`/learning-admin/assignment-reports`)
+- **What it Does**: Consolidates duplicate `assignment_reports` by keeping one report per `learning_path_id` and `assignment_source`, moves missing learner rows into the kept report, deletes duplicate reports and duplicate learner rows, then adds unique indexes to prevent the same duplicates from returning.
+- **Database Objects Changed**:
+  - Adds `idx_assignment_reports_learning_path_source_unique` on `(learning_path_id, assignment_source)` where `learning_path_id IS NOT NULL`.
+  - Adds `idx_assignment_report_learners_report_employee_unique` on `(report_id, employee_number)`.
+- **Is it Actually Needed?**: Yes. It keeps report totals accurate and prevents repeated learner rows from appearing in assignment reports.
+
+### 26. Class Detail Reports (019_create_class_detail_reports.sql)
+
+- **Importance to the Project**: Medium to High - Stores detailed ERP class metadata needed for class report export and review.
+- **Where it is Important**: Class assignment reporting, class detail download workflows, and Learning Admin record keeping.
+- **Frontend Pages Used**:
+  - `AssignEnrollmentToClassesPage` (`/learning-admin/classes/assign`)
+- **What it Does**: Creates `class_detail_reports` to store per-class details for a learning path course, including course category/name, offering name, catalog year, location, class title, training center, dates, times, duration, enrollment window, cost, and bond details.
+- **Database Objects Added**:
+  - `class_detail_reports` table.
+  - Unique constraint on `(learning_path_id, course_code, class_id)`.
+  - `idx_class_detail_reports_lookup` on `(learning_path_id, course_code, class_id)`.
+- **Is it Actually Needed?**: Yes. It lets Learning Admins save and re-open the detailed class report information used when exporting class details, instead of losing those values after the current browser session.
+
 ---
 
 
