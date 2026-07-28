@@ -183,6 +183,59 @@
 - **What it Does**: Creates a `learning_admin_assignments` table keyed by `employee_number`. It links `employee_number` to `assigned_by_principal_id`, stores `created_at` and `updated_at` timestamps, and adds an index on `assigned_by_principal_id` for faster lookup.
 - **Is it Actually Needed?**: Yes. The app uses this table to determine whether a user should be treated as a learning admin and to maintain the assignment history for administrative control.
 
+### 18. Certificate Signer Details (011_add_certificate_signature_to_learning_paths.sql)
+
+- **Importance to the Project**: Medium - Supports certificate personalization and official authorization.
+- **Where it is Important**: Learning path configuration and learner certificate generation.
+- **Frontend Pages Used**:
+  - `LearningPathManagement` (Learning path creation and editing)
+  - Learner certificate download and display workflows
+- **What it Does**: Adds `certificate_signer_name` and `certificate_signer_title` columns to `learning_paths`. These fields store the name and job title of the person whose authorization appears on certificates issued for a specific learning path.
+- **Is it Actually Needed?**: Yes. Certificate signer information varies by learning path and must be stored locally so generated certificates contain the correct approving authority.
+
+### 19. Stage Course Ordering and Course-Level Progress (012_stage_course_order_and_course_progress.sql)
+
+- **Importance to the Project**: High - Enables deterministic course sequencing and detailed progress tracking.
+- **Where it is Important**: Learning path stage management, learner progress calculation, and course completion workflows.
+- **Frontend Pages Used**:
+  - `LearningPathManagement` (Ordering courses within stages)
+  - `LearnerMyProgressPage` (`/learner/my-progress`)
+- **What it Does**: Adds the required `course_order` column to `stage_courses`, backfills existing records, and creates a unique index so two courses cannot occupy the same position in one stage. It also adds `course_id` to `enrollment_progress` and creates a unique partial index so each course has at most one progress record per enrollment.
+- **Is it Actually Needed?**: Yes. Stage-level progress alone cannot identify individual completed courses, and an explicit course order is necessary to display a consistent learning sequence.
+
+### 20. Certificate Signature Image (013_add_certificate_signature_png_to_learning_paths.sql)
+
+- **Importance to the Project**: Medium - Completes the visual certificate-signing capability.
+- **Where it is Important**: Certificate template configuration and PDF certificate rendering.
+- **Frontend Pages Used**:
+  - `LearningPathManagement` (Certificate configuration)
+  - Learner certificate download workflow
+- **What it Does**: Adds `certificate_signature_png` to `learning_paths`. The text column stores the PNG signature representation used when rendering the certificate for that learning path.
+- **Is it Actually Needed?**: Yes, when certificates must show the authorized signer's actual signature image rather than only a typed name and title.
+
+### 21. ERP Snapshot-Based Learner and Course Data (014_move_learners_and_courses_to_erp_snapshots.sql)
+
+- **Importance to the Project**: Very High - Temporarily shifts learner and course dependencies away from local master tables toward ERP-derived snapshots.
+- **Where it is Important**: Enrollments, notifications, certificates, learning path courses, and course-level progress.
+- **Frontend Pages Used**:
+  - `LearnerMyProgressPage` (`/learner/my-progress`)
+  - Learning path creation and details pages
+  - Notifications and certificate workflows
+- **What it Does**: Adds learner snapshot fields to `enrollments`, an employee number to `notifications`, learner snapshot fields to `certificates`, and ERP course snapshot fields to `stage_courses` and `enrollment_progress`. It backfills those fields from the existing `employees`, `auth_principals`, and `courses` data; creates uniqueness indexes for employee/path and course-code progress records; removes course foreign-key dependencies; and then drops the local `courses` and `employees` tables.
+- **Is it Actually Needed?**: It was needed for the ERP-snapshot architecture introduced at that point in the migration history. It preserved the learner and course details required by LPMS transactions while treating ERP as the master source. However, migration `015` subsequently restores the local tables and relationships for application compatibility.
+
+### 22. Restore Local Employees and Courses (015_restore_employees_and_courses.sql)
+
+- **Importance to the Project**: Very High - Restores the relational structures required by the current LPMS implementation.
+- **Where it is Important**: Authentication-linked employee records, learning path course relationships, progress tracking, and learning-admin assignments.
+- **Frontend Pages Used**:
+  - `AdminEmployeeHierarchyPage` (`/admin/hierarchy`)
+  - `AdminLearnersPage` (`/admin/learners`)
+  - `LearningPathManagement`
+  - `LearnerMyProgressPage` (`/learner/my-progress`)
+- **What it Does**: Recreates the `course_type` enum and the `employees` and `courses` tables if absent. It restores `course_id` relationships on `stage_courses` and `enrollment_progress`, rebuilds course records from the snapshot columns introduced by migration `014`, reconnects stage and progress records to those courses, reconstructs employee records from enrollment, certificate, notification, and active principal data, and restores the foreign key from `learning_admin_assignments` to `employees`.
+- **Is it Actually Needed?**: Yes. It reconciles the ERP snapshot data with the local relational model expected by the application, retaining ERP-derived values while restoring foreign keys, normalized queries, and compatibility with existing controllers.
+
 ---
 
 
