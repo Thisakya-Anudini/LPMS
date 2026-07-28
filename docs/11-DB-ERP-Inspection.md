@@ -122,7 +122,70 @@
 - **What it Does**: This migration file does **not** create any new tables. Instead, it adds B-tree indexes to heavily queried foreign keys and status columns on the tables created in migrations 001-004. For example, it indexes `email` in `auth_principals`, `principal_id` in `enrollments`, and `status` in `learning_paths`.
 - **Is it Actually Needed?**: Yes. Without these indexes, the PostgreSQL database would have to perform full table scans whenever a learner logs in or views their assigned courses, which would cause the LPMS to severely lag as the number of enrollments scales up.
 
+
+### 13. auth_principals update (006_add_must_change_password.sql)
+
+- **Importance to the Project**: High - This strengthens the core authentication table with forced password-change support.
+- **Where it is Important**: Login flow, first-time password change flow, imported employee provisioning, and role-based authentication checks.
+- **Frontend Pages Used**:
+  - `LoginPage.tsx` (`/login`)
+  - `ChangePasswordPage.tsx` (`/change-password`)
+  - `AdminDashboard` (`/admin/accounts`)
+  - `AdminLearnersPage` (`/admin/learners`)
+- **What it Does**: Adds a `must_change_password` boolean column to `auth_principals`, defaulting to `false`. The application uses this to force newly imported or reset users to change their password before continuing.
+- **Is it Actually Needed?**: Yes. This is required for secure onboarding of imported users and for enforcing password reset policies without depending on the ERP.
+
+
+### 14. certificates and enrollment_source update (007_add_certificates_and_enrollment_source.sql)
+
+- **Importance to the Project**: Very High - This migration adds the certificate issuance table and tracks how enrollments were created.
+- **Where it is Important**: Certificate generation, certificate downloads, learner achievement views, learning-admin certificate settings, and enrollment provenance reporting.
+- **Frontend Pages Used**:
+  - `LearnerCertificatesPage` (`/learner/certificates`)
+  - `CertificateCustomizationPage` (`/learning-admin/certificates`)
+  - `LearningAdminDashboard` (`/learning-admin/dashboard`)
+  - `AssignmentReportsPage` (`/learning-admin/assignment-reports`)
+- **What it Does**: Adds `enrollment_source` to `enrollments` with a default value of `MANUAL`, then creates the `certificates` table. The `certificates` table stores `principal_id`, `learning_path_id`, `scope`, `issued_at`, and `issued_by`, and enforces one certificate per principal, learning path, and scope. It also adds indexes on `principal_id` and `learning_path_id` for lookup performance.
+- **Is it Actually Needed?**: Yes. Certificates are a core learner-facing feature, and `enrollment_source` is important for knowing whether an enrollment came from manual entry, self-service, a learning admin, or a supervisor workflow.
+
+
+### 15. notifications behavior update (008_limit_notifications_per_principal.sql)
+
+- **Importance to the Project**: Medium to High - This keeps the notifications table bounded and performant.
+- **Where it is Important**: In-app notifications, notification bell refresh, and user notification history.
+- **Frontend Pages Used**:
+  - `NotificationsPage.tsx` (`/notifications`)
+  - `DashboardLayout.tsx` (Global header)
+  - `EmployeeDashboard`
+- **What it Does**: Creates a trigger function that automatically keeps only the newest 20 notifications per principal after each insert. It also runs a one-time cleanup for existing rows and adds a composite index on `principal_id`, `created_at`, and `id` to support the trimming and sorting logic.
+- **Is it Actually Needed?**: Yes, if the product wants to cap notification growth and keep the table fast for frequent reads. Without this, notifications can grow indefinitely and slow down inbox queries.
+
+
+### 16. enrollment_progress unique index (009_enrollment_progress_unique_stage.sql)
+
+- **Importance to the Project**: High - This protects stage-level progress tracking from duplicate rows.
+- **Where it is Important**: Learner progress tracking, stage completion updates, and resume/retry behavior in multi-stage learning paths.
+- **Frontend Pages Used**:
+  - `LearnerMyProgressPage` (`/learner/my-progress`)
+  - `LearningPathManagement`
+  - `SupervisorDashboard`
+- **What it Does**: Deletes duplicate `enrollment_progress` rows for the same `enrollment_id` and `stage_id` combination, then creates a unique partial index so each enrollment can have only one progress row per stage when `stage_id` is not null.
+- **Is it Actually Needed?**: Yes. This prevents duplicate stage-progress rows and makes progress upserts safe and predictable.
+
+
+### 17. learning_admin_assignments (010_create_learning_admin_assignments.sql)
+
+- **Importance to the Project**: High - This table stores which employees are assigned as learning admins.
+- **Where it is Important**: Admin account management, authorization checks, and learning-admin role mapping.
+- **Frontend Pages Used**:
+  - `AdminDashboard` (`/admin/accounts`)
+  - Super Admin account management views
+- **What it Does**: Creates a `learning_admin_assignments` table keyed by `employee_number`. It links `employee_number` to `assigned_by_principal_id`, stores `created_at` and `updated_at` timestamps, and adds an index on `assigned_by_principal_id` for faster lookup.
+- **Is it Actually Needed?**: Yes. The app uses this table to determine whether a user should be treated as a learning admin and to maintain the assignment history for administrative control.
+
 ---
+
+
 
 ## ERP Integration & Configuration Inspection
 
