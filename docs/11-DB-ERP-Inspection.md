@@ -116,10 +116,7 @@
 
 ---
 
-## ERP APIs Inspection (Technical Reference)
-
-> [!NOTE]
-> This section is written to onboard new developers, detailing exactly how the LPMS communicates with the external corporate ERP system.
+## ERP Integration & Configuration Inspection
 
 ### Overview
 
@@ -127,25 +124,25 @@ The LPMS interacts with an external ERP system via a dedicated client (`server/u
 
 ### Technical Implementation Details
 
-- **Authentication**: The ERP requires specific headers for every request. Specifically, the headers `UserName` and `Password` must be passed. These are sourced from `.env` variables (`ERP_USERNAME`, `ERP_PASSWORD`, `ERP_SEARCH_USERNAME`, `ERP_SEARCH_PASSWORD`).
+- **Authentication & Testing**: The ERP requires specific headers for every request. Normal operations use `ERP_USERNAME` and `ERP_PASSWORD`, while search-heavy endpoints use `ERP_SEARCH_USERNAME` and `ERP_SEARCH_PASSWORD`. For local development, `ERP_USE_MOCK=true` can be set to intercept network requests and return mock data instead of hitting the real ERP.
 - **HTTP Methods**: Most endpoints use `POST` with JSON bodies, except for fetching organizations which uses `GET`.
-- **Data Hydration (`importErpEmployees`)**: The primary integration orchestrator is the `importErpEmployees` function in `integrationController.js`. It takes arrays of ERP employees and provisions local `auth_principals` and `employees` records, creating a local copy of the user and automatically hashing a default password (`ERP_IMPORTED_DEFAULT_PASSWORD`).
+- **Data Hydration (`importErpEmployees`)**: The primary integration orchestrator is the `importErpEmployees` function in `integrationController.js`. It takes arrays of ERP employees and provisions local `auth_principals` and `employees` records. It assigns a default password using `ERP_IMPORTED_DEFAULT_PASSWORD`. If an ERP user lacks an email, the system generates a fake one using `ERP_FALLBACK_EMAIL_DOMAIN` (e.g., `employee123@erp.local`).
 
 ### Specific Endpoints and their Roles
 
 1. **Employee Details & Hierarchy**
-   - `fetchEmployeeSubordinates`: Accepts an `employeeNo` and returns a list of their direct reports. Used heavily to build the Supervisor Dashboards.
-   - `fetchEmployeeDetailsForServiceNo`: Fetches an exact match for an employee number. It automatically appends a default cost center (`ERP_DEFAULT_COST_CENTER_CODE`) and organization ID (`ERP_DEFAULT_ORGANIZATION_ID`).
-   - `fetchEmployeesByPartialName`: A search endpoint for employee name lookups.
-   - `fetchEmployeesByFilters`: Advanced search allowing filtering by `designation`, `gradeName`, `orgName`, and `payroll`.
+   - `fetchEmployeeSubordinates`: Accepts an `employeeNo` and returns a list of their direct reports. _Usage in LPMS:_ Called by `supervisorController.js` to build the team hierarchy tree and populate the Supervisor Dashboard, allowing managers to see their subordinates without needing local database replication of the org chart. _(Powered by `.env`: `ERP_SUBORDINATES_URL`, authenticated with `ERP_USERNAME` / `ERP_PASSWORD`)_
+   - `fetchEmployeeDetailsForServiceNo`: Fetches an exact profile match for an employee number (including their cost center, organization, and email). _Usage in LPMS:_ Heavily used by `learnerController.js` as a fallback; if an employee logs in but doesn't exist in the local database yet, this API fetches their ERP profile to auto-provision their LPMS account on the fly. _(Powered by `.env`: `ERP_DETAILS_URL`, authenticated with `ERP_USERNAME` / `ERP_PASSWORD`)_
+   - `fetchEmployeesByPartialName`: A search endpoint for employee name lookups. _Usage in LPMS:_ Used by admin controllers when searching for specific employees to manually assign learning paths or view records. _(Powered by `.env`: `ERP_PART_NAME_URL`, authenticated with `ERP_SEARCH_USERNAME` / `ERP_SEARCH_PASSWORD`)_
+   - `fetchEmployeesByFilters`: Advanced search allowing filtering by `designation`, `gradeName`, `orgName`, and `payroll`. _Usage in LPMS:_ Critical for `learningAdminController.js`. When an admin creates a learning path, they use this endpoint to find a specific cohort of employees (e.g., "All Engineers in the IT department") to bulk-enroll them. _(Powered by `.env`: `ERP_EMPLOYEE_FILTER_URL`, authenticated with `ERP_SEARCH_USERNAME` / `ERP_SEARCH_PASSWORD`)_
+   - _(Note: `ERP_HIERARCHY_URL` is a reserved/legacy URL for tree traversal not explicitly mapped to a primary wrapper function in standard workflows)._
 
 2. **Organizational Master Data**
-   - `fetchAllDesignations`: Returns all possible job titles.
-   - `fetchAllSalaryGrades`: Returns all possible pay grades.
-   - `fetchOrganizationList`: Returns all organizational units via a `GET` request.
-   - _Use Case_: These endpoints allow LPMS admins to assign Learning Paths dynamically to users based on their corporate position rather than selecting individual names.
+   - `fetchAllDesignations`: Returns all possible job titles. _Usage in LPMS:_ Populates the dropdowns in the Learning Admin UI so paths can be assigned by job title. _(Powered by `.env`: `ERP_DESIGNATIONS_URL`, authenticated with `ERP_SEARCH_USERNAME` / `ERP_SEARCH_PASSWORD`)_
+   - `fetchAllSalaryGrades`: Returns all possible pay grades. _Usage in LPMS:_ Populates dropdowns for bulk path assignment by seniority/grade. _(Powered by `.env`: `ERP_SALARY_GRADES_URL`, authenticated with `ERP_SEARCH_USERNAME` / `ERP_SEARCH_PASSWORD`)_
+   - `fetchOrganizationList`: Returns all organizational departments via a `GET` request. _Usage in LPMS:_ Populates department dropdowns in the Learning Admin UI, allowing path assignments to entire corporate divisions. _(Powered by `.env`: `ERP_ORGANIZATIONS_URL`, authenticated with `ERP_SEARCH_USERNAME` / `ERP_SEARCH_PASSWORD`)_
 
 3. **External/Legacy Course Data**
-   - `fetchAllCourses` & `fetchClassesByCourseCode`: Fetches the external course catalog from the ERP.
-   - `fetchCourseEnrollmentDetails`: Retrieves an employee's legacy enrollment records from the ERP.
-   - _Use Case_: The LPMS acts as an overlay on top of existing corporate training, allowing users to see their old ERP training records within the modern LPMS interface.
+   - `fetchAllCourses`: Fetches the master external course catalog from the ERP. _Usage in LPMS:_ Used in `learningAdminController.js`. It allows admins building a local Learning Path to search and embed legacy/ERP-hosted courses into their stages alongside local content. _(Powered by `.env`: `ERP_COURSES_URL`, authenticated with `ERP_SEARCH_USERNAME` / `ERP_SEARCH_PASSWORD`)_
+   - `fetchClassesByCourseCode`: Gets scheduled class sessions (batches, venues, dates) for a specific ERP course. _Usage in LPMS:_ Allows Learning Admins to assign users to specific physical or virtual scheduled sessions that are managed in the ERP. _(Powered by `.env`: `ERP_CLASSES_URL`, authenticated with `ERP_SEARCH_USERNAME` / `ERP_SEARCH_PASSWORD`)_
+   - `fetchCourseEnrollmentDetails`: Retrieves a specific employee's legacy or external training history directly from the ERP. _Usage in LPMS:_ Called by `learnerController.js`. It merges these ERP records with the local LPMS progress records, allowing the user's dashboard to display a unified "My Progress" view containing both old ERP completions and new LPMS enrollments. _(Powered by `.env`: `ERP_COURSE_ENROLLMENTS_URL`, authenticated with `ERP_USERNAME` / `ERP_PASSWORD`)_
