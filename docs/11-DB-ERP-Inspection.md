@@ -114,6 +114,14 @@
 - **What it Does**: Records sensitive actions performed in the system. It tracks the `actor_principal_id` (who did it), `action` (e.g., FETCH_ERP_LEARNER_DETAILS), `resource_type`, and a JSONB payload of `metadata`.
 - **Is it Actually Needed?**: Yes. Having an immutable log of who changed what or fetched sensitive data from the ERP is crucial for compliance in an enterprise application.
 
+### 12. Database Optimization Indexes (005_add_indexes.sql)
+
+- **Importance to the Project**: High for performance.
+- **Where it is Important**: Backend query execution times.
+- **Frontend Pages Used**: Impacts load times across the entire application, especially dashboards and data grids.
+- **What it Does**: This migration file does **not** create any new tables. Instead, it adds B-tree indexes to heavily queried foreign keys and status columns on the tables created in migrations 001-004. For example, it indexes `email` in `auth_principals`, `principal_id` in `enrollments`, and `status` in `learning_paths`.
+- **Is it Actually Needed?**: Yes. Without these indexes, the PostgreSQL database would have to perform full table scans whenever a learner logs in or views their assigned courses, which would cause the LPMS to severely lag as the number of enrollments scales up.
+
 ---
 
 ## ERP Integration & Configuration Inspection
