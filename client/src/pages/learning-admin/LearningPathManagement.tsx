@@ -250,6 +250,16 @@ export function LearningPathManagement({
   const [enrolledEmployeeNumbers, setEnrolledEmployeeNumbers] = useState<
     Set<string>
   >(new Set());
+  const [coursePageSize] = useState(10);
+  const [currentCoursePage, setCurrentCoursePage] = useState(1);
+  const [coursePagination, setCoursePagination] = useState<{
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  } | null>(null);
+  const [pathPageSize] = useState(10);
+  const [currentPathPage, setCurrentPathPage] = useState(1);
   const assignEmployeeNoValidationRequestId = useRef(0);
   const assignNameValidationRequestId = useRef(0);
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
@@ -384,11 +394,15 @@ export function LearningPathManagement({
 
       const [pathsResponse, coursesResponse] = await Promise.all([
         learningApi.getLearningPaths(token),
-        courseApi.getAllCourses(token),
+        courseApi.getAllCourses(token, currentCoursePage, coursePageSize),
       ]);
 
       setPaths(pathsResponse.learningPaths as LearningPathRow[]);
       setCourses(coursesResponse.courses);
+      
+      if (coursesResponse.pagination) {
+        setCoursePagination(coursesResponse.pagination);
+      }
 
       if (section === "assign") {
         const optionsResponse =
@@ -412,11 +426,15 @@ export function LearningPathManagement({
       setLoading(false);
       setAssignOptionsLoading(false);
     }
-  }, [getAccessToken, section, showToast]);
+  }, [getAccessToken, section, showToast, currentCoursePage, coursePageSize]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setCurrentPathPage(1);
+  }, [query, categoryFilter, statusFilter]);
 
   const filteredPaths = useMemo(() => {
     let result = paths;
@@ -438,6 +456,23 @@ export function LearningPathManagement({
     }
     return result;
   }, [paths, query, categoryFilter, statusFilter]);
+
+  const paginatedPaths = useMemo(() => {
+    const totalRecords = filteredPaths.length;
+    const totalPages = Math.ceil(totalRecords / pathPageSize);
+    const startIndex = (currentPathPage - 1) * pathPageSize;
+    const endIndex = startIndex + pathPageSize;
+    
+    return {
+      data: filteredPaths.slice(startIndex, endIndex),
+      totalRecords,
+      totalPages,
+      currentPage: currentPathPage,
+      pageSize: pathPageSize,
+      hasNextPage: currentPathPage < totalPages,
+      hasPrevPage: currentPathPage > 1
+    };
+  }, [filteredPaths, currentPathPage, pathPageSize]);
 
   const toStages = (stages: StageForm[]) =>
     stages
@@ -955,11 +990,39 @@ export function LearningPathManagement({
                     </div>
                   ) : null}
                 </div>
-                {mode === "edit" ? (
-                  <p className="mb-2 text-xs text-slate-500">
-                    Showing {visibleCourses.length} of {courses.length} courses
+                <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <p className="text-xs text-slate-500">
+                    {mode === "edit" ? (
+                      <>Showing {visibleCourses.length} of {courses.length} courses</>
+                    ) : coursePagination ? (
+                      <>Total Courses: {coursePagination.totalRecords} | Page {currentCoursePage} of {coursePagination.totalPages}</>
+                    ) : (
+                      <>Showing {courses.length} courses</>
+                    )}
                   </p>
-                ) : null}
+                  {mode === "create" && coursePagination && (
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setCurrentCoursePage(prev => Math.max(1, prev - 1))}
+                        disabled={!coursePagination.hasPrevPage || loading}
+                      >
+                        Previous
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setCurrentCoursePage(prev => prev + 1)}
+                        disabled={!coursePagination.hasNextPage || loading}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
                   {visibleCourses.length === 0 ? (
                     <p className="p-3 text-sm text-slate-500">
@@ -1138,9 +1201,38 @@ export function LearningPathManagement({
                   />
                 </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Showing {liveFilteredCourses.length} of {courses.length} courses
-              </p>
+              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <p className="text-xs text-slate-500">
+                  {createCourseSearch
+                    ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
+                    : coursePagination
+                      ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
+                      : `Showing ${courses.length} courses`
+                  }
+                </p>
+                {!createCourseSearch && coursePagination && (
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentCoursePage(prev => Math.max(1, prev - 1))}
+                      disabled={!coursePagination.hasPrevPage || loading}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setCurrentCoursePage(prev => prev + 1)}
+                      disabled={!coursePagination.hasNextPage || loading}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </div>
               <div className="max-h-[30rem] overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
                 {loading ? (
                   <div className="space-y-2">
@@ -2008,9 +2100,9 @@ export function LearningPathManagement({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[600px] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+              <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-3">Path Name</th>
                   <th className="px-6 py-3">Category</th>
@@ -2032,7 +2124,7 @@ export function LearningPathManagement({
                     </td>
                   </tr>
                 ) : (
-                  filteredPaths.map((path) => (
+                  paginatedPaths.data.map((path) => (
                     <tr
                       key={path.id}
                       className="hover:bg-slate-50 transition-colors"
@@ -2101,6 +2193,40 @@ export function LearningPathManagement({
                 )}
               </tbody>
             </table>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="text-xs text-slate-600">
+              <span className="font-medium">
+                {paginatedPaths.totalRecords === 0
+                  ? "No learning paths"
+                  : `${(paginatedPaths.currentPage - 1) * paginatedPaths.pageSize + 1}–${Math.min(paginatedPaths.currentPage * paginatedPaths.pageSize, paginatedPaths.totalRecords)} of ${paginatedPaths.totalRecords}`}
+              </span>
+              {" | Page "}
+              <span className="font-medium">{paginatedPaths.currentPage}</span>
+              {" of "}
+              <span className="font-medium">{paginatedPaths.totalPages}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCurrentPathPage(prev => Math.max(1, prev - 1))}
+                disabled={!paginatedPaths.hasPrevPage || loading}
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCurrentPathPage(prev => prev + 1)}
+                disabled={!paginatedPaths.hasNextPage || loading}
+              >
+                Next
+              </Button>
+            </div>
           </div>
         </Card>
       ) : null}

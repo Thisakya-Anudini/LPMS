@@ -6,6 +6,7 @@ type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string | null;
+  query?: Record<string, string | number | boolean>;
 };
 
 type ApiErrorPayload = {
@@ -76,7 +77,17 @@ const parseApiError = async (response: Response) => {
 };
 
 const request = async <T>(path: string, options: RequestOptions = {}) => {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  let url = `${API_BASE_URL}${path}`;
+  
+  if (options.query) {
+    const queryParams = new URLSearchParams();
+    Object.entries(options.query).forEach(([key, value]) => {
+      queryParams.append(key, String(value));
+    });
+    url = `${url}?${queryParams.toString()}`;
+  }
+  
+  const response = await fetch(url, {
     method: options.method || 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -730,7 +741,7 @@ export const integrationApi = {
 };
 
 export const courseApi = {
-  getAllCourses(token: string) {
+  getAllCourses(token: string, page: number = 1, pageSize: number = 10) {
     return request<{
       courses: Array<{
         id: string;
@@ -742,7 +753,18 @@ export const courseApi = {
         videoUrl: string | null;
         venue: string | null;
       }>;
-    }>('/courses', { token });
+      pagination?: {
+        currentPage: number;
+        pageSize: number;
+        totalRecords: number;
+        totalPages: number;
+        hasNextPage: boolean;
+        hasPrevPage: boolean;
+      };
+    }>('/courses', { 
+      token,
+      query: { page, pageSize }
+    });
   }
 };
 

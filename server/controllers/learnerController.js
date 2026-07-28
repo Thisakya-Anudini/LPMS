@@ -1373,14 +1373,34 @@ export const enrollLearnerTeam = async (req, res) => {
   }
 };
 
-export const getCourses = async (_req, res) => {
+export const getCourses = async (req, res) => {
   try {
+    const page = Math.max(1, parseInt(req.query?.page, 10) || 1);
+    const pageSize = Math.max(1, Math.min(100, parseInt(req.query?.pageSize, 10) || 10));
+    
     const response = await fetchAllCourses();
     const rows = Array.isArray(response?.data) ? response.data : [];
+    
+    const allCourses = rows
+      .map((row, index) => normalizeErpCourse(row, index))
+      .filter((course) => Boolean(course.code) && Boolean(course.title));
+    
+    const totalRecords = allCourses.length;
+    const totalPages = Math.ceil(totalRecords / pageSize);
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const paginatedCourses = allCourses.slice(startIndex, endIndex);
+    
     return res.status(200).json({
-      courses: rows
-        .map((row, index) => normalizeErpCourse(row, index))
-        .filter((course) => Boolean(course.code) && Boolean(course.title))
+      courses: paginatedCourses,
+      pagination: {
+        currentPage: page,
+        pageSize,
+        totalRecords,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
     });
   } catch (error) {
     return sendError(
