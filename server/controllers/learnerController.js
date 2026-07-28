@@ -1375,8 +1375,8 @@ export const enrollLearnerTeam = async (req, res) => {
 
 export const getCourses = async (req, res) => {
   try {
-    const page = Math.max(1, parseInt(req.query.page) || 1);
-    const pageSize = Math.max(1, Math.min(100, parseInt(req.query.pageSize) || 10));
+    const page = Math.max(1, parseInt(req.query?.page, 10) || 1);
+    const pageSize = Math.max(1, Math.min(100, parseInt(req.query?.pageSize, 10) || 10));
     
     const response = await fetchAllCourses();
     const rows = Array.isArray(response?.data) ? response.data : [];
