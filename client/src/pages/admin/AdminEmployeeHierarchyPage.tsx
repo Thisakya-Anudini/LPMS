@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { BookOpen, UserRound } from "lucide-react";
 import {
   EmployeeHierarchyPanel,
@@ -47,7 +47,7 @@ export function AdminEmployeeHierarchyPage() {
       setLearner({
         id: employee.employeeNumber,
         name: employee.name,
-        email: employee.designation || "No designation available",
+        email: "",
       });
       setLearningPaths([]);
 
@@ -154,7 +154,10 @@ export function AdminEmployeeHierarchyPage() {
                   <p className="text-lg font-semibold text-slate-900">
                     {learner.name}
                   </p>
-                  <p className="text-sm text-slate-500">{learner.email}</p>
+                  <p className="text-sm text-slate-500">
+                    {selectedEmployee?.designation ||
+                      "No designation available"}
+                  </p>
                 </div>
 
                 <div>
