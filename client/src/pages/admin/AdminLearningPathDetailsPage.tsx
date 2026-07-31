@@ -19,7 +19,6 @@ export function AdminLearningPathDetailsPage() {
     title: string;
     description: string;
     category: string;
-    total_duration: string;
     status: string;
     created_at: string;
     stages: Array<{
@@ -119,7 +118,7 @@ export function AdminLearningPathDetailsPage() {
             <p className="text-lg font-semibold text-slate-900">{pathDetail.title}</p>
             <p className="text-sm text-slate-600">{pathDetail.description}</p>
             <p className="text-xs text-slate-500">
-              {pathDetail.category.replace('_', ' ')} | {pathDetail.total_duration} | {pathDetail.status}
+              {pathDetail.category.replace('_', ' ')} | {pathDetail.status}
             </p>
             <p className="text-xs text-slate-500">Created: {formatDate(pathDetail.created_at)}</p>
           </div>
