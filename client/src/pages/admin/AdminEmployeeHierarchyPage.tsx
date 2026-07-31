@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { BookOpen, UserRound } from "lucide-react";
 import {
   EmployeeHierarchyPanel,
@@ -24,6 +24,66 @@ type LearnerPath = {
   total_duration: string;
 };
 
+function PathCoursesList({ enrollmentId }: { enrollmentId: string }) {
+  const { getAccessToken } = useAuth();
+  const [courses, setCourses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    getAccessToken().then((token) => {
+      if (!token) return;
+      superAdminApi
+        .getEnrollmentCourses(token, enrollmentId)
+        .then((res) => {
+          if (isMounted) {
+            setCourses(res.courses);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setLoading(false);
+        });
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [enrollmentId, getAccessToken]);
+
+  if (loading)
+    return (
+      <div className="mt-4 text-xs text-slate-500">Loading courses...</div>
+    );
+  if (courses.length === 0)
+    return (
+      <div className="mt-4 text-xs text-slate-500">
+        No courses found in this path.
+      </div>
+    );
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+      {courses.map((course) => (
+        <div key={course.courseId} className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-700">
+              {course.title}
+            </span>
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              {course.stageTitle}
+            </span>
+          </div>
+          <ProgressBar
+            progress={Number(course.progress || 0)}
+            showLabel
+            size="sm"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AdminEmployeeHierarchyPage() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
@@ -37,6 +97,7 @@ export function AdminEmployeeHierarchyPage() {
     email: string;
   } | null>(null);
   const [learningPaths, setLearningPaths] = useState<LearnerPath[]>([]);
+  const [expandedPathId, setExpandedPathId] = useState<string | null>(null);
 
   const loadLearnerDetails = useCallback(
     async (employee: SelectedHierarchyEmployee) => {
@@ -177,7 +238,14 @@ export function AdminEmployeeHierarchyPage() {
                       {learningPaths.map((path) => (
                         <div
                           key={path.enrollment_id}
-                          className="rounded-xl border border-slate-200 bg-white p-3"
+                          className="rounded-xl border border-slate-200 bg-white p-3 cursor-pointer transition-colors hover:border-slate-300"
+                          onClick={() =>
+                            setExpandedPathId(
+                              expandedPathId === path.enrollment_id
+                                ? null
+                                : path.enrollment_id,
+                            )
+                          }
                         >
                           <div className="mb-2 flex items-start justify-between gap-3">
                             <p className="min-w-0 font-medium text-slate-900">
@@ -196,6 +264,11 @@ export function AdminEmployeeHierarchyPage() {
                             {path.category.replace("_", " ")} |{" "}
                             {path.total_duration}
                           </p>
+                          {expandedPathId === path.enrollment_id && (
+                            <PathCoursesList
+                              enrollmentId={path.enrollment_id}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
