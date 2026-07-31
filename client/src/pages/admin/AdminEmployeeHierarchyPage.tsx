@@ -1,15 +1,15 @@
-import React, { useCallback, useState } from 'react';
-import { BookOpen, UserRound } from 'lucide-react';
+import React, { useCallback, useState } from "react";
+import { BookOpen, UserRound } from "lucide-react";
 import {
   EmployeeHierarchyPanel,
-  type SelectedHierarchyEmployee
-} from '../../components/admin/EmployeeHierarchyPanel';
-import { superAdminApi } from '../../api/lpmsApi';
-import { Card } from '../../components/ui/Card';
-import { ProgressBar } from '../../components/ui/ProgressBar';
-import { Skeleton } from '../../components/ui/Skeleton';
-import { useAuth } from '../../contexts/useAuth';
-import { useToast } from '../../contexts/useToast';
+  type SelectedHierarchyEmployee,
+} from "../../components/admin/EmployeeHierarchyPanel";
+import { superAdminApi } from "../../api/lpmsApi";
+import { Card } from "../../components/ui/Card";
+import { ProgressBar } from "../../components/ui/ProgressBar";
+import { Skeleton } from "../../components/ui/Skeleton";
+import { useAuth } from "../../contexts/useAuth";
+import { useToast } from "../../contexts/useToast";
 
 type LearnerPath = {
   enrollment_id: string;
@@ -24,54 +24,145 @@ type LearnerPath = {
   total_duration: string;
 };
 
+type EnrollmentCourse = {
+  courseId: string;
+  title: string;
+  stageTitle: string;
+  progress: number;
+  isCompleted: boolean;
+};
+
+function PathCoursesList({ enrollmentId }: { enrollmentId: string }) {
+  const { getAccessToken } = useAuth();
+  const [courses, setCourses] = useState<EnrollmentCourse[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    getAccessToken().then((token) => {
+      if (!token) return;
+      superAdminApi
+        .getEnrollmentCourses(token, enrollmentId)
+        .then((res) => {
+          if (isMounted) {
+            setCourses(res.courses);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setLoading(false);
+        });
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [enrollmentId, getAccessToken]);
+
+  if (loading)
+    return (
+      <div className="mt-4 text-xs text-slate-500">Loading courses...</div>
+    );
+  if (courses.length === 0)
+    return (
+      <div className="mt-4 text-xs text-slate-500">
+        No courses found in this path.
+      </div>
+    );
+
+  return (
+    <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+      {courses.map((course) => (
+        <div key={course.courseId} className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-700">
+              {course.title}
+            </span>
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              {course.stageTitle}
+            </span>
+          </div>
+          <ProgressBar
+            progress={Number(course.progress || 0)}
+            showLabel
+            size="sm"
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function AdminEmployeeHierarchyPage() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
-  const [selectedEmployee, setSelectedEmployee] = useState<SelectedHierarchyEmployee | null>(null);
+  const [selectedEmployee, setSelectedEmployee] =
+    useState<SelectedHierarchyEmployee | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
-  const [learner, setLearner] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [learner, setLearner] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
   const [learningPaths, setLearningPaths] = useState<LearnerPath[]>([]);
+  const [expandedPathId, setExpandedPathId] = useState<string | null>(null);
 
   const loadLearnerDetails = useCallback(
     async (employee: SelectedHierarchyEmployee) => {
       setSelectedEmployee(employee);
       setLoadingDetails(true);
       setDetailsError(null);
-      setLearner(null);
+
+      setLearner({
+        id: employee.employeeNumber,
+        name: employee.name,
+        email: "",
+      });
       setLearningPaths([]);
 
       try {
         const token = await getAccessToken();
         if (!token) {
-          showToast('Session expired. Please login again.', 'error');
+          showToast("Session expired. Please login again.", "error");
           return;
         }
 
-        const response = await superAdminApi.getLearnerLearningPathsByEmployeeNo(
-          token,
-          employee.employeeNumber
-        );
+        const response =
+          await superAdminApi.getLearnerLearningPathsByEmployeeNo(
+            token,
+            employee.employeeNumber,
+          );
         setLearner(response.learner);
         setLearningPaths(response.learningPaths);
       } catch (err) {
-        setDetailsError(
-          err instanceof Error
-            ? err.message
-            : 'Failed to load learner details for the selected employee.'
-        );
+        const errorMessage = err instanceof Error ? err.message : "";
+
+        if (errorMessage.toLowerCase().includes("not found")) {
+          setLearningPaths([]);
+        } else {
+          setDetailsError(
+            err instanceof Error
+              ? err.message
+              : "Failed to load learner details for the selected employee.",
+          );
+        }
       } finally {
         setLoadingDetails(false);
       }
     },
-    [getAccessToken, showToast]
+    [getAccessToken, showToast],
   );
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Employee Hierarchy</h1>
-        <p className="text-slate-500">Browse the organization structure and inspect learner progress from one workspace.</p>
+        <h1 className="text-2xl font-bold text-slate-900">
+          Employee Hierarchy
+        </h1>
+        <p className="text-slate-500">
+          Browse the organization structure and inspect learner progress from
+          one workspace.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)]">
@@ -79,6 +170,7 @@ export function AdminEmployeeHierarchyPage() {
           <EmployeeHierarchyPanel
             selectedEmployeeNumber={selectedEmployee?.employeeNumber}
             onViewDetails={loadLearnerDetails}
+            onRefresh={() => setSelectedEmployee(null)}
           />
         </aside>
 
@@ -87,8 +179,8 @@ export function AdminEmployeeHierarchyPage() {
             title="Learner Details"
             description={
               selectedEmployee
-                ? `${selectedEmployee.employeeNumber} | ${selectedEmployee.designation}`
-                : 'Select an employee from the hierarchy.'
+                ? `${selectedEmployee.employeeNumber}`
+                : "Select an employee from the hierarchy."
             }
             className="h-full"
           >
@@ -97,9 +189,12 @@ export function AdminEmployeeHierarchyPage() {
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
                   <UserRound className="h-6 w-6" />
                 </div>
-                <p className="text-sm font-semibold text-slate-900">No hierarchy employee selected</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  No hierarchy employee selected
+                </p>
                 <p className="mt-1 max-w-sm text-sm text-slate-500">
-                  Use the View button on a hierarchy employee to load their assigned learning paths here.
+                  Use the View button on a hierarchy employee to load their
+                  assigned learning paths here.
                 </p>
               </div>
             ) : loadingDetails ? (
@@ -109,7 +204,10 @@ export function AdminEmployeeHierarchyPage() {
                   <Skeleton className="h-4 w-64" />
                 </div>
                 {Array.from({ length: 3 }, (_, index) => (
-                  <div key={`selected-learner-path-skeleton-${index}`} className="rounded-xl border border-slate-200 p-4">
+                  <div
+                    key={`selected-learner-path-skeleton-${index}`}
+                    className="rounded-xl border border-slate-200 p-4"
+                  >
                     <Skeleton className="mb-3 h-5 w-60" />
                     <Skeleton className="mb-3 h-3 w-full" />
                     <Skeleton className="h-4 w-40" />
@@ -123,8 +221,13 @@ export function AdminEmployeeHierarchyPage() {
             ) : learner ? (
               <div className="space-y-5">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-lg font-semibold text-slate-900">{learner.name}</p>
-                  <p className="text-sm text-slate-500">{learner.email}</p>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {learner.name}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    {selectedEmployee?.designation ||
+                      "No designation available"}
+                  </p>
                 </div>
 
                 <div>
@@ -142,17 +245,39 @@ export function AdminEmployeeHierarchyPage() {
                   ) : (
                     <div className="space-y-3">
                       {learningPaths.map((path) => (
-                        <div key={path.enrollment_id} className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div
+                          key={path.enrollment_id}
+                          className="rounded-xl border border-slate-200 bg-white p-3 cursor-pointer transition-colors hover:border-primary-300 hover:shadow-soft"
+                          onClick={() =>
+                            setExpandedPathId(
+                              expandedPathId === path.enrollment_id
+                                ? null
+                                : path.enrollment_id,
+                            )
+                          }
+                        >
                           <div className="mb-2 flex items-start justify-between gap-3">
-                            <p className="min-w-0 font-medium text-slate-900">{path.title}</p>
+                            <p className="min-w-0 font-medium text-slate-900">
+                              {path.title}
+                            </p>
                             <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                              {path.status.replace('_', ' ')}
+                              {path.status.replace("_", " ")}
                             </span>
                           </div>
-                          <ProgressBar progress={Number(path.progress || 0)} showLabel size="sm" />
+                          <ProgressBar
+                            progress={Number(path.progress || 0)}
+                            showLabel
+                            size="sm"
+                          />
                           <p className="mt-2 text-xs text-slate-500">
-                            {path.category.replace('_', ' ')} | {path.total_duration}
+                            {path.category.replace("_", " ")} |{" "}
+                            {path.total_duration}
                           </p>
+                          {expandedPathId === path.enrollment_id && (
+                            <PathCoursesList
+                              enrollmentId={path.enrollment_id}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -160,7 +285,9 @@ export function AdminEmployeeHierarchyPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Learner details are not available.</p>
+              <p className="text-sm text-slate-500">
+                Learner details are not available.
+              </p>
             )}
           </Card>
         </section>

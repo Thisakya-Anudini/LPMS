@@ -917,3 +917,44 @@ export const createEmployee = async (req, res) => {
     employee: employeeResult.rows[0],
   });
 };
+
+export const getEnrollmentCourses = async (req, res) => {
+  const { enrollmentId } = req.params;
+
+  try {
+    const coursesResult = await query(
+      `
+        SELECT 
+          COALESCE(sc.course_code, lps.id::text) AS "courseId",
+          COALESCE(sc.course_title, lps.title) AS title,
+          COALESCE(sc.course_order, lps.stage_order) AS "order",
+          lps.title AS "stageTitle",
+          lps.stage_order AS "stageOrder",
+          COALESCE(ep.progress, 0) AS progress,
+          CASE WHEN COALESCE(ep.progress, 0) >= 100 THEN true ELSE false END AS "isCompleted"
+        FROM enrollments en
+        JOIN learning_path_stages lps ON lps.learning_path_id = en.learning_path_id
+        LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+        LEFT JOIN enrollment_progress ep 
+          ON ep.enrollment_id = en.id 
+          AND (
+            ep.course_code = sc.course_code 
+            OR (sc.course_code IS NULL AND ep.stage_id = lps.id)
+          )
+        WHERE en.id = $1
+        ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+      `,
+      [enrollmentId],
+    );
+
+    return res.status(200).json({ courses: coursesResult.rows });
+  } catch (error) {
+    console.error("Failed to fetch enrollment courses for super admin:", error);
+    return sendError(
+      res,
+      500,
+      "INTERNAL_ERROR",
+      "Failed to fetch enrollment courses.",
+    );
+  }
+};
