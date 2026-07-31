@@ -238,7 +238,7 @@ export function AdminEmployeeHierarchyPage() {
                       {learningPaths.map((path) => (
                         <div
                           key={path.enrollment_id}
-                          className="rounded-xl border border-slate-200 bg-white p-3 cursor-pointer transition-colors hover:border-slate-300"
+                          className="rounded-xl border border-slate-200 bg-white p-3 cursor-pointer transition-colors hover:border-primary-300 hover:shadow-soft"
                           onClick={() =>
                             setExpandedPathId(
                               expandedPathId === path.enrollment_id
