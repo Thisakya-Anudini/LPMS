@@ -925,21 +925,24 @@ export const getEnrollmentCourses = async (req, res) => {
     const coursesResult = await query(
       `
         SELECT 
-          course.id AS "courseId",
-          course.title,
-          sc.course_order AS "order",
+          COALESCE(sc.course_code, lps.id::text) AS "courseId",
+          COALESCE(sc.course_title, lps.title) AS title,
+          COALESCE(sc.course_order, lps.stage_order) AS "order",
           lps.title AS "stageTitle",
           lps.stage_order AS "stageOrder",
           COALESCE(ep.progress, 0) AS progress,
           CASE WHEN COALESCE(ep.progress, 0) >= 100 THEN true ELSE false END AS "isCompleted"
         FROM enrollments en
         JOIN learning_path_stages lps ON lps.learning_path_id = en.learning_path_id
-        JOIN stage_courses sc ON sc.stage_id = lps.id
-        JOIN courses course ON course.id = sc.course_id
-        LEFT JOIN enrollment_progress ep ON ep.enrollment_id = en.id AND ep.course_id = course.id
+        LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+        LEFT JOIN enrollment_progress ep 
+          ON ep.enrollment_id = en.id 
+          AND (
+            ep.course_code = sc.course_code 
+            OR (sc.course_code IS NULL AND ep.stage_id = lps.id)
+          )
         WHERE en.id = $1
-          AND course.is_deleted = FALSE
-        ORDER BY lps.stage_order ASC, sc.course_order ASC
+        ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
       `,
       [enrollmentId],
     );
