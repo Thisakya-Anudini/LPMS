@@ -162,6 +162,7 @@ export function AdminEmployeeHierarchyPage() {
           <EmployeeHierarchyPanel
             selectedEmployeeNumber={selectedEmployee?.employeeNumber}
             onViewDetails={loadLearnerDetails}
+            onRefresh={() => setSelectedEmployee(null)}
           />
         </aside>
 
