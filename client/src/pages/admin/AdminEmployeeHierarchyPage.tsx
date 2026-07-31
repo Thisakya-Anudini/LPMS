@@ -24,9 +24,17 @@ type LearnerPath = {
   total_duration: string;
 };
 
+type EnrollmentCourse = {
+  courseId: string;
+  title: string;
+  stageTitle: string;
+  progress: number;
+  isCompleted: boolean;
+};
+
 function PathCoursesList({ enrollmentId }: { enrollmentId: string }) {
   const { getAccessToken } = useAuth();
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<EnrollmentCourse[]>([]);
   const [loading, setLoading] = useState(true);
 
   React.useEffect(() => {
