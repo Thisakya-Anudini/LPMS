@@ -12,6 +12,7 @@ import {
   getLearningPaths,
   getLearnerProfile,
   getLearnerTeam,
+  getLearnerTeamProgressDetails,
   getPublicLearningPathById,
   selfEnrollPublicLearningPath,
   updateLearnerCourseCompletion
@@ -37,6 +38,7 @@ router.put(
 router.get('/public-paths', protect, requireRole([ROLES.EMPLOYEE]), getPublicLearningPaths);
 router.get('/public-paths/:id', protect, requireRole([ROLES.EMPLOYEE]), getPublicLearningPathById);
 router.get('/team', protect, requireRole([ROLES.EMPLOYEE]), getLearnerTeam);
+router.get('/team/progress-details', protect, requireRole([ROLES.EMPLOYEE]), getLearnerTeamProgressDetails);
 router.post(
   '/self-enroll',
   protect,

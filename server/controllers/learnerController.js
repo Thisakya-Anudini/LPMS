@@ -1373,6 +1373,215 @@ export const enrollLearnerTeam = async (req, res) => {
   }
 };
 
+export const getLearnerTeamProgressDetails = async (req, res) => {
+  const supervisorEmployeeNo = normalizeEmployeeNo(req.user, req.body);
+  if (!supervisorEmployeeNo) {
+    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
+  }
+
+  try {
+    const subordinates = await fetchEmployeeSubordinates(supervisorEmployeeNo);
+    const subordinateRows = Array.isArray(subordinates?.data) ? subordinates.data : [];
+    const subordinateNumbers = subordinateRows
+      .map((employee) => String(employee.employeeNumber || '').trim())
+      .filter(Boolean);
+
+    if (subordinateNumbers.length === 0) {
+      return res.status(200).json({
+        employeeNo: supervisorEmployeeNo,
+        isSupervisor: false,
+        learners: []
+      });
+    }
+
+    const learnerResult = await query(
+      `
+        SELECT
+          e.employee_number,
+          ap.id AS principal_id,
+          ap.name,
+          ap.email
+        FROM employees e
+        JOIN auth_principals ap ON ap.id = e.principal_id
+        WHERE e.employee_number = ANY($1::text[])
+      `,
+      [subordinateNumbers]
+    );
+    const principalByEmployeeNo = new Map(
+      learnerResult.rows.map((row) => [String(row.employee_number || '').trim(), row])
+    );
+    const principalIds = learnerResult.rows.map((row) => row.principal_id).filter(Boolean);
+
+    let enrollmentRows = [];
+    let courseRows = [];
+    if (principalIds.length > 0) {
+      const enrollmentsResult = await query(
+        `
+          SELECT
+            en.id,
+            en.principal_id,
+            en.learning_path_id,
+            en.status,
+            en.progress,
+            en.enrolled_at,
+            en.completed_at,
+            en.enrollment_source,
+            lp.title AS learning_path_title,
+            lp.total_duration
+          FROM enrollments en
+          JOIN learning_paths lp ON lp.id = en.learning_path_id
+          WHERE en.principal_id = ANY($1::uuid[])
+            AND lp.is_deleted = FALSE
+          ORDER BY en.enrolled_at DESC
+        `,
+        [principalIds]
+      );
+      enrollmentRows = enrollmentsResult.rows;
+
+      const enrollmentIds = enrollmentRows.map((row) => row.id);
+      if (enrollmentIds.length > 0) {
+        const useCourseReference = await usesCourseReferenceTable();
+        const coursesResult = await query(
+          useCourseReference
+            ? `
+                SELECT
+                  en.id AS enrollment_id,
+                  COALESCE(course.id::text, lps.id::text) AS course_id,
+                  course.code AS course_code,
+                  COALESCE(course.title, lps.title) AS title,
+                  lps.title AS stage_title,
+                  lps.stage_order,
+                  COALESCE(sc.course_order, lps.stage_order) AS course_order,
+                  course.duration AS duration,
+                  COALESCE(ep.progress, 0) AS progress
+                FROM enrollments en
+                JOIN learning_path_stages lps ON lps.learning_path_id = en.learning_path_id
+                LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+                LEFT JOIN courses course ON course.id = sc.course_id
+                LEFT JOIN enrollment_progress ep
+                  ON ep.enrollment_id = en.id
+                 AND (
+                   ep.course_id = course.id
+                   OR (course.id IS NULL AND ep.stage_id = lps.id)
+                 )
+                WHERE en.id = ANY($1::uuid[])
+                ORDER BY en.id, lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+              `
+            : `
+                SELECT
+                  en.id AS enrollment_id,
+                  COALESCE(sc.course_code, lps.id::text) AS course_id,
+                  sc.course_code,
+                  COALESCE(sc.course_title, lps.title) AS title,
+                  lps.title AS stage_title,
+                  lps.stage_order,
+                  COALESCE(sc.course_order, lps.stage_order) AS course_order,
+                  sc.course_duration AS duration,
+                  COALESCE(ep.progress, 0) AS progress
+                FROM enrollments en
+                JOIN learning_path_stages lps ON lps.learning_path_id = en.learning_path_id
+                LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+                LEFT JOIN enrollment_progress ep
+                  ON ep.enrollment_id = en.id
+                 AND (
+                   ep.course_code = sc.course_code
+                   OR (sc.course_code IS NULL AND ep.stage_id = lps.id)
+                 )
+                WHERE en.id = ANY($1::uuid[])
+                ORDER BY en.id, lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+              `,
+          [enrollmentIds]
+        );
+        courseRows = coursesResult.rows;
+      }
+    }
+
+    const enrollmentsByPrincipalId = new Map();
+    for (const enrollment of enrollmentRows) {
+      const key = String(enrollment.principal_id);
+      const current = enrollmentsByPrincipalId.get(key) || [];
+      current.push(enrollment);
+      enrollmentsByPrincipalId.set(key, current);
+    }
+
+    const coursesByEnrollmentId = new Map();
+    for (const course of courseRows) {
+      const key = String(course.enrollment_id);
+      const current = coursesByEnrollmentId.get(key) || [];
+      current.push({
+        courseId: course.course_id,
+        courseCode: course.course_code || null,
+        title: course.title,
+        duration: normalizeDurationDisplay(course.duration),
+        order: Number(course.course_order || 0),
+        stageTitle: course.stage_title,
+        stageOrder: Number(course.stage_order || 0),
+        progress: Number(course.progress || 0),
+        isCompleted: Number(course.progress || 0) >= 100
+      });
+      coursesByEnrollmentId.set(key, current);
+    }
+
+    const learners = subordinateRows.map((row) => {
+      const employeeNumber = String(row.employeeNumber || '').trim();
+      const principal = principalByEmployeeNo.get(employeeNumber);
+      const enrollments = principal
+        ? enrollmentsByPrincipalId.get(String(principal.principal_id)) || []
+        : [];
+      const learningPaths = enrollments.map((enrollment) => {
+        const courses = coursesByEnrollmentId.get(String(enrollment.id)) || [];
+        return {
+          enrollmentId: enrollment.id,
+          learningPathId: enrollment.learning_path_id,
+          title: enrollment.learning_path_title,
+          totalDuration: normalizeDurationDisplay(enrollment.total_duration),
+          status: enrollment.status,
+          progress: Number(enrollment.progress || 0),
+          enrolledAt: enrollment.enrolled_at,
+          completedAt: enrollment.completed_at,
+          enrollmentSource: enrollment.enrollment_source,
+          totalCourses: courses.length,
+          completedCourses: courses.filter((course) => course.isCompleted).length,
+          courses
+        };
+      });
+
+      return {
+        employeeNumber,
+        name: normalizeNameFromRow(row, employeeNumber),
+        designation: String(row.designation || '').trim() || '-',
+        gradeName: String(row.gradeName || '').trim() || '-',
+        email: row.email ? String(row.email).trim().toLowerCase() : '',
+        principalId: principal?.principal_id || null,
+        totalLearningPaths: learningPaths.length,
+        completedLearningPaths: learningPaths.filter((path) => path.status === 'COMPLETED').length,
+        averageProgress:
+          learningPaths.length > 0
+            ? Math.round(
+              learningPaths.reduce((sum, path) => sum + Number(path.progress || 0), 0) /
+                learningPaths.length
+            )
+            : 0,
+        learningPaths
+      };
+    });
+
+    return res.status(200).json({
+      employeeNo: supervisorEmployeeNo,
+      isSupervisor: true,
+      learners
+    });
+  } catch (error) {
+    return sendError(
+      res,
+      typeof error.status === 'number' ? error.status : 502,
+      'ERP_REQUEST_FAILED',
+      'Failed to fetch subordinate learning progress.',
+      error.details || error.message
+    );
+  }
+};
+
 export const getCourses = async (req, res) => {
   try {
     const page = Math.max(1, parseInt(req.query?.page, 10) || 1);
