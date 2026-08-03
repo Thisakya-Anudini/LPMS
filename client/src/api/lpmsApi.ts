@@ -998,6 +998,47 @@ export const learnerApi = {
       team: Array<Record<string, unknown>>;
     }>("/learner/team", { token });
   },
+  getTeamProgressDetails(token: string) {
+    return request<{
+      employeeNo: string;
+      isSupervisor: boolean;
+      learners: Array<{
+        employeeNumber: string;
+        name: string;
+        designation: string;
+        gradeName: string;
+        email: string;
+        principalId: string | null;
+        totalLearningPaths: number;
+        completedLearningPaths: number;
+        averageProgress: number;
+        learningPaths: Array<{
+          enrollmentId: string;
+          learningPathId: string;
+          title: string;
+          totalDuration: string | null;
+          status: string;
+          progress: number;
+          enrolledAt: string;
+          completedAt: string | null;
+          enrollmentSource: string | null;
+          totalCourses: number;
+          completedCourses: number;
+          courses: Array<{
+            courseId: string;
+            courseCode: string | null;
+            title: string;
+            duration: string | null;
+            order: number;
+            stageTitle: string | null;
+            stageOrder: number;
+            progress: number;
+            isCompleted: boolean;
+          }>;
+        }>;
+      }>;
+    }>("/learner/team/progress-details", { token });
+  },
   getLearningPaths(token: string) {
     return request<{
       learningPaths: Array<{
