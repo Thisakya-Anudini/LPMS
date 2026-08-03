@@ -963,7 +963,7 @@ export const getEnrollmentCourses = async (req, res) => {
       useCourseReference
         ? `
             SELECT 
-              COALESCE(course.id, lps.id::text) AS "courseId",
+              COALESCE(course.id, lps.id) AS "courseId",
               COALESCE(course.title, lps.title) AS title,
               COALESCE(sc.course_order, lps.stage_order) AS "order",
               lps.title AS "stageTitle",
@@ -1014,7 +1014,7 @@ export const getEnrollmentCourses = async (req, res) => {
       res,
       500,
       "INTERNAL_ERROR",
-      "Failed to fetch enrollment courses.",
+      `Database Error: ${error.message}`,
     );
   }
 };
