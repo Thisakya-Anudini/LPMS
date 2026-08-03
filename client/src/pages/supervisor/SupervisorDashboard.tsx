@@ -22,6 +22,8 @@ type LearningPath = {
   description: string;
 };
 
+type SupervisorTab = 'progress' | 'assign';
+
 type TeamProgressCourse = {
   courseId: string;
   courseCode: string | null;
@@ -86,6 +88,7 @@ export function SupervisorDashboard() {
   const [employeeNoSearch, setEmployeeNoSearch] = useState('');
   const [nameSearch, setNameSearch] = useState('');
   const [designationFilter, setDesignationFilter] = useState('ALL');
+  const [activeTab, setActiveTab] = useState<SupervisorTab>('progress');
   const [expandedLearners, setExpandedLearners] = useState<string[]>([]);
   const [expandedEnrollments, setExpandedEnrollments] = useState<string[]>([]);
   const statSkeletons = Array.from({ length: 2 }, (_, index) => index);
@@ -270,7 +273,7 @@ export function SupervisorDashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Supervisor Dashboard</h1>
-        <p className="text-slate-500">Assign learning paths to team learners under your supervision.</p>
+        <p className="text-slate-500">Track subordinate learning progress and assign learning paths.</p>
       </div>
 
       {error ? <Card className="text-red-600">{error}</Card> : null}
@@ -296,6 +299,32 @@ export function SupervisorDashboard() {
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab('progress')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'progress'
+              ? 'bg-primary-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          Subordinates Progress
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('assign')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'assign'
+              ? 'bg-primary-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          Assign Learning Paths
+        </button>
+      </div>
+
+      {activeTab === 'progress' ? (
       <Card title="Subordinates Progress" bodyClassName="p-4">
         {loading ? (
           <div className="space-y-3">
@@ -307,16 +336,36 @@ export function SupervisorDashboard() {
               </div>
             ))}
           </div>
-        ) : filteredTeamProgress.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No assigned learning path progress found for the current subordinate filters.
-          </p>
         ) : (
           <div className="space-y-3">
-            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Showing {filteredTeamProgress.length} subordinate(s), {stats.assignedPathCount} assigned learning path(s), {stats.completedPathCount} completed.
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-lg border border-slate-200 p-3">
+              <Input
+                label="Search by Employee No"
+                value={employeeNoSearch}
+                onChange={(event) => setEmployeeNoSearch(event.target.value)}
+                placeholder="e.g. 011338"
+              />
+              <Input
+                label="Search by Name"
+                value={nameSearch}
+                onChange={(event) => setNameSearch(event.target.value)}
+                placeholder="e.g. Tennakoon"
+              />
+              <Select
+                label="Filter by Designation"
+                value={designationFilter}
+                onChange={(event) => setDesignationFilter(event.target.value)}
+                options={designationOptions.map((option) => ({ value: option, label: option }))}
+              />
             </div>
-            {filteredTeamProgress.map((learner) => {
+            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Click a subordinate to view assigned learning paths, then click “Show Courses” on a learning path to view course progress.
+            </div>
+            {filteredTeamProgress.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No assigned learning path progress found for the current subordinate filters.
+              </p>
+            ) : filteredTeamProgress.map((learner) => {
               const learnerExpanded = expandedLearners.includes(learner.employeeNumber);
               return (
                 <div key={learner.employeeNumber} className="rounded-lg border border-slate-200">
@@ -435,7 +484,9 @@ export function SupervisorDashboard() {
           </div>
         )}
       </Card>
+      ) : null}
 
+      {activeTab === 'assign' ? (
       <Card title="Assign Learning Paths" bodyClassName="p-4">
         <div className="space-y-4">
           {loading ? (
@@ -549,6 +600,7 @@ export function SupervisorDashboard() {
           </Button>
         </div>
       </Card>
+      ) : null}
     </div>
   );
 }
