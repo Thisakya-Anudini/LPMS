@@ -1014,7 +1014,7 @@ export const getEnrollmentCourses = async (req, res) => {
       res,
       500,
       "INTERNAL_ERROR",
-      "Failed to fetch enrollment courses.",
+      `Database Error: ${error.message}`,
     );
   }
 };
