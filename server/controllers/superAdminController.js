@@ -5,6 +5,37 @@ import { sendError } from "../utils/http.js";
 import { logAudit } from "../utils/audit.js";
 import { fetchEmployeeDetailsForServiceNo } from "../utils/erpClient.js";
 
+const hasTable = async (tableName) => {
+  const result = await query(
+    `
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+        AND table_name = $1
+    ) AS present
+    `,
+    [tableName],
+  );
+  return Boolean(result.rows[0]?.present);
+};
+
+const hasColumn = async (tableName, columnName) => {
+  const result = await query(
+    `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+      ) AS present
+    `,
+    [tableName, columnName],
+  );
+  return Boolean(result.rows[0]?.present);
+};
+
 const createPrincipal = async ({
   email,
   password,
@@ -922,28 +953,57 @@ export const getEnrollmentCourses = async (req, res) => {
   const { enrollmentId } = req.params;
 
   try {
+    // Dynamically determine the database schema
+    const useCourseReference =
+      (await hasTable("courses")) &&
+      (await hasColumn("stage_courses", "course_id")) &&
+      (await hasColumn("enrollment_progress", "course_id"));
+
     const coursesResult = await query(
-      `
-        SELECT 
-          COALESCE(sc.course_code, lps.id::text) AS "courseId",
-          COALESCE(sc.course_title, lps.title) AS title,
-          COALESCE(sc.course_order, lps.stage_order) AS "order",
-          lps.title AS "stageTitle",
-          lps.stage_order AS "stageOrder",
-          COALESCE(ep.progress, 0) AS progress,
-          CASE WHEN COALESCE(ep.progress, 0) >= 100 THEN true ELSE false END AS "isCompleted"
-        FROM enrollments en
-        JOIN learning_path_stages lps ON lps.learning_path_id = en.learning_path_id
-        LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
-        LEFT JOIN enrollment_progress ep 
-          ON ep.enrollment_id = en.id 
-          AND (
-            ep.course_code = sc.course_code 
-            OR (sc.course_code IS NULL AND ep.stage_id = lps.id)
-          )
-        WHERE en.id = $1
-        ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
-      `,
+      useCourseReference
+        ? `
+            SELECT 
+              COALESCE(course.id, lps.id::text) AS "courseId",
+              COALESCE(course.title, lps.title) AS title,
+              COALESCE(sc.course_order, lps.stage_order) AS "order",
+              lps.title AS "stageTitle",
+              lps.stage_order AS "stageOrder",
+              COALESCE(ep.progress, 0) AS progress,
+              CASE WHEN COALESCE(ep.progress, 0) >= 100 THEN true ELSE false END AS "isCompleted"
+            FROM enrollments en
+            JOIN learning_path_stages lps ON lps.learning_path_id = en.learning_path_id
+            LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+            LEFT JOIN courses course ON course.id = sc.course_id
+            LEFT JOIN enrollment_progress ep 
+              ON ep.enrollment_id = en.id 
+              AND (
+                ep.course_id = course.id
+                OR (course.id IS NULL AND ep.stage_id = lps.id)
+              )
+            WHERE en.id = $1
+            ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+          `
+        : `
+            SELECT 
+              COALESCE(sc.course_code, lps.id::text) AS "courseId",
+              COALESCE(sc.course_title, lps.title) AS title,
+              COALESCE(sc.course_order, lps.stage_order) AS "order",
+              lps.title AS "stageTitle",
+              lps.stage_order AS "stageOrder",
+              COALESCE(ep.progress, 0) AS progress,
+              CASE WHEN COALESCE(ep.progress, 0) >= 100 THEN true ELSE false END AS "isCompleted"
+            FROM enrollments en
+            JOIN learning_path_stages lps ON lps.learning_path_id = en.learning_path_id
+            LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
+            LEFT JOIN enrollment_progress ep 
+              ON ep.enrollment_id = en.id 
+              AND (
+                ep.course_code = sc.course_code 
+                OR (sc.course_code IS NULL AND ep.stage_id = lps.id)
+              )
+            WHERE en.id = $1
+            ORDER BY lps.stage_order ASC, COALESCE(sc.course_order, lps.stage_order) ASC
+          `,
       [enrollmentId],
     );
 
