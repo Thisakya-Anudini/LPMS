@@ -25,10 +25,12 @@ export function AdminLearningPathsPage() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
+  const PAGE_SIZE = 12;
   const [paths, setPaths] = useState<LearningPathRow[]>([]);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage] = useState(1);
 
   const loadPaths = useCallback(async () => {
     try {
@@ -75,6 +77,21 @@ export function AdminLearningPathsPage() {
     return result;
   }, [paths, query, categoryFilter, statusFilter]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [query, categoryFilter, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPaths.length / PAGE_SIZE));
+  const pageNumbers = useMemo(
+    () => Array.from({ length: totalPages }, (_, index) => index + 1),
+    [totalPages],
+  );
+
+  const paginatedPaths = useMemo(() => {
+    const startIndex = (page - 1) * PAGE_SIZE;
+    return filteredPaths.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredPaths, page]);
+
   const handleResetFilters = () => {
     setQuery("");
     setCategoryFilter("");
@@ -95,7 +112,64 @@ export function AdminLearningPathsPage() {
         </p>
       </div>
 
-      <Card title="All Learning Paths">
+      <Card
+        title="All Learning Paths"
+        className="max-h-[calc(100vh-12rem)] flex flex-col"
+        bodyClassName="min-h-0 flex-1"
+        footer={
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-slate-500">
+            <div>Page {page} of {totalPages}</div>
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                First
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={page === 1}
+                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                &lt;
+              </button>
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  onClick={() => setPage(pageNumber)}
+                  className={`h-8 min-w-[2rem] rounded-full border px-2 text-sm transition-colors duration-200 ${
+                    pageNumber === page
+                      ? 'border-primary-600 bg-primary-600 text-white'
+                      : 'border-secondary-200 bg-white text-slate-700 hover:bg-secondary-100'
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={page === totalPages}
+                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                &gt;
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages}
+                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        }
+      >
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -139,14 +213,14 @@ export function AdminLearningPathsPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto max-h-[60vh] scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
           <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+            <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200 sticky top-0 z-10">
               <tr>
-                <th className="px-3 py-2">Title</th>
-                <th className="px-3 py-2">Category</th>
-                <th className="px-3 py-2">Duration</th>
-                <th className="px-3 py-2">Status</th>
+                <th className="px-6 py-3">Title</th>
+                <th className="px-6 py-3">Category</th>
+                <th className="px-6 py-3">Duration</th>
+                <th className="px-6 py-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -163,7 +237,7 @@ export function AdminLearningPathsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredPaths.map((path) => (
+                paginatedPaths.map((path) => (
                   <tr
                     key={path.id}
                     onClick={() => openPathDetail(path.id)}
@@ -209,6 +283,58 @@ export function AdminLearningPathsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-slate-500">
+          <div>Page {page} of {totalPages}</div>
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              First
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              disabled={page === 1}
+              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              &lt;
+            </button>
+            {pageNumbers.map((pageNumber) => (
+              <button
+                key={pageNumber}
+                type="button"
+                onClick={() => setPage(pageNumber)}
+                className={`h-8 min-w-[2rem] rounded-full border px-2 text-sm transition-colors duration-200 ${
+                  pageNumber === page
+                    ? 'border-primary-600 bg-primary-600 text-white'
+                    : 'border-secondary-200 bg-white text-slate-700 hover:bg-secondary-100'
+                }`}
+              >
+                {pageNumber}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={page === totalPages}
+              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              &gt;
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage(totalPages)}
+              disabled={page === totalPages}
+              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Last
+            </button>
+          </div>
         </div>
       </Card>
     </div>
