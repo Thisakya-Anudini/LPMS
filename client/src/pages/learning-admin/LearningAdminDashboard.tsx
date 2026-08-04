@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck } from 'lucide-react';
+import { BookOpen, CheckCircle2, Globe2, ShieldCheck } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
