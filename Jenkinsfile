@@ -61,7 +61,7 @@ RUN npm test
         stage('SonarQube Analysis') {
             steps {
                 echo 'Running SonarQube Code Analysis...'
-                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
                     sh '''
                         docker run --rm --network host \
                           -v $PWD:/usr/src \
