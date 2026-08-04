@@ -1,9 +1,9 @@
-import { AuthResponse, Role, User } from '../types';
+import { AuthResponse, Role, User } from "../types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   token?: string | null;
   query?: Record<string, string | number | boolean>;
@@ -24,14 +24,14 @@ export class ApiRequestError extends Error {
 
   constructor(message: string, status: number, payload?: ApiErrorPayload) {
     super(message);
-    this.name = 'ApiRequestError';
+    this.name = "ApiRequestError";
     this.status = status;
     this.payload = payload;
   }
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
+  typeof value === "object" && value !== null;
 
 const isApiErrorPayload = (value: unknown): value is ApiErrorPayload => {
   if (!isRecord(value)) {
@@ -51,14 +51,14 @@ const getApiError = (payload: unknown) => {
 
 const parseApiErrorPayload = (payload: unknown, status: number) => {
   const error = getApiError(payload);
-  const message = typeof error?.message === 'string' ? error.message : null;
+  const message = typeof error?.message === "string" ? error.message : null;
   if (!message) {
     return `Request failed with status ${status}`;
   }
 
-  if (error && 'details' in error && error.details) {
+  if (error && "details" in error && error.details) {
     const detailsText =
-      typeof error.details === 'string'
+      typeof error.details === "string"
         ? error.details
         : JSON.stringify(error.details);
     return `${message} (${detailsText})`;
@@ -78,7 +78,7 @@ const parseApiError = async (response: Response) => {
 
 const request = async <T>(path: string, options: RequestOptions = {}) => {
   let url = `${API_BASE_URL}${path}`;
-  
+
   if (options.query) {
     const queryParams = new URLSearchParams();
     Object.entries(options.query).forEach(([key, value]) => {
@@ -86,14 +86,14 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
     });
     url = `${url}?${queryParams.toString()}`;
   }
-  
+
   const response = await fetch(url, {
-    method: options.method || 'GET',
+    method: options.method || "GET",
     headers: {
-      'Content-Type': 'application/json',
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {})
+      "Content-Type": "application/json",
+      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
     },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
   if (!response.ok) {
@@ -108,7 +108,10 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
     const message = parseApiErrorPayload(payload, response.status);
     const typedPayload = isApiErrorPayload(payload) ? payload : undefined;
 
-    if (response.status === 409 && apiError?.code === 'DUPLICATE_LEARNING_PATH') {
+    if (
+      response.status === 409 &&
+      apiError?.code === "DUPLICATE_LEARNING_PATH"
+    ) {
       throw new ApiRequestError(message, response.status, typedPayload);
     }
 
@@ -124,69 +127,98 @@ const request = async <T>(path: string, options: RequestOptions = {}) => {
 
 export const authApi = {
   login(username: string, password: string) {
-    return request<AuthResponse>('/auth/login', {
-      method: 'POST',
-      body: { email: username, password }
+    return request<AuthResponse>("/auth/login", {
+      method: "POST",
+      body: { email: username, password },
     });
   },
   refresh(refreshToken: string) {
-    return request<{ accessToken: string }>('/auth/refresh', {
-      method: 'POST',
-      body: { refreshToken }
+    return request<{ accessToken: string }>("/auth/refresh", {
+      method: "POST",
+      body: { refreshToken },
     });
   },
   logout(refreshToken: string) {
-    return request<{ success: boolean }>('/auth/logout', {
-      method: 'POST',
-      body: { refreshToken }
+    return request<{ success: boolean }>("/auth/logout", {
+      method: "POST",
+      body: { refreshToken },
     });
   },
   me(token: string) {
-    return request<{ user: User }>('/auth/me', { token });
+    return request<{ user: User }>("/auth/me", { token });
   },
   changePassword(token: string, oldPassword: string, newPassword: string) {
-    return request<{ user: User }>('/auth/change-password', {
-      method: 'PUT',
+    return request<{ user: User }>("/auth/change-password", {
+      method: "PUT",
       token,
-      body: { oldPassword, newPassword }
+      body: { oldPassword, newPassword },
     });
-  }
+  },
 };
 
 export const userApi = {
   listUsers(token: string) {
-    return request<{ users: Array<{ id: string; name: string; email: string; role: Role; is_active: boolean }> }>('/users', { token });
+    return request<{
+      users: Array<{
+        id: string;
+        name: string;
+        email: string;
+        role: Role;
+        is_active: boolean;
+      }>;
+    }>("/users", { token });
   },
   createUser(
     token: string,
-    payload: { name: string; email: string; password: string; role: 'SUPER_ADMIN' | 'LEARNING_ADMIN' }
+    payload: {
+      name: string;
+      email: string;
+      password: string;
+      role: "SUPER_ADMIN" | "LEARNING_ADMIN";
+    },
   ) {
-    return request<{ user: { id: string; name: string; email: string; role: Role; is_active: boolean } }>('/users', {
-      method: 'POST',
+    return request<{
+      user: {
+        id: string;
+        name: string;
+        email: string;
+        role: Role;
+        is_active: boolean;
+      };
+    }>("/users", {
+      method: "POST",
       token,
-      body: payload
+      body: payload,
     });
   },
   deleteUser(token: string, userId: string) {
-    return request<{ user: { id: string; name: string; email: string; role: Role; is_active: boolean } }>(`/users/${userId}`, {
-      method: 'DELETE',
-      token
+    return request<{
+      user: {
+        id: string;
+        name: string;
+        email: string;
+        role: Role;
+        is_active: boolean;
+      };
+    }>(`/users/${userId}`, {
+      method: "DELETE",
+      token,
     });
-  }
+  },
 };
 
 const requestBlob = async (
   path: string,
   token: string,
-  options: { method?: 'GET' | 'POST'; body?: unknown } = {}
+  options: { method?: "GET" | "POST"; body?: unknown } = {},
 ) => {
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method || 'GET',
+    method: options.method || "GET",
     headers: {
-      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: options.body ? JSON.stringify(options.body) : undefined
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
 
   if (!response.ok) {
@@ -210,7 +242,7 @@ export const learningApi = {
         certificate_signer_name?: string | null;
         certificate_signer_title?: string | null;
       }>;
-    }>('/learning-paths', { token });
+    }>("/learning-paths", { token });
   },
   getLearningPathById(token: string, id: string) {
     return request<{
@@ -218,9 +250,9 @@ export const learningApi = {
         id: string;
         title: string;
         description: string;
-        category: 'RESTRICTED' | 'PUBLIC';
+        category: "RESTRICTED" | "PUBLIC";
         total_duration: string;
-        status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+        status: "ACTIVE" | "DRAFT" | "ARCHIVED";
         created_at: string;
         certificate_signer_name?: string | null;
         certificate_signer_title?: string | null;
@@ -232,7 +264,7 @@ export const learningApi = {
             course_id: string;
             title: string;
             course_order: number;
-            delivery_mode?: 'ONLINE' | 'PHYSICAL';
+            delivery_mode?: "ONLINE" | "PHYSICAL";
           }>;
         }>;
       };
@@ -243,19 +275,19 @@ export const learningApi = {
     payload: {
       title: string;
       description: string;
-      category: 'RESTRICTED' | 'PUBLIC';
+      category: "RESTRICTED" | "PUBLIC";
       totalDuration?: string;
       stages?: Array<{
         title: string;
         order: number;
         courses?: Array<{ courseId: string; order: number }>;
       }>;
-    }
+    },
   ) {
-    return request<{ learningPath: { id: string } }>('/learning-paths', {
-      method: 'POST',
+    return request<{ learningPath: { id: string } }>("/learning-paths", {
+      method: "POST",
       token,
-      body: payload
+      body: payload,
     });
   },
   updateLearningPath(
@@ -264,26 +296,26 @@ export const learningApi = {
     payload: {
       title: string;
       description: string;
-      category: 'RESTRICTED' | 'PUBLIC';
+      category: "RESTRICTED" | "PUBLIC";
       totalDuration?: string;
-      status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
+      status: "ACTIVE" | "DRAFT" | "ARCHIVED";
       stages?: Array<{
         title: string;
         order: number;
         courses?: Array<{ courseId: string; order: number }>;
       }>;
-    }
+    },
   ) {
     return request<{ learningPath: { id: string } }>(`/learning-paths/${id}`, {
-      method: 'PUT',
+      method: "PUT",
       token,
-      body: payload
+      body: payload,
     });
   },
   deleteLearningPath(token: string, id: string) {
     return request<{ success: boolean }>(`/learning-paths/${id}`, {
-      method: 'DELETE',
-      token
+      method: "DELETE",
+      token,
     });
   },
   getAssignableEmployeeSearchOptions(token: string) {
@@ -296,8 +328,8 @@ export const learningApi = {
         parentOrganizationId: string;
         parentOrganizationName: string;
       }>;
-      payrolls: Array<{ value: 'EXECUTIVE' | 'NON_EXECUTIVE'; label: string }>;
-    }>('/employee-search-options', { token });
+      payrolls: Array<{ value: "EXECUTIVE" | "NON_EXECUTIVE"; label: string }>;
+    }>("/employee-search-options", { token });
   },
   searchAssignableEmployees(
     token: string,
@@ -307,8 +339,8 @@ export const learningApi = {
       designation?: string;
       grade?: string;
       organizationName?: string;
-      payrollType?: 'EXECUTIVE' | 'NON_EXECUTIVE' | '';
-    }
+      payrollType?: "EXECUTIVE" | "NON_EXECUTIVE" | "";
+    },
   ) {
     return request<{
       employees: Array<{
@@ -325,10 +357,10 @@ export const learningApi = {
         employeeSupervisorNumber: string;
         isLearningAdmin?: boolean;
       }>;
-    }>('/employee-search', {
-      method: 'POST',
+    }>("/employee-search", {
+      method: "POST",
       token,
-      body: payload
+      body: payload,
     });
   },
   createEnrollments(
@@ -348,12 +380,20 @@ export const learningApi = {
         employeeInitials: string;
         employeeSupervisorNumber: string;
       }>;
-    }
+    },
   ) {
-    return request<{ enrollments: Array<{ id: string }>; skipped?: Array<{ principalId?: string; employeeNumber: string; learnerName?: string; reason?: string }> }>('/enrollments', {
-      method: 'POST',
+    return request<{
+      enrollments: Array<{ id: string }>;
+      skipped?: Array<{
+        principalId?: string;
+        employeeNumber: string;
+        learnerName?: string;
+        reason?: string;
+      }>;
+    }>("/enrollments", {
+      method: "POST",
       token,
-      body: payload
+      body: payload,
     });
   },
   getAssignmentReports(token: string) {
@@ -364,8 +404,8 @@ export const learningApi = {
         learning_path_title: string;
         assigned_by_name: string;
         assigned_by_role: string;
-        assignment_source: 'LEARNING_ADMIN' | 'SUPERVISOR';
-        report_status: 'ASSIGNED_IN_LPMS' | 'ENROLLED_IN_ERP';
+        assignment_source: "LEARNING_ADMIN" | "SUPERVISOR";
+        report_status: "ASSIGNED_IN_LPMS" | "ENROLLED_IN_ERP";
         assigned_at: string;
         learners: Array<{
           id: string;
@@ -377,21 +417,23 @@ export const learningApi = {
           gradeName: string | null;
         }>;
       }>;
-    }>('/assignment-reports', { token });
+    }>("/assignment-reports", { token });
   },
   updateAssignmentReportStatus(
     token: string,
     reportId: string,
-    status: 'ASSIGNED_IN_LPMS' | 'ENROLLED_IN_ERP'
+    status: "ASSIGNED_IN_LPMS" | "ENROLLED_IN_ERP",
   ) {
-    return request<{ report: { id: string; report_status: 'ASSIGNED_IN_LPMS' | 'ENROLLED_IN_ERP' } }>(
-      `/assignment-reports/${reportId}/status`,
-      {
-        method: 'PATCH',
-        token,
-        body: { status }
-      }
-    );
+    return request<{
+      report: {
+        id: string;
+        report_status: "ASSIGNED_IN_LPMS" | "ENROLLED_IN_ERP";
+      };
+    }>(`/assignment-reports/${reportId}/status`, {
+      method: "PATCH",
+      token,
+      body: { status },
+    });
   },
   getClassAssignmentOptions(token: string, learningPathId: string) {
     return request<{
@@ -470,7 +512,7 @@ export const learningApi = {
         raw?: Record<string, unknown>;
       };
       enrollmentIds: string[];
-    }
+    },
   ) {
     return request<{
       assigned: Array<{
@@ -482,20 +524,20 @@ export const learningApi = {
         class_title: string | null;
         assigned_at: string;
       }>;
-    }>('/class-enrollments', {
-      method: 'POST',
+    }>("/class-enrollments", {
+      method: "POST",
       token,
-      body: payload
+      body: payload,
     });
   },
   getClassDetailReport(
     token: string,
-    params: { learningPathId: string; courseCode: string; classId: string }
+    params: { learningPathId: string; courseCode: string; classId: string },
   ) {
     const searchParams = new URLSearchParams({
       learningPathId: params.learningPathId,
       courseCode: params.courseCode,
-      classId: params.classId
+      classId: params.classId,
     });
     return request<{
       report: null | {
@@ -515,7 +557,7 @@ export const learningApi = {
       courseCode: string;
       classId: string;
       values: Record<string, string>;
-    }
+    },
   ) {
     return request<{
       report: {
@@ -526,14 +568,16 @@ export const learningApi = {
         values: Record<string, string>;
         updatedAt: string;
       };
-    }>('/class-detail-reports', {
-      method: 'PUT',
+    }>("/class-detail-reports", {
+      method: "PUT",
       token,
-      body: payload
+      body: payload,
     });
   },
   getSummaryReport(token: string, learningPathId?: string) {
-    const query = learningPathId ? `?${new URLSearchParams({ learningPathId }).toString()}` : '';
+    const query = learningPathId
+      ? `?${new URLSearchParams({ learningPathId }).toString()}`
+      : "";
     return request<{
       summary: {
         totalPaths: number;
@@ -555,12 +599,16 @@ export const learningApi = {
         certificate_signature_png: string | null;
         updated_at: string;
       }>;
-    }>('/certificate-settings', { token });
+    }>("/certificate-settings", { token });
   },
   updateCertificateSignature(
     token: string,
     learningPathId: string,
-    payload: { signerName: string; signerTitle: string; signaturePngDataUrl?: string | null }
+    payload: {
+      signerName: string;
+      signerTitle: string;
+      signaturePngDataUrl?: string | null;
+    },
   ) {
     return request<{
       learningPath: {
@@ -572,32 +620,49 @@ export const learningApi = {
         updated_at: string;
       };
     }>(`/learning-paths/${learningPathId}/certificate-signature`, {
-      method: 'PUT',
+      method: "PUT",
       token,
-      body: payload
+      body: payload,
     });
   },
   previewCertificate(
     token: string,
     learningPathId: string,
-    payload?: { signerName?: string; signerTitle?: string; signaturePngDataUrl?: string | null }
+    payload?: {
+      signerName?: string;
+      signerTitle?: string;
+      signaturePngDataUrl?: string | null;
+    },
   ) {
-    return requestBlob(`/learning-paths/${learningPathId}/certificate-preview`, token, {
-      method: 'POST',
-      body: payload || {}
-    });
-  }
+    return requestBlob(
+      `/learning-paths/${learningPathId}/certificate-preview`,
+      token,
+      {
+        method: "POST",
+        body: payload || {},
+      },
+    );
+  },
 };
 
 export const supervisorApi = {
   getTeamProgress(token: string) {
-    return request<{ progress: Array<{ principal_id: string; name: string; email: string; total_enrollments: string; avg_progress: string; completed_count: string }> }>('/supervisor/team/progress', { token });
+    return request<{
+      progress: Array<{
+        principal_id: string;
+        name: string;
+        email: string;
+        total_enrollments: string;
+        avg_progress: string;
+        completed_count: string;
+      }>;
+    }>("/supervisor/team/progress", { token });
   },
   getApprovals(token: string) {
     return request<{
       approvals: Array<{
         id: string;
-        approval_status: 'PENDING' | 'APPROVED' | 'REJECTED';
+        approval_status: "PENDING" | "APPROVED" | "REJECTED";
         status: string;
         progress: number;
         enrolled_at: string;
@@ -607,54 +672,93 @@ export const supervisorApi = {
         learning_path_id: string;
         learning_path_title: string;
       }>;
-    }>('/supervisor/approvals', { token });
+    }>("/supervisor/approvals", { token });
   },
   approveEnrollment(token: string, enrollmentId: string) {
     return request<{ enrollment: { id: string; approval_status: string } }>(
       `/supervisor/approvals/${enrollmentId}/approve`,
-      { method: 'POST', token }
+      { method: "POST", token },
     );
   },
   rejectEnrollment(token: string, enrollmentId: string) {
     return request<{ enrollment: { id: string; approval_status: string } }>(
       `/supervisor/approvals/${enrollmentId}/reject`,
-      { method: 'POST', token }
+      { method: "POST", token },
     );
   },
   getSupervisorPaths(token: string) {
     return request<{
-      learningPaths: Array<{ id: string; title: string; description: string; category: string; status: string }>;
-    }>('/supervisor/paths', { token });
+      learningPaths: Array<{
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        status: string;
+      }>;
+    }>("/supervisor/paths", { token });
   },
-  enrollTeamMembers(token: string, payload: { learningPathId: string; employeePrincipalIds: string[] }) {
-    return request<{ enrollments: Array<{ id: string }> }>('/supervisor/enrollments', {
-      method: 'POST',
-      token,
-      body: payload
-    });
-  }
+  enrollTeamMembers(
+    token: string,
+    payload: { learningPathId: string; employeePrincipalIds: string[] },
+  ) {
+    return request<{ enrollments: Array<{ id: string }> }>(
+      "/supervisor/enrollments",
+      {
+        method: "POST",
+        token,
+        body: payload,
+      },
+    );
+  },
 };
 
 export const employeeApi = {
   getMyPaths(token: string) {
-    return request<{ enrollments: Array<{ id: string; status: string; progress: number; enrolled_at: string; completed_at?: string; learning_path_id: string; title: string; description: string; total_duration: string }> }>('/employee/my-paths', { token });
+    return request<{
+      enrollments: Array<{
+        id: string;
+        status: string;
+        progress: number;
+        enrolled_at: string;
+        completed_at?: string;
+        learning_path_id: string;
+        title: string;
+        description: string;
+        total_duration: string;
+      }>;
+    }>("/employee/my-paths", { token });
   },
   getMyProgress(token: string) {
-    return request<{ progress: { total_enrollments: string; completed_enrollments: string; average_progress: string } }>('/employee/my-progress', { token });
+    return request<{
+      progress: {
+        total_enrollments: string;
+        completed_enrollments: string;
+        average_progress: string;
+      };
+    }>("/employee/my-progress", { token });
   },
   getNotifications(token: string) {
-    return request<{ notifications: Array<{ id: string; title: string; message: string; type: string; is_read: boolean; created_at: string }> }>('/employee/notifications', { token });
+    return request<{
+      notifications: Array<{
+        id: string;
+        title: string;
+        message: string;
+        type: string;
+        is_read: boolean;
+        created_at: string;
+      }>;
+    }>("/employee/notifications", { token });
   },
   getCertificates(token: string) {
     return request<{
       certificates: Array<{
         id: string;
-        scope: 'STAGE' | 'FULL';
+        scope: "STAGE" | "FULL";
         issued_at: string;
         learning_path_id: string;
         learning_path_title: string;
       }>;
-    }>('/employee/certificates', { token });
+    }>("/employee/certificates", { token });
   },
   getPublicPaths(token: string) {
     return request<{
@@ -667,25 +771,29 @@ export const employeeApi = {
         status: string;
         already_enrolled: boolean;
       }>;
-    }>('/employee/public-paths', { token });
+    }>("/employee/public-paths", { token });
   },
   selfEnroll(token: string, learningPathId: string) {
-    return request<{ enrollment: { id: string } }>('/employee/self-enroll', {
-      method: 'POST',
+    return request<{ enrollment: { id: string } }>("/employee/self-enroll", {
+      method: "POST",
       token,
-      body: { learningPathId }
+      body: { learningPathId },
     });
   },
   updateMyProgress(token: string, enrollmentId: string, progress: number) {
-    return request<{ enrollment: { id: string; progress: number; status: string; completed_at?: string } }>(
-      `/employee/my-paths/${enrollmentId}/progress`,
-      {
-        method: 'PUT',
-        token,
-        body: { progress }
-      }
-    );
-  }
+    return request<{
+      enrollment: {
+        id: string;
+        progress: number;
+        status: string;
+        completed_at?: string;
+      };
+    }>(`/employee/my-paths/${enrollmentId}/progress`, {
+      method: "PUT",
+      token,
+      body: { progress },
+    });
+  },
 };
 
 export const integrationApi = {
@@ -694,10 +802,10 @@ export const integrationApi = {
       success: boolean;
       message: string;
       data: Array<Record<string, unknown>>;
-    }>('/integrations/erp/learner-details', {
-      method: 'POST',
+    }>("/integrations/erp/learner-details", {
+      method: "POST",
       token,
-      body: { employeeNo }
+      body: { employeeNo },
     });
   },
   getErpSubordinates(token: string, employeeNo: string) {
@@ -705,10 +813,10 @@ export const integrationApi = {
       success: boolean;
       message: string;
       data: Array<Record<string, unknown>>;
-    }>('/integrations/erp/subordinates', {
-      method: 'POST',
+    }>("/integrations/erp/subordinates", {
+      method: "POST",
       token,
-      body: { employeeNo }
+      body: { employeeNo },
     });
   },
   importErpEmployees(
@@ -724,7 +832,7 @@ export const integrationApi = {
         email?: string | null;
       }>;
       supervisorId?: string;
-    }
+    },
   ) {
     return request<{
       success: boolean;
@@ -732,12 +840,12 @@ export const integrationApi = {
       skippedCount: number;
       imported: Array<{ employeeNumber: string; email: string }>;
       skipped: Array<{ employeeNumber: string | null; reason: string }>;
-    }>('/integrations/erp/import-employees', {
-      method: 'POST',
+    }>("/integrations/erp/import-employees", {
+      method: "POST",
       token,
-      body: payload
+      body: payload,
     });
-  }
+  },
 };
 
 export const courseApi = {
@@ -749,7 +857,7 @@ export const courseApi = {
         title: string;
         description: string | null;
         durationHours: number | null;
-        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+        deliveryMode: "ONLINE" | "PHYSICAL" | null;
         videoUrl: string | null;
         venue: string | null;
       }>;
@@ -761,11 +869,11 @@ export const courseApi = {
         hasNextPage: boolean;
         hasPrevPage: boolean;
       };
-    }>('/courses', { 
+    }>("/courses", {
       token,
-      query: { page, pageSize }
+      query: { page, pageSize },
     });
-  }
+  },
 };
 
 export const learnerApi = {
@@ -773,7 +881,7 @@ export const learnerApi = {
     return request<{
       profile: Record<string, unknown> | null;
       isSupervisor: boolean;
-    }>('/learner/profile', { token });
+    }>("/learner/profile", { token });
   },
   getDashboard(token: string) {
     return request<{
@@ -785,9 +893,18 @@ export const learnerApi = {
         progress: number;
         status: string;
       }>;
-      summary: { totalLearningPaths: number; completedLearningPaths: number; averageProgress: number };
-      notifications: Array<{ id: string; title: string; message: string; type: string }>;
-    }>('/learner/dashboard', { token });
+      summary: {
+        totalLearningPaths: number;
+        completedLearningPaths: number;
+        averageProgress: number;
+      };
+      notifications: Array<{
+        id: string;
+        title: string;
+        message: string;
+        type: string;
+      }>;
+    }>("/learner/dashboard", { token });
   },
   getMyPathCourses(token: string, enrollmentId: string) {
     return request<{
@@ -810,7 +927,7 @@ export const learnerApi = {
         stageOrder: number;
         isCompleted: boolean;
         erpStatus: string | null;
-        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        deliveryMode: "ONLINE" | "PHYSICAL";
         venue: string | null;
         videoUrl: string | null;
       }>;
@@ -820,7 +937,7 @@ export const learnerApi = {
     token: string,
     enrollmentId: string,
     courseId: string,
-    completed: boolean
+    completed: boolean,
   ) {
     return request<{
       enrollment: {
@@ -842,21 +959,21 @@ export const learnerApi = {
         stageOrder: number;
         isCompleted: boolean;
         erpStatus: string | null;
-        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        deliveryMode: "ONLINE" | "PHYSICAL";
         venue: string | null;
         videoUrl: string | null;
       }>;
     }>(`/learner/my-paths/${enrollmentId}/courses/${courseId}`, {
-      method: 'PUT',
+      method: "PUT",
       token,
-      body: { completed }
+      body: { completed },
     });
   },
   getCertificates(token: string) {
     return request<{
       certificates: Array<{
         id: string;
-        scope: 'STAGE' | 'FULL';
+        scope: "STAGE" | "FULL";
         issued_at: string;
         learning_path_id: string;
         learning_path_title: string;
@@ -866,17 +983,61 @@ export const learnerApi = {
         learner_email: string;
         completed_at: string | null;
       }>;
-    }>('/learner/certificates', { token });
+    }>("/learner/certificates", { token });
   },
   downloadCertificate(token: string, certificateId: string) {
-    return requestBlob(`/learner/certificates/${certificateId}/download`, token);
+    return requestBlob(
+      `/learner/certificates/${certificateId}/download`,
+      token,
+    );
   },
   getTeam(token: string) {
     return request<{
       employeeNo: string;
       isSupervisor: boolean;
       team: Array<Record<string, unknown>>;
-    }>('/learner/team', { token });
+    }>("/learner/team", { token });
+  },
+  getTeamProgressDetails(token: string) {
+    return request<{
+      employeeNo: string;
+      isSupervisor: boolean;
+      learners: Array<{
+        employeeNumber: string;
+        name: string;
+        designation: string;
+        gradeName: string;
+        email: string;
+        principalId: string | null;
+        totalLearningPaths: number;
+        completedLearningPaths: number;
+        averageProgress: number;
+        learningPaths: Array<{
+          enrollmentId: string;
+          learningPathId: string;
+          title: string;
+          totalDuration: string | null;
+          status: string;
+          progress: number;
+          enrolledAt: string;
+          completedAt: string | null;
+          enrollmentSource: string | null;
+          totalCourses: number;
+          completedCourses: number;
+          courses: Array<{
+            courseId: string;
+            courseCode: string | null;
+            title: string;
+            duration: string | null;
+            order: number;
+            stageTitle: string | null;
+            stageOrder: number;
+            progress: number;
+            isCompleted: boolean;
+          }>;
+        }>;
+      }>;
+    }>("/learner/team/progress-details", { token });
   },
   getLearningPaths(token: string) {
     return request<{
@@ -885,7 +1046,7 @@ export const learnerApi = {
         title: string;
         description: string;
       }>;
-    }>('/learner/learning-paths', { token });
+    }>("/learner/learning-paths", { token });
   },
   getPublicPaths(token: string) {
     return request<{
@@ -898,7 +1059,7 @@ export const learnerApi = {
         status: string;
         already_enrolled: boolean;
       }>;
-    }>('/learner/public-paths', { token });
+    }>("/learner/public-paths", { token });
   },
   getPublicPathById(token: string, id: string) {
     return request<{
@@ -906,7 +1067,7 @@ export const learnerApi = {
         id: string;
         title: string;
         description: string;
-        category: 'PUBLIC';
+        category: "PUBLIC";
         total_duration: string;
         status: string;
         created_at: string;
@@ -918,7 +1079,7 @@ export const learnerApi = {
             course_id: string;
             title: string;
             course_order: number;
-            delivery_mode?: 'ONLINE' | 'PHYSICAL';
+            delivery_mode?: "ONLINE" | "PHYSICAL";
           }>;
         }>;
       };
@@ -934,7 +1095,7 @@ export const learnerApi = {
         duration: string | null;
         erpStatus: string | null;
         isCompleted: boolean;
-        deliveryMode: 'ONLINE' | 'PHYSICAL';
+        deliveryMode: "ONLINE" | "PHYSICAL";
         stageTitle: string | null;
         stageOrder: number;
         courseOrder: number;
@@ -947,7 +1108,7 @@ export const learnerApi = {
           id: string;
           title: string;
           description: string;
-          category: 'PUBLIC' | 'RESTRICTED';
+          category: "PUBLIC" | "RESTRICTED";
           totalDuration: string;
         };
       }>;
@@ -960,7 +1121,7 @@ export const learnerApi = {
         durationHours: number | null;
         erpStatus: string | null;
         isCompleted: boolean;
-        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+        deliveryMode: "ONLINE" | "PHYSICAL" | null;
         videoUrl: string | null;
         venue: string | null;
         alreadyEnrolled: boolean;
@@ -968,7 +1129,7 @@ export const learnerApi = {
           id: string;
           title: string;
           description: string;
-          category: 'PUBLIC' | 'RESTRICTED';
+          category: "PUBLIC" | "RESTRICTED";
           totalDuration: string;
         }>;
       }>;
@@ -981,7 +1142,7 @@ export const learnerApi = {
         durationHours: number | null;
         erpStatus: string | null;
         isCompleted: boolean;
-        deliveryMode: 'ONLINE' | 'PHYSICAL' | null;
+        deliveryMode: "ONLINE" | "PHYSICAL" | null;
         videoUrl: string | null;
         venue: string | null;
         alreadyEnrolled: boolean;
@@ -989,22 +1150,22 @@ export const learnerApi = {
           id: string;
           title: string;
           description: string;
-          category: 'PUBLIC' | 'RESTRICTED';
+          category: "PUBLIC" | "RESTRICTED";
           totalDuration: string;
         }>;
       }>;
-    }>('/learner/other-courses', { token });
+    }>("/learner/other-courses", { token });
   },
   selfEnroll(token: string, learningPathId: string) {
-    return request<{ enrollment: { id: string } }>('/learner/self-enroll', {
-      method: 'POST',
+    return request<{ enrollment: { id: string } }>("/learner/self-enroll", {
+      method: "POST",
       token,
-      body: { learningPathId }
+      body: { learningPathId },
     });
   },
   enrollTeam(
     token: string,
-    payload: { employeeNumbers: string[]; learningPathIds: string[] }
+    payload: { employeeNumbers: string[]; learningPathIds: string[] },
   ) {
     return request<{
       success: boolean;
@@ -1014,12 +1175,12 @@ export const learnerApi = {
         employeeNo: string;
         assignedLearningPathIds: string[];
       }>;
-    }>('/learner/team/enroll', {
-      method: 'POST',
+    }>("/learner/team/enroll", {
+      method: "POST",
       token,
-      body: payload
+      body: payload,
     });
-  }
+  },
 };
 
 export const superAdminApi = {
@@ -1031,24 +1192,24 @@ export const superAdminApi = {
       employeeNo?: string;
       name?: string;
       designation?: string;
-    }
+    },
   ) {
     const searchParams = new URLSearchParams();
 
     if (params?.page) {
-      searchParams.set('page', String(params.page));
+      searchParams.set("page", String(params.page));
     }
     if (params?.pageSize) {
-      searchParams.set('pageSize', String(params.pageSize));
+      searchParams.set("pageSize", String(params.pageSize));
     }
     if (params?.employeeNo?.trim()) {
-      searchParams.set('employeeNo', params.employeeNo.trim());
+      searchParams.set("employeeNo", params.employeeNo.trim());
     }
     if (params?.name?.trim()) {
-      searchParams.set('name', params.name.trim());
+      searchParams.set("name", params.name.trim());
     }
-    if (params?.designation && params.designation !== 'ALL') {
-      searchParams.set('designation', params.designation);
+    if (params?.designation && params.designation !== "ALL") {
+      searchParams.set("designation", params.designation);
     }
 
     const query = searchParams.toString();
@@ -1073,7 +1234,7 @@ export const superAdminApi = {
         total: number;
         totalPages: number;
       };
-    }>(`/users/learners${query ? `?${query}` : ''}`, { token });
+    }>(`/users/learners${query ? `?${query}` : ""}`, { token });
   },
   getAssignedLearningAdmins(token: string) {
     return request<{
@@ -1088,7 +1249,7 @@ export const superAdminApi = {
         created_at: string;
         updated_at: string;
       }>;
-    }>('/users/learning-admin-assignments', { token });
+    }>("/users/learning-admin-assignments", { token });
   },
   getLearnerLearningPaths(token: string, principalId: string) {
     return request<{
@@ -1122,7 +1283,10 @@ export const superAdminApi = {
         category: string;
         total_duration: string;
       }>;
-    }>(`/users/learners/by-employee/${encodeURIComponent(employeeNo)}/learning-paths`, { token });
+    }>(
+      `/users/learners/by-employee/${encodeURIComponent(employeeNo)}/learning-paths`,
+      { token },
+    );
   },
   getLearningPathEnrollments(token: string, learningPathId: string) {
     return request<{
@@ -1165,7 +1329,7 @@ export const superAdminApi = {
       employeeInitials: string;
       employeeSupervisorNumber: string;
       isLearningAdmin?: boolean;
-    }
+    },
   ) {
     return request<{
       assignment: {
@@ -1175,18 +1339,32 @@ export const superAdminApi = {
         email: string;
         isLearningAdmin: boolean;
       };
-    }>('/users/learning-admin-assignments', {
-      method: 'POST',
+    }>("/users/learning-admin-assignments", {
+      method: "POST",
       token,
-      body: { employeeNumber, employee }
+      body: { employeeNumber, employee },
     });
   },
   removeLearningAdmin(token: string, employeeNumber: string) {
-    return request<{ success: boolean }>(`/users/learning-admin-assignments/${employeeNumber}`, {
-      method: 'DELETE',
-      token
-    });
-  }
+    return request<{ success: boolean }>(
+      `/users/learning-admin-assignments/${employeeNumber}`,
+      {
+        method: "DELETE",
+        token,
+      },
+    );
+  },
+  getEnrollmentCourses(token: string, enrollmentId: string) {
+    return request<{
+      courses: Array<{
+        courseId: string;
+        title: string;
+        stageTitle: string;
+        progress: number;
+        isCompleted: boolean;
+      }>;
+    }>(`/users/enrollments/${enrollmentId}/courses`, { token });
+  },
 };
 
 export const notificationsApi = {
@@ -1196,28 +1374,37 @@ export const notificationsApi = {
         id: string;
         title: string;
         message: string;
-        type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+        type: "INFO" | "SUCCESS" | "WARNING" | "ERROR";
         is_read: boolean;
         created_at: string;
       }>;
-    }>('/notifications', { token });
+    }>("/notifications", { token });
   },
   markAsRead(token: string, notificationId: string) {
-    return request<{ notification: { id: string; is_read: boolean } }>(`/notifications/${notificationId}/read`, {
-      method: 'PATCH',
-      token
-    });
+    return request<{ notification: { id: string; is_read: boolean } }>(
+      `/notifications/${notificationId}/read`,
+      {
+        method: "PATCH",
+        token,
+      },
+    );
   },
   markAllAsRead(token: string) {
-    return request<{ success: boolean; updatedCount: number }>('/notifications/read-all', {
-      method: 'PATCH',
-      token
-    });
+    return request<{ success: boolean; updatedCount: number }>(
+      "/notifications/read-all",
+      {
+        method: "PATCH",
+        token,
+      },
+    );
   },
   clearAllNotifications(token: string) {
-    return request<{ success: boolean; deletedCount: number }>('/notifications/clear-all', {
-      method: 'DELETE',
-      token
-    });
-  }
+    return request<{ success: boolean; deletedCount: number }>(
+      "/notifications/clear-all",
+      {
+        method: "DELETE",
+        token,
+      },
+    );
+  },
 };

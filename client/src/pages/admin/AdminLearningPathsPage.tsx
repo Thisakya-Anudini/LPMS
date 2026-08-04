@@ -15,7 +15,6 @@ type LearningPathRow = {
   title: string;
   description: string;
   category: "PUBLIC" | "RESTRICTED";
-  total_duration: string;
   status: string;
   created_at: string;
 };
@@ -219,20 +218,19 @@ export function AdminLearningPathsPage() {
               <tr>
                 <th className="px-6 py-3">Title</th>
                 <th className="px-6 py-3">Category</th>
-                <th className="px-6 py-3">Duration</th>
                 <th className="px-6 py-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-3 text-slate-500">
+                  <td colSpan={3} className="px-3 py-3 text-slate-500">
                     Loading learning paths...
                   </td>
                 </tr>
               ) : filteredPaths.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-3 text-slate-500">
+                  <td colSpan={3} className="px-3 py-3 text-slate-500">
                     No learning paths found.
                   </td>
                 </tr>
@@ -261,9 +259,6 @@ export function AdminLearningPathsPage() {
                           {path.category.replace("_", " ")}
                         </span>
                       </Badge>
-                    </td>
-                    <td className="px-3 py-2 text-slate-700">
-                      {path.total_duration}
                     </td>
                     <td className="px-3 py-2">
                       <Badge
