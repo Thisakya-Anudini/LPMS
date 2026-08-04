@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Award, BookOpen, CheckCircle2, Globe2, ShieldCheck } from 'lucide-react';
+import { BookOpen, CheckCircle2, Globe2, ShieldCheck } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Card } from '../../components/ui/Card';
 import { Select } from '../../components/ui/Select';
@@ -224,11 +224,10 @@ function CompletionPreview() {
           <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary-500">Select A LP</span>
         </div>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {[
           { label: 'Total assignments', tone: 'bg-primary-50 text-primary-700' },
-          { label: 'Completed', tone: 'bg-success-50 text-success-700' },
-          { label: 'Certificates', tone: 'bg-warning-50 text-warning-700' }
+          { label: 'Completed', tone: 'bg-success-50 text-success-700' }
         ].map((item) => (
           <div key={item.label} className="rounded-lg border border-secondary-200 bg-secondary-50/60 p-4">
             <div className={`mb-4 h-10 w-10 animate-pulse rounded-lg ${item.tone}`} />
@@ -399,7 +398,7 @@ export function LearningAdminDashboard() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.05fr_1fr]">
         <Card
           title="Completion Intelligence"
-          description="Learning path assignment completion rate and certificate output."
+          description="Learning path assignment completion rate."
           className="transition-all duration-300 hover:-translate-y-1 hover:border-primary-200 hover:shadow-medium"
           bodyClassName="space-y-6"
           action={
@@ -430,7 +429,7 @@ export function LearningAdminDashboard() {
             <div className="space-y-5">
               <div className="rounded-lg border border-primary-100 bg-primary-50/60 px-4 py-3">
                 <p className="text-sm font-semibold text-primary-800">{selectedCompletionLabel}</p>
-                <p className="mt-1 text-xs text-secondary-600">Assignment completion and certificates for this view.</p>
+                <p className="mt-1 text-xs text-secondary-600">Assignment completion for this view.</p>
               </div>
               <div className="grid gap-6 md:grid-cols-[220px_1fr] md:items-center">
                 <DonutChart
@@ -438,11 +437,10 @@ export function LearningAdminDashboard() {
                   label="Completed"
                   caption={`${formatNumber(completedEnrollments)} of ${formatNumber(totalEnrollments)} learning path assignments completed`}
                 />
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                 {[
                   { label: 'Total assignments', value: totalEnrollments, icon: BookOpen, tone: 'bg-primary-50 text-primary-700' },
-                  { label: 'Completed', value: completedEnrollments, icon: CheckCircle2, tone: 'bg-success-50 text-success-700' },
-                  { label: 'Certificates', value: completionSummary?.totalCertificates ?? 0, icon: Award, tone: 'bg-warning-50 text-warning-700' }
+                  { label: 'Completed', value: completedEnrollments, icon: CheckCircle2, tone: 'bg-success-50 text-success-700' }
                 ].map((item) => {
                   const Icon = item.icon;
 
