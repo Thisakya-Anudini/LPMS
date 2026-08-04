@@ -57,6 +57,21 @@ RUN npm test
                 }
             }
         }
+
+        stage('SonarQube Analysis') {
+            steps {
+                echo 'Running SonarQube Code Analysis...'
+                withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        docker run --rm --network host \
+                          -v $PWD:/usr/src \
+                          sonarsource/sonar-scanner-cli \
+                          -Dsonar.host.url=https://dpdlab1.slt.lk:9443 \
+                          -Dsonar.token="$SONAR_TOKEN"
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -69,14 +84,14 @@ RUN npm test
             '''
         }
         success {
-            echo '==========================================='
-            echo ' SUCCESS: All Code & Error Checks Passed!  '
-            echo '==========================================='
+            echo '==================================================='
+            echo ' SUCCESS: All Code, Tests & Sonar Scan Passed!     '
+            echo '==================================================='
         }
         failure {
-            echo '==========================================='
-            echo ' FAILURE: Linting, Build, or Test Errors!  '
-            echo '==========================================='
+            echo '==================================================='
+            echo ' FAILURE: CI Checks or Sonar Scan Failed!          '
+            echo '==================================================='
         }
     }
 }
