@@ -67,7 +67,7 @@ RUN npm test
                           -v $PWD:/usr/src \
                           sonarsource/sonar-scanner-cli \
                           -Dsonar.host.url=https://dpdlab1.slt.lk:9443 \
-                          -Dsonar.token="$SONAR_TOKEN"
+                          -Dsonar.token="$SONAR_TOKEN" \
                           -Dsonar.projectKey="LPMS" \
                           -Dsonar.projectName="LPMS Learning Portal" \
                           -Dsonar.sources="server,client/src" \
