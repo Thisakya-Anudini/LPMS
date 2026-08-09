@@ -20,6 +20,7 @@ type HierarchyEmployee = {
   employeeNumber: string;
   name: string;
   designation: string;
+  orgName?: string;
 };
 
 export type SelectedHierarchyEmployee = HierarchyEmployee;
@@ -50,7 +51,8 @@ const mapHierarchyEmployee = (row: Record<string, unknown>) => {
   return {
     employeeNumber,
     name: normalizeHierarchyName(row, employeeNumber),
-    designation: String(row.designation || row.designationName || '').trim() || 'Employee'
+    designation: String(row.designation || row.designationName || '').trim() || 'Employee',
+    orgName: String(row.orgName || row.empSection || row.empDivision || '').trim()
   };
 };
 
@@ -145,8 +147,8 @@ export function EmployeeHierarchyPanel({
         const response = await integrationApi.getErpSubordinates(token, normalizedEmployeeNo);
         const rows = Array.isArray(response.data)
           ? response.data
-              .map((row) => mapHierarchyEmployee(row))
-              .filter((row) => row.employeeNumber.length > 0)
+            .map((row) => mapHierarchyEmployee(row))
+            .filter((row) => row.employeeNumber.length > 0)
           : [];
 
         setHierarchyChildrenByEmployee((prev) => ({
@@ -196,8 +198,8 @@ export function EmployeeHierarchyPanel({
           : {};
       const childRows = Array.isArray(childrenResponse.data)
         ? childrenResponse.data
-            .map((row) => mapHierarchyEmployee(row))
-            .filter((row) => row.employeeNumber.length > 0)
+          .map((row) => mapHierarchyEmployee(row))
+          .filter((row) => row.employeeNumber.length > 0)
         : [];
 
       setHierarchyRoot({
@@ -205,7 +207,8 @@ export function EmployeeHierarchyPanel({
         name: normalizeHierarchyName(detailRow, ROOT_EMPLOYEE_NO),
         designation:
           String(detailRow.designation || detailRow.designationName || '').trim() ||
-          'Chief Executive Officer'
+          'Chief Executive Officer',
+        orgName: String(detailRow.orgName || '').trim()
       });
       setHierarchyChildrenByEmployee({
         [ROOT_EMPLOYEE_NO]: {
@@ -270,22 +273,19 @@ export function EmployeeHierarchyPanel({
         ) : null}
 
         <div
-          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all ${
-            isRoot
+          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all ${isRoot
               ? 'border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm hover:border-amber-300 hover:shadow-md'
               : `${depthStyle.cardClass} hover:shadow-sm`
-          } ${isSelected ? 'ring-2 ring-primary-600 ring-offset-1' : ''}`}
+            } ${isSelected ? 'ring-2 ring-primary-600 ring-offset-1' : ''}`}
         >
           <button
             type="button"
             onClick={() => void toggleHierarchyEmployee(employee.employeeNumber)}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
-              hasChildren ? 'cursor-pointer' : 'cursor-default'
-            } ${
-              isRoot
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${hasChildren ? 'cursor-pointer' : 'cursor-default'
+              } ${isRoot
                 ? 'border-amber-200 bg-amber-100 text-amber-700'
                 : depthStyle.iconWrapClass
-            }`}
+              }`}
             disabled={!canExpand && !nodeState?.loading}
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${employee.name}`}
           >
@@ -300,13 +300,15 @@ export function EmployeeHierarchyPanel({
           >
             <p className="truncate text-[15px] font-semibold leading-5 text-slate-900">{employee.name}</p>
             <p className="truncate text-sm leading-4 text-slate-500">{employee.designation}</p>
+            {employee.orgName ? (
+              <p className="truncate text-xs leading-4 text-slate-400">{employee.orgName}</p>
+            ) : null}
           </button>
 
           {childCount !== null ? (
             <span
-              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                isRoot ? 'border-amber-200 bg-amber-50 text-amber-700' : depthStyle.countClass
-              }`}
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${isRoot ? 'border-amber-200 bg-amber-50 text-amber-700' : depthStyle.countClass
+                }`}
             >
               {childCount}
             </span>
@@ -325,9 +327,8 @@ export function EmployeeHierarchyPanel({
           <button
             type="button"
             onClick={() => void toggleHierarchyEmployee(employee.employeeNumber)}
-            className={`shrink-0 rounded-full p-1.5 text-slate-400 transition ${
-              hasChildren ? 'group-hover:bg-slate-100 group-hover:text-slate-600' : 'opacity-40'
-            }`}
+            className={`shrink-0 rounded-full p-1.5 text-slate-400 transition ${hasChildren ? 'group-hover:bg-slate-100 group-hover:text-slate-600' : 'opacity-40'
+              }`}
             disabled={!canExpand && !nodeState?.loading}
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${employee.name}`}
           >
