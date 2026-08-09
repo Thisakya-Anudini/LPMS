@@ -618,7 +618,7 @@ export function AssignEnrollmentToClassesPage() {
     return completedCourseLearners.filter((learner) =>
       learnerMatchesSearch(learner, search),
     );
-  }, [completedCourseLearners, learnerSearch, selectedCourseCode]);
+  }, [completedCourseLearners, learnerSearch]);
 
   const filteredSetupNotCompletedLearners = useMemo(() => {
     const search = setupCourseStatusSearch.trim().toLowerCase();
@@ -628,7 +628,7 @@ export function AssignEnrollmentToClassesPage() {
     return notCompletedCourseLearners.filter((learner) =>
       learnerMatchesSearch(learner, search),
     );
-  }, [notCompletedCourseLearners, selectedCourseCode, setupCourseStatusSearch]);
+  }, [notCompletedCourseLearners, setupCourseStatusSearch]);
 
   const filteredSetupCompletedLearners = useMemo(() => {
     const search = setupCourseStatusSearch.trim().toLowerCase();
@@ -638,7 +638,7 @@ export function AssignEnrollmentToClassesPage() {
     return completedCourseLearners.filter((learner) =>
       learnerMatchesSearch(learner, search),
     );
-  }, [completedCourseLearners, selectedCourseCode, setupCourseStatusSearch]);
+  }, [completedCourseLearners, setupCourseStatusSearch]);
 
   const statusTransferLearners = useMemo(
     () =>
@@ -694,7 +694,6 @@ export function AssignEnrollmentToClassesPage() {
   }, [
     learnerSearch,
     selectableLearners,
-    selectedCourseCode,
     designationFilter,
     gradeFilter,
   ]);

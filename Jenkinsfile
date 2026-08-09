@@ -57,6 +57,30 @@ RUN npm test
                 }
             }
         }
+
+        stage('SonarQube Analysis') {
+            steps {
+                echo 'Running SonarQube Code Analysis...'
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                    echo 'Building temporary SonarScanner container...'
+                    writeFile file: 'Dockerfile.sonar', text: '''FROM sonarsource/sonar-scanner-cli
+WORKDIR /usr/src
+COPY . /usr/src
+'''
+                    sh 'docker build -t lpms-sonar-scan -f Dockerfile.sonar .'
+                    
+                    sh '''
+                        docker run --rm --network host lpms-sonar-scan \
+                          -Dsonar.host.url="https://dpdlab1.slt.lk:9443" \
+                          -Dsonar.token="$SONAR_TOKEN" \
+                          -Dsonar.projectKey="LPMS" \
+                          -Dsonar.projectName="LPMS Learning Portal" \
+                          -Dsonar.sources="server,client/src" \
+                          -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/build/**"
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -64,19 +88,19 @@ RUN npm test
             echo 'Cleaning up test database, images, and temporary files...'
             sh '''
                 docker stop jenkins-test-postgres && docker rm jenkins-test-postgres || true
-                docker rmi lpms-frontend-ci lpms-backend-ci || true
-                rm -f client/Dockerfile.ci server/Dockerfile.ci || true
+                docker rmi lpms-frontend-ci lpms-backend-ci lpms-sonar-scan || true
+                rm -f client/Dockerfile.ci server/Dockerfile.ci Dockerfile.sonar || true
             '''
         }
         success {
-            echo '==========================================='
-            echo ' SUCCESS: All Code & Error Checks Passed!  '
-            echo '==========================================='
+            echo '==================================================='
+            echo ' SUCCESS: All Code, Tests & Sonar Scan Passed!     '
+            echo '==================================================='
         }
         failure {
-            echo '==========================================='
-            echo ' FAILURE: Linting, Build, or Test Errors!  '
-            echo '==========================================='
+            echo '==================================================='
+            echo ' FAILURE: CI Checks or Sonar Scan Failed!          '
+            echo '==================================================='
         }
     }
 }

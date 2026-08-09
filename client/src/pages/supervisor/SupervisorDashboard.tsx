@@ -22,6 +22,47 @@ type LearningPath = {
   description: string;
 };
 
+type SupervisorTab = 'progress' | 'assign';
+
+type TeamProgressCourse = {
+  courseId: string;
+  courseCode: string | null;
+  title: string;
+  duration: string | null;
+  order: number;
+  stageTitle: string | null;
+  stageOrder: number;
+  progress: number;
+  isCompleted: boolean;
+};
+
+type TeamProgressLearningPath = {
+  enrollmentId: string;
+  learningPathId: string;
+  title: string;
+  totalDuration: string | null;
+  status: string;
+  progress: number;
+  enrolledAt: string;
+  completedAt: string | null;
+  enrollmentSource: string | null;
+  totalCourses: number;
+  completedCourses: number;
+  courses: TeamProgressCourse[];
+};
+
+type TeamProgressLearner = {
+  employeeNumber: string;
+  name: string;
+  designation: string;
+  gradeName: string;
+  email: string;
+  totalLearningPaths: number;
+  completedLearningPaths: number;
+  averageProgress: number;
+  learningPaths: TeamProgressLearningPath[];
+};
+
 const getEmployeeDisplayName = (row: Record<string, unknown>) => {
   const employeeName = typeof row.employeeName === 'string' ? row.employeeName.trim() : '';
   if (employeeName) {
@@ -41,11 +82,15 @@ export function SupervisorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [learningPaths, setLearningPaths] = useState<LearningPath[]>([]);
+  const [teamProgress, setTeamProgress] = useState<TeamProgressLearner[]>([]);
   const [selectedLearningPathId, setSelectedLearningPathId] = useState('');
   const [selectedTeamNumbers, setSelectedTeamNumbers] = useState<string[]>([]);
   const [employeeNoSearch, setEmployeeNoSearch] = useState('');
   const [nameSearch, setNameSearch] = useState('');
   const [designationFilter, setDesignationFilter] = useState('ALL');
+  const [activeTab, setActiveTab] = useState<SupervisorTab>('progress');
+  const [expandedLearners, setExpandedLearners] = useState<string[]>([]);
+  const [expandedEnrollments, setExpandedEnrollments] = useState<string[]>([]);
   const statSkeletons = Array.from({ length: 2 }, (_, index) => index);
   const teamSkeletons = Array.from({ length: 4 }, (_, index) => index);
 
@@ -59,9 +104,10 @@ export function SupervisorDashboard() {
         return;
       }
 
-      const [teamResponse, learningPathResponse] = await Promise.all([
+      const [teamResponse, learningPathResponse, progressResponse] = await Promise.all([
         learnerApi.getTeam(token),
-        learnerApi.getLearningPaths(token)
+        learnerApi.getLearningPaths(token),
+        learnerApi.getTeamProgressDetails(token)
       ]);
 
       if (!teamResponse.isSupervisor) {
@@ -70,6 +116,7 @@ export function SupervisorDashboard() {
         showToast(message, 'error');
         setTeam([]);
         setLearningPaths([]);
+        setTeamProgress([]);
         return;
       }
 
@@ -83,6 +130,7 @@ export function SupervisorDashboard() {
         }))
       );
       setLearningPaths(learningPathResponse.learningPaths);
+      setTeamProgress(progressResponse.learners || []);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load supervisor dashboard.';
       setError(message);
@@ -97,11 +145,21 @@ export function SupervisorDashboard() {
   }, [load]);
 
   const stats = useMemo(() => {
+    const assignedPathCount = teamProgress.reduce(
+      (sum, learner) => sum + learner.totalLearningPaths,
+      0
+    );
+    const completedPathCount = teamProgress.reduce(
+      (sum, learner) => sum + learner.completedLearningPaths,
+      0
+    );
     return {
       teamCount: team.length,
-      availablePathCount: learningPaths.length
+      availablePathCount: learningPaths.length,
+      assignedPathCount,
+      completedPathCount
     };
-  }, [team.length, learningPaths.length]);
+  }, [team.length, learningPaths.length, teamProgress]);
 
   const designationOptions = useMemo(() => {
     const values = Array.from(
@@ -126,6 +184,11 @@ export function SupervisorDashboard() {
     });
   }, [designationFilter, employeeNoSearch, nameSearch, team]);
 
+  const filteredTeamProgress = useMemo(() => {
+    const filteredNumbers = new Set(filteredTeam.map((member) => member.employeeNumber));
+    return teamProgress.filter((learner) => filteredNumbers.has(learner.employeeNumber));
+  }, [filteredTeam, teamProgress]);
+
   const toggleTeamMember = (employeeNumber: string) => {
     setSelectedTeamNumbers((prev) =>
       prev.includes(employeeNumber)
@@ -146,6 +209,35 @@ export function SupervisorDashboard() {
   const clearAllFiltered = () => {
     const filteredSet = new Set(filteredTeam.map((member) => member.employeeNumber));
     setSelectedTeamNumbers((prev) => prev.filter((employeeNumber) => !filteredSet.has(employeeNumber)));
+  };
+
+  const toggleExpandedLearner = (employeeNumber: string) => {
+    setExpandedLearners((prev) =>
+      prev.includes(employeeNumber)
+        ? prev.filter((value) => value !== employeeNumber)
+        : [...prev, employeeNumber]
+    );
+  };
+
+  const toggleExpandedEnrollment = (enrollmentId: string) => {
+    setExpandedEnrollments((prev) =>
+      prev.includes(enrollmentId)
+        ? prev.filter((value) => value !== enrollmentId)
+        : [...prev, enrollmentId]
+    );
+  };
+
+  const getStatusClassName = (status: string) => {
+    if (status === 'COMPLETED') {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    if (status === 'IN_PROGRESS') {
+      return 'bg-blue-50 text-blue-700 border-blue-200';
+    }
+    if (status === 'OVERDUE') {
+      return 'bg-red-50 text-red-700 border-red-200';
+    }
+    return 'bg-slate-50 text-slate-600 border-slate-200';
   };
 
   const handleAssign = async () => {
@@ -181,7 +273,7 @@ export function SupervisorDashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Supervisor Dashboard</h1>
-        <p className="text-slate-500">Assign learning paths to team learners under your supervision.</p>
+        <p className="text-slate-500">Track subordinate learning progress and assign learning paths.</p>
       </div>
 
       {error ? <Card className="text-red-600">{error}</Card> : null}
@@ -207,6 +299,194 @@ export function SupervisorDashboard() {
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab('progress')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'progress'
+              ? 'bg-primary-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          Subordinates Progress
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('assign')}
+          className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            activeTab === 'assign'
+              ? 'bg-primary-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          Assign Learning Paths
+        </button>
+      </div>
+
+      {activeTab === 'progress' ? (
+      <Card title="Subordinates Progress" bodyClassName="p-4">
+        {loading ? (
+          <div className="space-y-3">
+            {teamSkeletons.map((index) => (
+              <div key={`progress-skeleton-${index}`} className="rounded-lg border border-slate-200 p-4">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="mt-3 h-3 w-full" />
+                <Skeleton className="mt-3 h-4 w-72" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-lg border border-slate-200 p-3">
+              <Input
+                label="Search by Employee No"
+                value={employeeNoSearch}
+                onChange={(event) => setEmployeeNoSearch(event.target.value)}
+                placeholder="e.g. 011338"
+              />
+              <Input
+                label="Search by Name"
+                value={nameSearch}
+                onChange={(event) => setNameSearch(event.target.value)}
+                placeholder="e.g. Tennakoon"
+              />
+              <Select
+                label="Filter by Designation"
+                value={designationFilter}
+                onChange={(event) => setDesignationFilter(event.target.value)}
+                options={designationOptions.map((option) => ({ value: option, label: option }))}
+              />
+            </div>
+            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              Click a subordinate to view assigned learning paths, then click “Show Courses” on a learning path to view course progress.
+            </div>
+            {filteredTeamProgress.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No assigned learning path progress found for the current subordinate filters.
+              </p>
+            ) : filteredTeamProgress.map((learner) => {
+              const learnerExpanded = expandedLearners.includes(learner.employeeNumber);
+              return (
+                <div key={learner.employeeNumber} className="rounded-lg border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpandedLearner(learner.employeeNumber)}
+                    className="flex w-full flex-col gap-3 px-4 py-4 text-left hover:bg-slate-50 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900">{learner.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {learner.employeeNumber} | {learner.designation || '-'} | {learner.gradeName || '-'}
+                      </p>
+                    </div>
+                    <div className="min-w-full md:min-w-[320px]">
+                      <div className="flex items-center justify-between text-xs text-slate-500">
+                        <span>{learner.completedLearningPaths}/{learner.totalLearningPaths} LP completed</span>
+                        <span className="font-semibold text-slate-700">{learner.averageProgress}%</span>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full bg-slate-200">
+                        <div
+                          className="h-2 rounded-full bg-primary-500"
+                          style={{ width: `${Math.min(100, Math.max(0, learner.averageProgress))}%` }}
+                        />
+                      </div>
+                    </div>
+                  </button>
+
+                  {learnerExpanded ? (
+                    <div className="space-y-3 border-t border-slate-100 bg-white p-4">
+                      {learner.learningPaths.length === 0 ? (
+                        <p className="text-sm text-slate-500">No learning paths assigned yet.</p>
+                      ) : (
+                        learner.learningPaths.map((path) => {
+                          const enrollmentExpanded = expandedEnrollments.includes(path.enrollmentId);
+                          return (
+                            <div key={path.enrollmentId} className="rounded-md border border-slate-200 p-3">
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div>
+                                  <p className="font-medium text-slate-900">{path.title}</p>
+                                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                                    <span className={`rounded-full border px-2 py-0.5 ${getStatusClassName(path.status)}`}>
+                                      {path.status.replace('_', ' ')}
+                                    </span>
+                                    <span>{path.completedCourses}/{path.totalCourses} courses completed</span>
+                                    {path.totalDuration ? <span>{path.totalDuration}</span> : null}
+                                  </div>
+                                </div>
+                                <div className="min-w-full md:min-w-[240px]">
+                                  <div className="flex items-center justify-between text-xs text-slate-500">
+                                    <span>Progress</span>
+                                    <span className="font-semibold text-slate-700">{path.progress}%</span>
+                                  </div>
+                                  <div className="mt-2 h-2 rounded-full bg-slate-200">
+                                    <div
+                                      className="h-2 rounded-full bg-emerald-500"
+                                      style={{ width: `${Math.min(100, Math.max(0, path.progress))}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="mt-3"
+                                onClick={() => toggleExpandedEnrollment(path.enrollmentId)}
+                              >
+                                {enrollmentExpanded ? 'Hide Courses' : 'Show Courses'}
+                              </Button>
+                              {enrollmentExpanded ? (
+                                <div className="mt-3 overflow-auto">
+                                  {path.courses.length === 0 ? (
+                                    <p className="text-sm text-slate-500">No courses configured for this learning path.</p>
+                                  ) : (
+                                    <div className="min-w-[680px]">
+                                      <div className="grid grid-cols-[0.6fr_1.5fr_1fr_0.7fr_0.7fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                        <span>Order</span>
+                                        <span>Course</span>
+                                        <span>Stage</span>
+                                        <span>Status</span>
+                                        <span>Progress</span>
+                                      </div>
+                                      {path.courses.map((course) => (
+                                        <div
+                                          key={`${path.enrollmentId}-${course.courseId}-${course.order}`}
+                                          className="grid grid-cols-[0.6fr_1.5fr_1fr_0.7fr_0.7fr] gap-3 border-b border-slate-100 px-3 py-2 text-sm text-slate-600"
+                                        >
+                                          <span>{course.order || '-'}</span>
+                                          <span>
+                                            <span className="font-medium text-slate-800">{course.title}</span>
+                                            {course.courseCode ? (
+                                              <span className="block text-xs text-slate-400">{course.courseCode}</span>
+                                            ) : null}
+                                          </span>
+                                          <span>{course.stageTitle || '-'}</span>
+                                          <span className={course.isCompleted ? 'text-emerald-600' : 'text-slate-500'}>
+                                            {course.isCompleted ? 'Completed' : 'Pending'}
+                                          </span>
+                                          <span>{course.progress}%</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+      ) : null}
+
+      {activeTab === 'assign' ? (
       <Card title="Assign Learning Paths" bodyClassName="p-4">
         <div className="space-y-4">
           {loading ? (
@@ -320,6 +600,7 @@ export function SupervisorDashboard() {
           </Button>
         </div>
       </Card>
+      ) : null}
     </div>
   );
 }

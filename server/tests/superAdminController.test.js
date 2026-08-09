@@ -2270,6 +2270,88 @@ describe("CREATE EMPLOYEE", () => {
   });
 });
 
+// getEnrollmentCourses testing
+
+describe("GET ENROLLMENT COURSES", () => {
+  it("should successfully fetch courses for an enrollment (modern schema)", async () => {
+    const mockCourses = [
+      {
+        courseId: "c1",
+        title: "Course 1",
+        order: 1,
+        stageTitle: "Stage 1",
+        stageOrder: 1,
+        progress: 100,
+        isCompleted: true,
+      },
+    ];
+    query
+
+      .mockResolvedValueOnce({ rows: [{ present: true }] })
+
+      .mockResolvedValueOnce({ rows: [{ present: true }] })
+
+      .mockResolvedValueOnce({ rows: [{ present: true }] })
+
+      .mockResolvedValueOnce({ rows: mockCourses });
+
+    const req = createMockReq({ params: { enrollmentId: "enr-123" } });
+    const res = createMockRes();
+
+    await superAdminController.getEnrollmentCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ courses: mockCourses });
+
+    expect(query).toHaveBeenCalledTimes(4);
+  });
+
+  it("should successfully fetch courses for an enrollment (legacy schema fallback)", async () => {
+    const mockCourses = [
+      {
+        courseId: "code-1",
+        title: "Legacy Course",
+        order: 1,
+        stageTitle: "Stage 1",
+        stageOrder: 1,
+        progress: 50,
+        isCompleted: false,
+      },
+    ];
+    query
+
+      .mockResolvedValueOnce({ rows: [{ present: false }] })
+      .mockResolvedValueOnce({ rows: mockCourses });
+
+    const req = createMockReq({ params: { enrollmentId: "enr-123" } });
+    const res = createMockRes();
+
+    await superAdminController.getEnrollmentCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ courses: mockCourses });
+
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("should return 500 on database error", async () => {
+    query.mockRejectedValueOnce(new Error("DB Connection Error"));
+
+    const req = createMockReq({ params: { enrollmentId: "enr-123" } });
+    const res = createMockRes();
+
+    await superAdminController.getEnrollmentCourses(req, res);
+
+    expect(res.statusCode).toBe(500);
+    expect(sendError).toHaveBeenCalledWith(
+      res,
+      500,
+      "INTERNAL_ERROR",
+      "Database Error: DB Connection Error",
+    );
+  });
+});
+
 // Authorization gaps
 
 describe("SUPERADMIN AUTHORIZATION GAPS", () => {
