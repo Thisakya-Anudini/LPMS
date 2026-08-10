@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Globe, Lock } from "lucide-react";
+import { BookOpen, CheckCircle2, Globe, Lock, Search } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
@@ -81,15 +81,93 @@ export function AdminLearningPathsPage() {
   }, [query, categoryFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPaths.length / PAGE_SIZE));
-  const pageNumbers = useMemo(
-    () => Array.from({ length: totalPages }, (_, index) => index + 1),
-    [totalPages],
-  );
+  const pageNumbers = useMemo(() => {
+    const windowSize = 5;
+    const halfWindow = Math.floor(windowSize / 2);
+    const start = Math.max(1, Math.min(page - halfWindow, totalPages - windowSize + 1));
+    const end = Math.min(totalPages, start + windowSize - 1);
+
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [page, totalPages]);
 
   const paginatedPaths = useMemo(() => {
     const startIndex = (page - 1) * PAGE_SIZE;
     return filteredPaths.slice(startIndex, startIndex + PAGE_SIZE);
   }, [filteredPaths, page]);
+
+  const pathStats = useMemo(
+    () => ({
+      total: paths.length,
+      public: paths.filter((path) => path.category === "PUBLIC").length,
+      restricted: paths.filter((path) => path.category === "RESTRICTED").length,
+      active: paths.filter((path) => path.status === "ACTIVE").length,
+    }),
+    [paths],
+  );
+
+  const pageStart = filteredPaths.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(page * PAGE_SIZE, filteredPaths.length);
+  const pagination = (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-slate-500">
+      <div>
+        Showing <span className="font-medium text-slate-700">{pageStart}</span>
+        {pageEnd > 0 ? (
+          <>
+            –<span className="font-medium text-slate-700">{pageEnd}</span>
+          </>
+        ) : null}{" "}
+        of <span className="font-medium text-slate-700">{filteredPaths.length}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 justify-end">
+        <button
+          type="button"
+          onClick={() => setPage(1)}
+          disabled={page === 1}
+          className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          First
+        </button>
+        <button
+          type="button"
+          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+          disabled={page === 1}
+          className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          &lt;
+        </button>
+        {pageNumbers.map((pageNumber) => (
+          <button
+            key={pageNumber}
+            type="button"
+            onClick={() => setPage(pageNumber)}
+            className={`h-9 min-w-[2.25rem] rounded-full border px-2 text-sm transition-colors duration-200 ${
+              pageNumber === page
+                ? "border-primary-600 bg-primary-600 text-white shadow-sm"
+                : "border-secondary-200 bg-white text-slate-700 hover:bg-secondary-100"
+            }`}
+          >
+            {pageNumber}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+          disabled={page === totalPages}
+          className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          &gt;
+        </button>
+        <button
+          type="button"
+          onClick={() => setPage(totalPages)}
+          disabled={page === totalPages}
+          className="h-9 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Last
+        </button>
+      </div>
+    </div>
+  );
 
   const handleResetFilters = () => {
     setQuery("");
@@ -103,71 +181,41 @@ export function AdminLearningPathsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Learning Paths</h1>
+      <div className="rounded-2xl border border-primary-100 bg-gradient-to-r from-primary-50 via-white to-secondary-50 p-6 shadow-soft">
+        <p className="text-sm font-semibold uppercase tracking-wide text-primary-700">
+          Super Admin
+        </p>
+        <h1 className="mt-1 text-3xl font-bold text-slate-900">Learning Paths</h1>
         <p className="text-slate-500">
           Browse learning paths, included courses, and enrolled learner
           progress.
         </p>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Total paths", value: pathStats.total, icon: BookOpen, color: "text-primary-600" },
+          { label: "Public", value: pathStats.public, icon: Globe, color: "text-blue-600" },
+          { label: "Restricted", value: pathStats.restricted, icon: Lock, color: "text-rose-600" },
+          { label: "Active", value: pathStats.active, icon: CheckCircle2, color: "text-success-600" },
+        ].map((stat) => (
+          <Card key={stat.label} className="p-0" bodyClassName="p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-slate-500">{stat.label}</p>
+                <p className="mt-1 text-2xl font-bold text-slate-900">{stat.value}</p>
+              </div>
+              <stat.icon className={`h-8 w-8 ${stat.color}`} />
+            </div>
+          </Card>
+        ))}
+      </div>
+
       <Card
         title="All Learning Paths"
         className="max-h-[calc(100vh-12rem)] flex flex-col"
         bodyClassName="min-h-0 flex-1"
-        footer={
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-slate-500">
-            <div>Page {page} of {totalPages}</div>
-            <div className="flex flex-wrap items-center gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setPage(1)}
-                disabled={page === 1}
-                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                First
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                disabled={page === 1}
-                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                &lt;
-              </button>
-              {pageNumbers.map((pageNumber) => (
-                <button
-                  key={pageNumber}
-                  type="button"
-                  onClick={() => setPage(pageNumber)}
-                  className={`h-8 min-w-[2rem] rounded-full border px-2 text-sm transition-colors duration-200 ${
-                    pageNumber === page
-                      ? 'border-primary-600 bg-primary-600 text-white'
-                      : 'border-secondary-200 bg-white text-slate-700 hover:bg-secondary-100'
-                  }`}
-                >
-                  {pageNumber}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={page === totalPages}
-                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                &gt;
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage(totalPages)}
-                disabled={page === totalPages}
-                className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Last
-              </button>
-            </div>
-          </div>
-        }
+        footer={pagination}
       >
         <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full max-w-md">
@@ -224,14 +272,16 @@ export function AdminLearningPathsPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="px-3 py-3 text-slate-500">
+                  <td colSpan={3} className="px-6 py-10 text-center text-slate-500">
                     Loading learning paths...
                   </td>
                 </tr>
               ) : filteredPaths.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-3 py-3 text-slate-500">
-                    No learning paths found.
+                  <td colSpan={3} className="px-6 py-12 text-center text-slate-500">
+                    <BookOpen className="mx-auto mb-3 h-8 w-8 text-slate-300" />
+                    <p className="font-medium text-slate-700">No learning paths found</p>
+                    <p className="mt-1 text-sm">Try changing the search or filters.</p>
                   </td>
                 </tr>
               ) : (
@@ -239,12 +289,15 @@ export function AdminLearningPathsPage() {
                   <tr
                     key={path.id}
                     onClick={() => openPathDetail(path.id)}
-                    className="hover:bg-slate-50 cursor-pointer"
+                    className="cursor-pointer transition hover:bg-primary-50/40"
                   >
-                    <td className="px-3 py-2 font-medium text-slate-900">
-                      {path.title}
+                    <td className="px-6 py-4">
+                      <p className="font-semibold text-slate-900">{path.title}</p>
+                      <p className="mt-1 line-clamp-1 max-w-3xl text-xs text-slate-500">
+                        {path.description || "No description provided."}
+                      </p>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-6 py-4">
                       <Badge
                         variant={
                           path.category === "RESTRICTED" ? "danger" : "success"
@@ -260,7 +313,7 @@ export function AdminLearningPathsPage() {
                         </span>
                       </Badge>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-6 py-4">
                       <Badge
                         variant={
                           path.status === "ACTIVE"
@@ -280,57 +333,6 @@ export function AdminLearningPathsPage() {
           </table>
         </div>
 
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm text-slate-500">
-          <div>Page {page} of {totalPages}</div>
-          <div className="flex flex-wrap items-center gap-2 justify-end">
-            <button
-              type="button"
-              onClick={() => setPage(1)}
-              disabled={page === 1}
-              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              First
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-              disabled={page === 1}
-              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              &lt;
-            </button>
-            {pageNumbers.map((pageNumber) => (
-              <button
-                key={pageNumber}
-                type="button"
-                onClick={() => setPage(pageNumber)}
-                className={`h-8 min-w-[2rem] rounded-full border px-2 text-sm transition-colors duration-200 ${
-                  pageNumber === page
-                    ? 'border-primary-600 bg-primary-600 text-white'
-                    : 'border-secondary-200 bg-white text-slate-700 hover:bg-secondary-100'
-                }`}
-              >
-                {pageNumber}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-              disabled={page === totalPages}
-              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              &gt;
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage(totalPages)}
-              disabled={page === totalPages}
-              className="h-8 rounded-lg border border-secondary-200 bg-white px-3 text-sm text-slate-700 transition hover:bg-secondary-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Last
-            </button>
-          </div>
-        </div>
       </Card>
     </div>
   );
