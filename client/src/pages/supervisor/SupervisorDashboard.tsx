@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Users, BookOpen, ListChecks, BookPlus } from "lucide-react";
+import { Users, BookOpen, ListChecks, BookPlus, User } from "lucide-react";
 import { learnerApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -455,31 +455,54 @@ export function SupervisorDashboard() {
                         onClick={() =>
                           toggleExpandedLearner(learner.employeeNumber)
                         }
-                        className="flex w-full flex-col gap-3 px-4 py-4 text-left hover:bg-slate-50 md:flex-row md:items-center md:justify-between"
+                        className="flex w-full flex-col gap-4 p-3 text-left transition-colors hover:bg-slate-50 md:flex-row md:items-center md:justify-between"
                       >
-                        <div>
-                          <p className="font-semibold text-slate-900">
-                            {learner.name}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {learner.employeeNumber} |{" "}
-                            {learner.designation || "-"} |{" "}
-                            {learner.gradeName || "-"}
-                          </p>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700 ring-4 ring-primary-50">
+                            <User size={20} />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-slate-900">
+                              {learner.name}
+                            </p>
+                            <p className="text-xs font-medium text-slate-500">
+                              {learner.employeeNumber}{" "}
+                              <span className="mx-1 text-slate-300">|</span>{" "}
+                              {learner.designation || "-"}{" "}
+                              <span className="mx-1 text-slate-300">|</span>{" "}
+                              {learner.gradeName || "-"}
+                            </p>
+                          </div>
                         </div>
-                        <div className="min-w-full md:min-w-[320px]">
-                          <div className="flex items-center justify-between text-xs text-slate-500">
-                            <span>
+                        <div
+                          className={`min-w-full rounded-lg px-4 py-3 md:min-w-[320px] ${
+                            learner.averageProgress === 100
+                              ? "bg-emerald-50 border border-emerald-100"
+                              : "bg-indigo-50/50 border border-indigo-100/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs font-medium">
+                            <span
+                              className={
+                                learner.averageProgress === 100
+                                  ? "text-emerald-700"
+                                  : "text-indigo-700"
+                              }
+                            >
                               {learner.completedLearningPaths}/
                               {learner.totalLearningPaths} LP completed
                             </span>
-                            <span className="font-semibold text-slate-700">
+                            <span
+                              className={`font-bold ${learner.averageProgress === 100 ? "text-emerald-700" : "text-indigo-900"}`}
+                            >
                               {learner.averageProgress}%
                             </span>
                           </div>
-                          <div className="mt-2 h-2 rounded-full bg-slate-200">
+                          <div
+                            className={`mt-2 h-2 rounded-full ${learner.averageProgress === 100 ? "bg-emerald-200" : "bg-indigo-200"}`}
+                          >
                             <div
-                              className="h-2 rounded-full bg-primary-500"
+                              className={`h-2 rounded-full ${learner.averageProgress === 100 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-indigo-500"}`}
                               style={{
                                 width: `${Math.min(100, Math.max(0, learner.averageProgress))}%`,
                               }}
