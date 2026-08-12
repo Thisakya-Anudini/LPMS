@@ -477,8 +477,8 @@ export function SupervisorDashboard() {
                         <div
                           className={`min-w-full rounded-lg px-4 py-3 md:min-w-[320px] ${
                             learner.averageProgress === 100
-                              ? "bg-emerald-50 border border-emerald-100"
-                              : "bg-indigo-50/50 border border-indigo-100/50"
+                              ? "bg-emerald-50/80 border border-emerald-100"
+                              : "bg-slate-50 border border-slate-200"
                           }`}
                         >
                           <div className="flex items-center justify-between text-xs font-medium">
@@ -486,23 +486,23 @@ export function SupervisorDashboard() {
                               className={
                                 learner.averageProgress === 100
                                   ? "text-emerald-700"
-                                  : "text-indigo-700"
+                                  : "text-slate-600"
                               }
                             >
                               {learner.completedLearningPaths}/
                               {learner.totalLearningPaths} LP completed
                             </span>
                             <span
-                              className={`font-bold ${learner.averageProgress === 100 ? "text-emerald-700" : "text-indigo-900"}`}
+                              className={`font-bold ${learner.averageProgress === 100 ? "text-emerald-700" : "text-slate-900"}`}
                             >
                               {learner.averageProgress}%
                             </span>
                           </div>
                           <div
-                            className={`mt-2 h-2 rounded-full ${learner.averageProgress === 100 ? "bg-emerald-200" : "bg-indigo-200"}`}
+                            className={`mt-2 h-2 rounded-full ${learner.averageProgress === 100 ? "bg-emerald-200" : "bg-slate-200"}`}
                           >
                             <div
-                              className={`h-2 rounded-full ${learner.averageProgress === 100 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-indigo-500"}`}
+                              className={`h-2 rounded-full ${learner.averageProgress === 100 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" : "bg-blue-500"}`}
                               style={{
                                 width: `${Math.min(100, Math.max(0, learner.averageProgress))}%`,
                               }}
@@ -546,16 +546,30 @@ export function SupervisorDashboard() {
                                         ) : null}
                                       </div>
                                     </div>
-                                    <div className="min-w-full md:min-w-[240px]">
-                                      <div className="flex items-center justify-between text-xs text-slate-500">
-                                        <span>Progress</span>
-                                        <span className="font-semibold text-slate-700">
+                                    <div
+                                      className={`min-w-full rounded-lg px-4 py-2 md:min-w-[240px] ${path.progress === 100 ? "bg-emerald-50/50 border" : "bg-sky-50/50 border"}`}
+                                    >
+                                      <div className="flex items-center justify-between text-xs font-medium">
+                                        <span
+                                          className={
+                                            path.progress === 100
+                                              ? "text-emerald-700"
+                                              : "text-sky-700"
+                                          }
+                                        >
+                                          Progress
+                                        </span>
+                                        <span
+                                          className={`font-bold ${path.progress === 100 ? "text-emerald-700" : "text-sky-900"}`}
+                                        >
                                           {path.progress}%
                                         </span>
                                       </div>
-                                      <div className="mt-2 h-2 rounded-full bg-slate-200">
+                                      <div
+                                        className={`mt-1.5 h-1.5 rounded-full ${path.progress === 100 ? "bg-emerald-200" : "bg-sky-200"}`}
+                                      >
                                         <div
-                                          className="h-2 rounded-full bg-emerald-500"
+                                          className={`h-1.5 rounded-full ${path.progress === 100 ? "bg-emerald-500" : "bg-sky-500"}`}
                                           style={{
                                             width: `${Math.min(100, Math.max(0, path.progress))}%`,
                                           }}
@@ -624,7 +638,19 @@ export function SupervisorDashboard() {
                                                   ? "Completed"
                                                   : "Pending"}
                                               </span>
-                                              <span>{course.progress}%</span>
+                                              <div className="flex items-center gap-2">
+                                                <div className="flex-1 h-1.5 rounded-full bg-slate-200">
+                                                  <div
+                                                    className={`h-1.5 rounded-full ${course.isCompleted ? "bg-emerald-500" : "bg-primary-400"}`}
+                                                    style={{
+                                                      width: `${Math.min(100, Math.max(0, course.progress))}%`,
+                                                    }}
+                                                  />
+                                                </div>
+                                                <span className="w-8 text-right font-medium">
+                                                  {course.progress}%
+                                                </span>
+                                              </div>
                                             </div>
                                           ))}
                                         </div>
