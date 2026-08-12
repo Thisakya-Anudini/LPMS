@@ -44,7 +44,31 @@ export const getErpSubordinates = async (req, res) => {
   }
 
   try {
-    const data = await fetchEmployeeSubordinates(employeeNo.trim());
+    const response = await fetchEmployeeSubordinates(employeeNo.trim());
+
+    if (response && Array.isArray(response.data)) {
+      const enrichedData = await Promise.all(
+        response.data.map(async (subordinate) => {
+          if (!subordinate.employeeNumber) return subordinate;
+          try {
+            const detailRes = await fetchEmployeeDetailsForServiceNo(subordinate.employeeNumber);
+            if (detailRes && Array.isArray(detailRes.data) && detailRes.data.length > 0) {
+              const details = detailRes.data[0];
+              return {
+                ...subordinate,
+                orgName: details.orgName || null,
+                empSection: details.empSection || null,
+                empDivision: details.empDivision || null
+              };
+            }
+          } catch (err) {
+            console.error(`Failed to fetch details for subordinate ${subordinate.employeeNumber}`, err);
+          }
+          return subordinate;
+        })
+      );
+      response.data = enrichedData;
+    }
 
     await logAudit({
       actorPrincipalId: req.user.id,
@@ -53,7 +77,7 @@ export const getErpSubordinates = async (req, res) => {
       metadata: { employeeNo }
     });
 
-    return res.status(200).json(data);
+    return res.status(200).json(response);
   } catch (error) {
     return sendError(
       res,

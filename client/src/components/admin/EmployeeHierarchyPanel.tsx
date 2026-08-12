@@ -20,6 +20,7 @@ type HierarchyEmployee = {
   employeeNumber: string;
   name: string;
   designation: string;
+  orgName?: string;
 };
 
 export type SelectedHierarchyEmployee = HierarchyEmployee;
@@ -58,8 +59,8 @@ const mapHierarchyEmployee = (row: Record<string, unknown>) => {
   return {
     employeeNumber,
     name: normalizeHierarchyName(row, employeeNumber),
-    designation:
-      String(row.designation || row.designationName || "").trim() || "Employee",
+    designation: String(row.designation || row.designationName || "").trim() || "Employee",
+    orgName: String(row.orgName || row.empSection || row.empDivision || "").trim()
   };
 };
 
@@ -164,8 +165,8 @@ export function EmployeeHierarchyPanel({
         );
         const rows = Array.isArray(response.data)
           ? response.data
-              .map((row) => mapHierarchyEmployee(row))
-              .filter((row) => row.employeeNumber.length > 0)
+            .map((row) => mapHierarchyEmployee(row))
+            .filter((row) => row.employeeNumber.length > 0)
           : [];
 
         setHierarchyChildrenByEmployee((prev) => ({
@@ -218,17 +219,17 @@ export function EmployeeHierarchyPanel({
           : {};
       const childRows = Array.isArray(childrenResponse.data)
         ? childrenResponse.data
-            .map((row) => mapHierarchyEmployee(row))
-            .filter((row) => row.employeeNumber.length > 0)
+          .map((row) => mapHierarchyEmployee(row))
+          .filter((row) => row.employeeNumber.length > 0)
         : [];
 
       setHierarchyRoot({
         employeeNumber: ROOT_EMPLOYEE_NO,
         name: normalizeHierarchyName(detailRow, ROOT_EMPLOYEE_NO),
         designation:
-          String(
-            detailRow.designation || detailRow.designationName || "",
-          ).trim() || "Chief Executive Officer",
+          String(detailRow.designation || detailRow.designationName || "").trim() ||
+          "Chief Executive Officer",
+        orgName: String(detailRow.orgName || "").trim()
       });
       setHierarchyChildrenByEmployee({
         [ROOT_EMPLOYEE_NO]: {
@@ -320,7 +321,7 @@ export function EmployeeHierarchyPanel({
               isRoot
                 ? "border-amber-200 bg-amber-100 text-amber-700"
                 : depthStyle.iconWrapClass
-            }`}
+              }`}
             disabled={!canExpand && !nodeState?.loading}
             aria-label={`${isExpanded ? "Collapse" : "Expand"} ${employee.name}`}
           >
@@ -341,6 +342,9 @@ export function EmployeeHierarchyPanel({
             <p className="truncate text-sm leading-4 text-slate-500">
               {employee.designation}
             </p>
+            {employee.orgName ? (
+              <p className="truncate text-xs leading-4 text-slate-400">{employee.orgName}</p>
+            ) : null}
           </button>
 
           {childCount !== null ? (
