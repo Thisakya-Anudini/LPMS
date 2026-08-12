@@ -248,9 +248,9 @@ export function AdminLearnersPage() {
         </div>
 
         <div className="mx-6 overflow-hidden rounded-xl border border-slate-200">
-          <div className="overflow-x-auto">
+          <div className="max-h-[32rem] overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
             <table className="w-full text-sm text-left">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-sm">
                 <tr>
                   <th className="px-3 py-2">Learner</th>
                   <th className="px-3 py-2">Employee No</th>
