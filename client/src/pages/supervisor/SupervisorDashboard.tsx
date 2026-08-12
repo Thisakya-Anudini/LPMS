@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Users, BookOpen, ListChecks, BookPlus, User } from "lucide-react";
+import {
+  Users,
+  BookOpen,
+  ListChecks,
+  BookPlus,
+  User,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { learnerApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
@@ -247,15 +255,15 @@ export function SupervisorDashboard() {
 
   const getStatusClassName = (status: string) => {
     if (status === "COMPLETED") {
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      return "bg-emerald-100/50 text-emerald-800 border-emerald-200 font-semibold";
     }
     if (status === "IN_PROGRESS") {
-      return "bg-blue-50 text-blue-700 border-blue-200";
+      return "bg-blue-100/50 text-blue-800 border-blue-200 font-semibold";
     }
     if (status === "OVERDUE") {
-      return "bg-red-50 text-red-700 border-red-200";
+      return "bg-red-100/50 text-red-800 border-red-200 font-semibold";
     }
-    return "bg-slate-50 text-slate-600 border-slate-200";
+    return "bg-slate-100/50 text-slate-700 border-slate-200 font-semibold";
   };
 
   const handleAssign = async () => {
@@ -581,17 +589,32 @@ export function SupervisorDashboard() {
                                     type="button"
                                     size="sm"
                                     variant="outline"
-                                    className="mt-3"
+                                    className="mt-3 group transition-all"
                                     onClick={() =>
                                       toggleExpandedEnrollment(
                                         path.enrollmentId,
                                       )
                                     }
                                   >
-                                    {enrollmentExpanded
-                                      ? "Hide Courses"
-                                      : "Show Courses"}
+                                    {enrollmentExpanded ? (
+                                      <>
+                                        Hide Courses
+                                        <ChevronUp
+                                          size={16}
+                                          className="text-slate-400 group-hover:text-slate-600 transition-colors"
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        Show Courses
+                                        <ChevronDown
+                                          size={16}
+                                          className="text-slate-400 group-hover:text-slate-600 transition-colors"
+                                        />
+                                      </>
+                                    )}
                                   </Button>
+
                                   {enrollmentExpanded ? (
                                     <div className="mt-3 overflow-auto">
                                       {path.courses.length === 0 ? (
