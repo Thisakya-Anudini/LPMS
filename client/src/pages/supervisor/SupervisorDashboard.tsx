@@ -212,6 +212,12 @@ export function SupervisorDashboard() {
     );
   }, [filteredTeam, teamProgress]);
 
+  const handleResetFilters = () => {
+    setEmployeeNoSearch("");
+    setNameSearch("");
+    setDesignationFilter("ALL");
+  };
+
   const toggleTeamMember = (employeeNumber: string) => {
     setSelectedTeamNumbers((prev) =>
       prev.includes(employeeNumber)
@@ -417,29 +423,50 @@ export function SupervisorDashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 rounded-lg border border-slate-200 p-3">
-                <Input
-                  label="Search by Employee No"
-                  value={employeeNoSearch}
-                  onChange={(event) => setEmployeeNoSearch(event.target.value)}
-                  placeholder="e.g. 011338"
-                />
-                <Input
-                  label="Search by Name"
-                  value={nameSearch}
-                  onChange={(event) => setNameSearch(event.target.value)}
-                  placeholder="e.g. Tennakoon"
-                />
-                <Select
-                  label="Filter by Designation"
-                  value={designationFilter}
-                  onChange={(event) => setDesignationFilter(event.target.value)}
-                  options={designationOptions.map((option) => ({
-                    value: option,
-                    label: option,
-                  }))}
-                />
+              <div className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Input
+                    label="Search by Employee No"
+                    value={employeeNoSearch}
+                    onChange={(event) =>
+                      setEmployeeNoSearch(event.target.value)
+                    }
+                    placeholder="e.g. 011338"
+                  />
+                  <Input
+                    label="Search by Name"
+                    value={nameSearch}
+                    onChange={(event) => setNameSearch(event.target.value)}
+                    placeholder="e.g. Tennakoon"
+                  />
+                  <Select
+                    label="Filter by Designation"
+                    value={designationFilter}
+                    onChange={(event) =>
+                      setDesignationFilter(event.target.value)
+                    }
+                    options={designationOptions.map((option) => ({
+                      value: option,
+                      label: option,
+                    }))}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetFilters}
+                    disabled={
+                      !employeeNoSearch &&
+                      !nameSearch &&
+                      designationFilter === "ALL"
+                    }
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
               </div>
+
               <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
                 Click a subordinate to view assigned learning paths, then click
                 “Show Courses” on a learning path to view course progress.
@@ -726,28 +753,48 @@ export function SupervisorDashboard() {
             )}
 
             <div className="max-h-80 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-2 border-b border-slate-200 mb-2">
-                <Input
-                  label="Search by Employee No"
-                  value={employeeNoSearch}
-                  onChange={(event) => setEmployeeNoSearch(event.target.value)}
-                  placeholder="e.g. 011338"
-                />
-                <Input
-                  label="Search by Name"
-                  value={nameSearch}
-                  onChange={(event) => setNameSearch(event.target.value)}
-                  placeholder="e.g. Tennakoon"
-                />
-                <Select
-                  label="Filter by Designation"
-                  value={designationFilter}
-                  onChange={(event) => setDesignationFilter(event.target.value)}
-                  options={designationOptions.map((option) => ({
-                    value: option,
-                    label: option,
-                  }))}
-                />
+              <div className="flex flex-col gap-3 border-b border-slate-200 p-2 mb-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Input
+                    label="Search by Employee No"
+                    value={employeeNoSearch}
+                    onChange={(event) =>
+                      setEmployeeNoSearch(event.target.value)
+                    }
+                    placeholder="e.g. 011338"
+                  />
+                  <Input
+                    label="Search by Name"
+                    value={nameSearch}
+                    onChange={(event) => setNameSearch(event.target.value)}
+                    placeholder="e.g. Tennakoon"
+                  />
+                  <Select
+                    label="Filter by Designation"
+                    value={designationFilter}
+                    onChange={(event) =>
+                      setDesignationFilter(event.target.value)
+                    }
+                    options={designationOptions.map((option) => ({
+                      value: option,
+                      label: option,
+                    }))}
+                  />
+                </div>
+                <div className="flex justify-end pb-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleResetFilters}
+                    disabled={
+                      !employeeNoSearch &&
+                      !nameSearch &&
+                      designationFilter === "ALL"
+                    }
+                  >
+                    Reset Filters
+                  </Button>
+                </div>
               </div>
 
               <div className="flex items-center justify-between px-2 pb-2">
