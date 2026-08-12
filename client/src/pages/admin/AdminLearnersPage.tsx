@@ -256,7 +256,7 @@ export function AdminLearnersPage() {
                   <th className="px-3 py-2">Employee No</th>
                   <th className="px-3 py-2">Designation</th>
                   <th className="px-3 py-2">Learning progress</th>
-                  <th className="px-3 py-2"><span className="sr-only">View learner</span></th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
