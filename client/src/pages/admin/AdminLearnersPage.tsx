@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, Filter, Search, SlidersHorizontal, Users, X } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Filter, Search, SlidersHorizontal, UserRound, Users, X } from 'lucide-react';
 import { superAdminApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -247,16 +247,16 @@ export function AdminLearnersPage() {
           </div>
         </div>
 
-        <div className="mx-6 overflow-hidden rounded-xl border border-slate-200">
-          <div className="overflow-x-auto">
+        <div className="mx-3 overflow-hidden rounded-xl border border-slate-200 sm:mx-4">
+          <div className="max-h-[32rem] overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
             <table className="w-full text-sm text-left">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-sm">
                 <tr>
                   <th className="px-3 py-2">Learner</th>
                   <th className="px-3 py-2">Employee No</th>
                   <th className="px-3 py-2">Designation</th>
                   <th className="px-3 py-2">Learning progress</th>
-                  <th className="px-3 py-2"><span className="sr-only">View learner</span></th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -293,13 +293,13 @@ export function AdminLearnersPage() {
                       onClick={() => openLearnerDetails(learner)}
                     >
                       <td className="px-3 py-3">
-                        <div className="flex items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">{learner.name.split(' ').filter(Boolean).slice(0, 2).map((name) => name[0]).join('').toUpperCase() || '?'}</div><div><p className="font-semibold text-slate-900">{learner.name}</p>
+                        <div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 ring-8 ring-sky-50/60"><UserRound className="h-5 w-5" strokeWidth={1.75} /></div><div><p className="font-semibold text-slate-900">{learner.name}</p>
                         <p className="text-xs text-slate-500">{learner.email}</p>
                         </div></div>
                       </td>
                       <td className="px-3 py-3 font-medium text-slate-700">{learner.employee_number || '—'}</td>
                       <td className="px-3 py-3"><p className="text-slate-700">{learner.designation || '—'}</p>{learner.grade_name && <p className="mt-0.5 text-xs text-slate-400">{learner.grade_name}</p>}</td>
-                      <td className="px-3 py-3"><div className="min-w-[130px]"><div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-semibold text-slate-700">{learner.completed_learning_paths} of {learner.total_learning_paths}</span><span className="text-slate-500">{learner.total_learning_paths ? Math.round((learner.completed_learning_paths / learner.total_learning_paths) * 100) : 0}%</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-primary-600" style={{ width: `${learner.total_learning_paths ? Math.min(100, Math.round((learner.completed_learning_paths / learner.total_learning_paths) * 100)) : 0}%` }} /></div></div>
+                      <td className="px-3 py-3"><div className="min-w-[150px]"><div className="mb-2 flex items-center justify-between text-xs"><span className="font-semibold text-slate-700">{learner.completed_learning_paths} of {learner.total_learning_paths} completed</span><span className="rounded-full bg-primary-50 px-2 py-0.5 font-bold text-primary-700">{learner.total_learning_paths ? Math.round((learner.completed_learning_paths / learner.total_learning_paths) * 100) : 0}%</span></div><div className={`h-2.5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200 ${learner.total_learning_paths > 0 && learner.completed_learning_paths === 0 ? 'learner-progress-empty' : ''} ${learner.total_learning_paths > learner.completed_learning_paths ? 'learner-progress-pending' : ''}`}><div className={`learner-progress-fill h-full rounded-full bg-gradient-to-r from-primary-500 to-sky-400 shadow-sm ${learner.completed_learning_paths > 0 && learner.completed_learning_paths < learner.total_learning_paths ? 'learner-progress-active' : ''}`} style={{ '--progress-width': `${learner.total_learning_paths ? Math.min(100, Math.round((learner.completed_learning_paths / learner.total_learning_paths) * 100)) : 0}%` } as React.CSSProperties} /></div></div>
                       </td>
                       <td className="px-3 py-3 text-right"><button type="button" onClick={(event) => { event.stopPropagation(); openLearnerDetails(learner); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-primary-500">View <ArrowRight className="h-3.5 w-3.5" /></button></td>
                     </tr>
