@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronLeft, ChevronRight, Filter, Search, SlidersHorizontal, Users, X } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Filter, Search, SlidersHorizontal, UserRound, Users, X } from 'lucide-react';
 import { superAdminApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -293,7 +293,7 @@ export function AdminLearnersPage() {
                       onClick={() => openLearnerDetails(learner)}
                     >
                       <td className="px-3 py-3">
-                        <div className="flex items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">{learner.name.split(' ').filter(Boolean).slice(0, 2).map((name) => name[0]).join('').toUpperCase() || '?'}</div><div><p className="font-semibold text-slate-900">{learner.name}</p>
+                        <div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 ring-8 ring-sky-50/60"><UserRound className="h-5 w-5" strokeWidth={1.75} /></div><div><p className="font-semibold text-slate-900">{learner.name}</p>
                         <p className="text-xs text-slate-500">{learner.email}</p>
                         </div></div>
                       </td>
