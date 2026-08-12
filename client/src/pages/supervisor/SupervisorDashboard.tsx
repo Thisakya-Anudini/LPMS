@@ -7,6 +7,7 @@ import {
   User,
   ChevronDown,
   ChevronUp,
+  UserPlus,
 } from "lucide-react";
 import { learnerApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -699,27 +700,29 @@ export function SupervisorDashboard() {
         <Card title="Assign Learning Paths" bodyClassName="p-4">
           <div className="space-y-4">
             {loading ? (
-              <div>
+              <div className="rounded-lg bg-slate-50 p-4 border border-slate-200">
                 <p className="mb-2 text-sm font-medium text-slate-700">
-                  Learning Path
+                  Select Learning Path to Assign
                 </p>
                 <Skeleton className="h-10 w-full rounded-md" />
               </div>
             ) : (
-              <Select
-                label="Learning Path"
-                value={selectedLearningPathId}
-                onChange={(event) =>
-                  setSelectedLearningPathId(event.target.value)
-                }
-                options={[
-                  { value: "", label: "Select a learning path" },
-                  ...learningPaths.map((path) => ({
-                    value: path.id,
-                    label: path.title,
-                  })),
-                ]}
-              />
+              <div className="rounded-lg bg-primary-50/50 p-4 border border-primary-100">
+                <Select
+                  label="Select Learning Path to Assign"
+                  value={selectedLearningPathId}
+                  onChange={(event) =>
+                    setSelectedLearningPathId(event.target.value)
+                  }
+                  options={[
+                    { value: "", label: "Select a learning path" },
+                    ...learningPaths.map((path) => ({
+                      value: path.id,
+                      label: path.title,
+                    })),
+                  ]}
+                />
+              </div>
             )}
 
             <div className="max-h-80 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
@@ -808,28 +811,39 @@ export function SupervisorDashboard() {
                     <span>Grade</span>
                     <span>Email</span>
                   </div>
-                  {filteredTeam.map((member) => (
-                    <label
-                      key={member.employeeNumber}
-                      className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedTeamNumbers.includes(
-                          member.employeeNumber,
-                        )}
-                        onChange={() => toggleTeamMember(member.employeeNumber)}
-                        className="shrink-0"
-                      />
-                      <span className="font-medium text-slate-900">
-                        {member.name}
-                      </span>
-                      <span>{member.employeeNumber}</span>
-                      <span>{member.designation || "-"}</span>
-                      <span>{member.gradeName || "-"}</span>
-                      <span>{member.email || "-"}</span>
-                    </label>
-                  ))}
+                  {filteredTeam.map((member) => {
+                    const isSelected = selectedTeamNumbers.includes(
+                      member.employeeNumber,
+                    );
+                    return (
+                      <label
+                        key={member.employeeNumber}
+                        className={`grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.4fr] items-center gap-3 border-b px-3 py-3 text-sm cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-primary-200 bg-primary-50 text-primary-900"
+                            : "border-slate-100 text-slate-600 hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() =>
+                            toggleTeamMember(member.employeeNumber)
+                          }
+                          className="shrink-0 cursor-pointer"
+                        />
+                        <span
+                          className={`font-medium ${isSelected ? "text-primary-900" : "text-slate-900"}`}
+                        >
+                          {member.name}
+                        </span>
+                        <span>{member.employeeNumber}</span>
+                        <span>{member.designation || "-"}</span>
+                        <span>{member.gradeName || "-"}</span>
+                        <span>{member.email || "-"}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -840,8 +854,14 @@ export function SupervisorDashboard() {
               disabled={
                 !selectedLearningPathId || selectedTeamNumbers.length === 0
               }
+              className="mt-2 w-full md:w-auto md:min-w-[200px]"
             >
-              Assign Enrollments
+              <UserPlus size={18} />
+              Assign{" "}
+              {selectedTeamNumbers.length > 0
+                ? selectedTeamNumbers.length
+                : ""}{" "}
+              Enrollments
             </Button>
           </div>
         </Card>
