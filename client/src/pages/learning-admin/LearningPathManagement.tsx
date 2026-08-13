@@ -2088,8 +2088,19 @@ export function LearningPathManagement({
                 !assignForm.learningPathId ||
                 assignForm.selectedLearnerEmployeeNumbers.length === 0
               }
+              className="mt-4 w-full md:w-auto md:min-w-[220px] group transition-all shadow-sm hover:shadow"
             >
-              Assign Enrollments
+              <UserPlus
+                size={18}
+                className="group-hover:scale-110 transition-transform duration-200"
+              />
+              <span>
+                Assign{" "}
+                {assignForm.selectedLearnerEmployeeNumbers.length > 0
+                  ? assignForm.selectedLearnerEmployeeNumbers.length
+                  : ""}{" "}
+                Enrollments
+              </span>
             </Button>
           </form>
         </Card>
