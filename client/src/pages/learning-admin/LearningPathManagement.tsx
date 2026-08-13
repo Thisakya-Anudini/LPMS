@@ -19,6 +19,7 @@ import {
   RotateCcw,
   CheckCircle,
   UserPlus,
+  Users,
 } from "lucide-react";
 import { ApiRequestError, courseApi, learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
@@ -1973,11 +1974,24 @@ export function LearningPathManagement({
                   </Button>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-200">
-                  <p className="text-xs text-slate-500">
-                    ERP results: {learners.length} | Selected:{" "}
-                    {assignForm.selectedLearnerEmployeeNumbers.length}
-                  </p>
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200 bg-white">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-slate-600">
+                      ERP results:{" "}
+                      <span className="text-slate-900">{learners.length}</span>
+                    </span>
+                    <div className="h-4 w-px bg-slate-200"></div>
+                    <span
+                      className={`text-sm font-medium px-2.5 py-0.5 rounded-full transition-colors ${
+                        assignForm.selectedLearnerEmployeeNumbers.length > 0
+                          ? "bg-primary-100 text-primary-800"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      Selected:{" "}
+                      {assignForm.selectedLearnerEmployeeNumbers.length}
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -1986,7 +2000,7 @@ export function LearningPathManagement({
                       onClick={selectAllFilteredLearners}
                       disabled={learners.length === 0}
                     >
-                      Select All Results
+                      Select All
                     </Button>
                     <Button
                       type="button"
@@ -1995,19 +2009,28 @@ export function LearningPathManagement({
                       onClick={clearFilteredLearners}
                       disabled={learners.length === 0}
                     >
-                      Clear Results
+                      Clear All
                     </Button>
                   </div>
                 </div>
 
-                <div className="max-h-[26rem] overflow-y-auto">
+                <div className="max-h-[26rem] overflow-y-auto relative bg-white rounded-b-lg">
                   {learners.length === 0 ? (
-                    <p className="text-sm text-slate-500 p-2">
-                      Search ERP to load learners.
-                    </p>
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                      <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100">
+                        <Users className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-900 mb-1">
+                        No learners loaded
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        Use the control panel above to search the ERP and select
+                        learners to enroll.
+                      </p>
+                    </div>
                   ) : (
                     <div className="min-w-[980px]">
-                      <div className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <div className="sticky top-0 z-10 grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] gap-3 border-b border-slate-200 bg-slate-50/95 backdrop-blur px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm">
                         <span>Select</span>
                         <span>Name</span>
                         <span>Emp No</span>
@@ -2016,6 +2039,7 @@ export function LearningPathManagement({
                         <span>Organization</span>
                         <span>Email</span>
                       </div>
+
                       {learners.map((learner) => {
                         const empNo = String(learner.employeeNumber || "");
                         const already = enrolledEmployeeNumbers.has(empNo);
