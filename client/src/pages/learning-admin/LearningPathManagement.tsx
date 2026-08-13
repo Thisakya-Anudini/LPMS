@@ -1849,12 +1849,15 @@ export function LearningPathManagement({
               />
             </div>
 
-            <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">
-                Select Learners
-              </p>
-              <div className="border border-slate-200 rounded-md bg-white">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-3 border-b border-slate-200">
+            <div className="mt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Filter size={16} className="text-slate-500" />
+                <p className="text-sm font-medium text-slate-700">
+                  Filter & Select Learners
+                </p>
+              </div>
+              <div className="border border-slate-200 rounded-lg bg-slate-50 shadow-sm overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4 border-b border-slate-100 bg-white">
                   <Input
                     label="Search by Employee No"
                     value={assignEmployeeNoSearch}
@@ -1941,7 +1944,7 @@ export function LearningPathManagement({
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 px-3 py-2 border-b border-slate-200 bg-slate-50/70">
+                <div className="flex justify-end gap-3 px-4 py-3 bg-slate-50">
                   <Button
                     type="button"
                     variant="outline"
@@ -1956,6 +1959,7 @@ export function LearningPathManagement({
                       learners.length === 0
                     }
                   >
+                    <RotateCcw size={16} />
                     Reset
                   </Button>
                   <Button
@@ -1964,6 +1968,7 @@ export function LearningPathManagement({
                     isLoading={assignSearchLoading}
                     disabled={isAssignLearnerSearchDisabled}
                   >
+                    <Search size={16} />
                     Search
                   </Button>
                 </div>
