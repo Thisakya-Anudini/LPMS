@@ -14,6 +14,12 @@ import {
   Trash2,
   Globe,
   Lock,
+  BookOpen,
+  Filter,
+  RotateCcw,
+  CheckCircle,
+  UserPlus,
+  Users,
 } from "lucide-react";
 import { ApiRequestError, courseApi, learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
@@ -399,7 +405,7 @@ export function LearningPathManagement({
 
       setPaths(pathsResponse.learningPaths as LearningPathRow[]);
       setCourses(coursesResponse.courses);
-      
+
       if (coursesResponse.pagination) {
         setCoursePagination(coursesResponse.pagination);
       }
@@ -462,7 +468,7 @@ export function LearningPathManagement({
     const totalPages = Math.ceil(totalRecords / pathPageSize);
     const startIndex = (currentPathPage - 1) * pathPageSize;
     const endIndex = startIndex + pathPageSize;
-    
+
     return {
       data: filteredPaths.slice(startIndex, endIndex),
       totalRecords,
@@ -470,7 +476,7 @@ export function LearningPathManagement({
       currentPage: currentPathPage,
       pageSize: pathPageSize,
       hasNextPage: currentPathPage < totalPages,
-      hasPrevPage: currentPathPage > 1
+      hasPrevPage: currentPathPage > 1,
     };
   }, [filteredPaths, currentPathPage, pathPageSize]);
 
@@ -993,9 +999,15 @@ export function LearningPathManagement({
                 <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-xs text-slate-500">
                     {mode === "edit" ? (
-                      <>Showing {visibleCourses.length} of {courses.length} courses</>
+                      <>
+                        Showing {visibleCourses.length} of {courses.length}{" "}
+                        courses
+                      </>
                     ) : coursePagination ? (
-                      <>Total Courses: {coursePagination.totalRecords} | Page {currentCoursePage} of {coursePagination.totalPages}</>
+                      <>
+                        Total Courses: {coursePagination.totalRecords} | Page{" "}
+                        {currentCoursePage} of {coursePagination.totalPages}
+                      </>
                     ) : (
                       <>Showing {courses.length} courses</>
                     )}
@@ -1006,7 +1018,9 @@ export function LearningPathManagement({
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => setCurrentCoursePage(prev => Math.max(1, prev - 1))}
+                        onClick={() =>
+                          setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                        }
                         disabled={!coursePagination.hasPrevPage || loading}
                       >
                         Previous
@@ -1015,7 +1029,7 @@ export function LearningPathManagement({
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => setCurrentCoursePage(prev => prev + 1)}
+                        onClick={() => setCurrentCoursePage((prev) => prev + 1)}
                         disabled={!coursePagination.hasNextPage || loading}
                       >
                         Next
@@ -1207,8 +1221,7 @@ export function LearningPathManagement({
                     ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
                     : coursePagination
                       ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
-                      : `Showing ${courses.length} courses`
-                  }
+                      : `Showing ${courses.length} courses`}
                 </p>
                 {!createCourseSearch && coursePagination && (
                   <div className="flex gap-2">
@@ -1216,7 +1229,9 @@ export function LearningPathManagement({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentCoursePage(prev => Math.max(1, prev - 1))}
+                      onClick={() =>
+                        setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                      }
                       disabled={!coursePagination.hasPrevPage || loading}
                     >
                       Previous
@@ -1225,7 +1240,7 @@ export function LearningPathManagement({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentCoursePage(prev => prev + 1)}
+                      onClick={() => setCurrentCoursePage((prev) => prev + 1)}
                       disabled={!coursePagination.hasNextPage || loading}
                     >
                       Next
@@ -1809,31 +1824,41 @@ export function LearningPathManagement({
       {section === "assign" ? (
         <Card title="Assign Learning Path to Learners">
           <form className="space-y-3" onSubmit={handleAssign}>
-            <Select
-              label="Learning Path"
-              value={assignForm.learningPathId}
-              onChange={(event) =>
-                setAssignForm((prev) => ({
-                  ...prev,
-                  learningPathId: event.target.value,
-                }))
-              }
-              options={[
-                { value: "", label: "Select a path" },
-                ...paths.map((path) => ({
-                  value: path.id,
-                  label: `${path.title} (${path.status})`,
-                })),
-              ]}
-              required
-            />
+            <div className="rounded-lg bg-gradient-to-r from-primary-50 to-blue-50/30 p-4 border border-primary-100 shadow-sm flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-primary-800">
+                <BookOpen size={18} className="text-primary-600" />
+                <span className="text-sm font-semibold">
+                  Select Learning Path to Assign
+                </span>
+              </div>
+              <Select
+                value={assignForm.learningPathId}
+                onChange={(event) =>
+                  setAssignForm((prev) => ({
+                    ...prev,
+                    learningPathId: event.target.value,
+                  }))
+                }
+                options={[
+                  { value: "", label: "Choose a learning path..." },
+                  ...paths.map((path) => ({
+                    value: path.id,
+                    label: `${path.title} (${path.status})`,
+                  })),
+                ]}
+                required
+              />
+            </div>
 
-            <div>
-              <p className="text-sm font-medium text-slate-700 mb-2">
-                Select Learners
-              </p>
-              <div className="border border-slate-200 rounded-md bg-white">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 p-3 border-b border-slate-200">
+            <div className="mt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Filter size={16} className="text-slate-500" />
+                <p className="text-sm font-medium text-slate-700">
+                  Filter & Select Learners
+                </p>
+              </div>
+              <div className="border border-slate-200 rounded-lg bg-slate-50 shadow-sm overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 p-4 border-b border-slate-100 bg-white">
                   <Input
                     label="Search by Employee No"
                     value={assignEmployeeNoSearch}
@@ -1920,7 +1945,7 @@ export function LearningPathManagement({
                   />
                 </div>
 
-                <div className="flex justify-end gap-2 px-3 py-2 border-b border-slate-200 bg-slate-50/70">
+                <div className="flex justify-end gap-3 px-4 py-3 bg-slate-50">
                   <Button
                     type="button"
                     variant="outline"
@@ -1935,6 +1960,7 @@ export function LearningPathManagement({
                       learners.length === 0
                     }
                   >
+                    <RotateCcw size={16} />
                     Reset
                   </Button>
                   <Button
@@ -1943,15 +1969,29 @@ export function LearningPathManagement({
                     isLoading={assignSearchLoading}
                     disabled={isAssignLearnerSearchDisabled}
                   >
+                    <Search size={16} />
                     Search
                   </Button>
                 </div>
 
-                <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-200">
-                  <p className="text-xs text-slate-500">
-                    ERP results: {learners.length} | Selected:{" "}
-                    {assignForm.selectedLearnerEmployeeNumbers.length}
-                  </p>
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-200 bg-white">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-slate-600">
+                      ERP results:{" "}
+                      <span className="text-slate-900">{learners.length}</span>
+                    </span>
+                    <div className="h-4 w-px bg-slate-200"></div>
+                    <span
+                      className={`text-sm font-medium px-2.5 py-0.5 rounded-full transition-colors ${
+                        assignForm.selectedLearnerEmployeeNumbers.length > 0
+                          ? "bg-primary-100 text-primary-800"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      Selected:{" "}
+                      {assignForm.selectedLearnerEmployeeNumbers.length}
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -1960,7 +2000,7 @@ export function LearningPathManagement({
                       onClick={selectAllFilteredLearners}
                       disabled={learners.length === 0}
                     >
-                      Select All Results
+                      Select All
                     </Button>
                     <Button
                       type="button"
@@ -1969,19 +2009,28 @@ export function LearningPathManagement({
                       onClick={clearFilteredLearners}
                       disabled={learners.length === 0}
                     >
-                      Clear Results
+                      Clear All
                     </Button>
                   </div>
                 </div>
 
-                <div className="max-h-[26rem] overflow-y-auto">
+                <div className="max-h-[26rem] overflow-y-auto relative bg-white rounded-b-lg">
                   {learners.length === 0 ? (
-                    <p className="text-sm text-slate-500 p-2">
-                      Search ERP to load learners.
-                    </p>
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                      <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100">
+                        <Users className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-900 mb-1">
+                        No learners loaded
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        Use the control panel above to search the ERP and select
+                        learners to enroll.
+                      </p>
+                    </div>
                   ) : (
                     <div className="min-w-[980px]">
-                      <div className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <div className="sticky top-0 z-10 grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] gap-3 border-b border-slate-200 bg-slate-50/95 backdrop-blur px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 shadow-sm">
                         <span>Select</span>
                         <span>Name</span>
                         <span>Emp No</span>
@@ -1990,32 +2039,53 @@ export function LearningPathManagement({
                         <span>Organization</span>
                         <span>Email</span>
                       </div>
+
                       {learners.map((learner) => {
                         const empNo = String(learner.employeeNumber || "");
                         const already = enrolledEmployeeNumbers.has(empNo);
+                        const isSelected =
+                          assignForm.selectedLearnerEmployeeNumbers.includes(
+                            empNo,
+                          );
+
+                        let rowClassName =
+                          "grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b px-3 py-3 text-sm transition-all duration-200 ";
+
+                        if (already) {
+                          rowClassName +=
+                            "border-slate-100 bg-slate-50/50 opacity-75 cursor-not-allowed text-slate-500 border-l-4 border-l-transparent";
+                        } else if (isSelected) {
+                          rowClassName +=
+                            "border-primary-100 bg-primary-50 text-primary-900 border-l-4 border-l-primary-500 cursor-pointer";
+                        } else {
+                          rowClassName +=
+                            "border-slate-100 text-slate-600 hover:bg-slate-50 hover:shadow-sm border-l-4 border-l-transparent cursor-pointer";
+                        }
+
                         return (
                           <label
                             key={
                               empNo || Math.random().toString(36).slice(2, 8)
                             }
-                            className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                            className={rowClassName}
                           >
                             <input
                               type="checkbox"
-                              checked={assignForm.selectedLearnerEmployeeNumbers.includes(
-                                empNo,
-                              )}
+                              checked={isSelected}
                               onChange={() => toggleLearnerSelection(empNo)}
-                              className="shrink-0"
+                              className={`shrink-0 ${already ? "cursor-not-allowed" : "cursor-pointer"}`}
                               disabled={already}
                             />
                             <div>
-                              <div className="font-medium text-slate-900">
+                              <div
+                                className={`font-medium ${isSelected ? "text-primary-900" : already ? "text-slate-500" : "text-slate-900"}`}
+                              >
                                 {learner.employeeName}
                               </div>
                               {already ? (
-                                <div className="text-xs text-amber-700">
-                                  Already enrolled
+                                <div className="text-xs text-amber-600 flex items-center gap-1 mt-0.5 font-medium">
+                                  <CheckCircle size={12} />
+                                  <span>Already enrolled</span>
                                 </div>
                               ) : null}
                             </div>
@@ -2042,8 +2112,19 @@ export function LearningPathManagement({
                 !assignForm.learningPathId ||
                 assignForm.selectedLearnerEmployeeNumbers.length === 0
               }
+              className="mt-4 w-full md:w-auto md:min-w-[220px] group transition-all shadow-sm hover:shadow"
             >
-              Assign Enrollments
+              <UserPlus
+                size={18}
+                className="group-hover:scale-110 transition-transform duration-200"
+              />
+              <span>
+                Assign{" "}
+                {assignForm.selectedLearnerEmployeeNumbers.length > 0
+                  ? assignForm.selectedLearnerEmployeeNumbers.length
+                  : ""}{" "}
+                Enrollments
+              </span>
             </Button>
           </form>
         </Card>
@@ -2212,7 +2293,9 @@ export function LearningPathManagement({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => setCurrentPathPage(prev => Math.max(1, prev - 1))}
+                onClick={() =>
+                  setCurrentPathPage((prev) => Math.max(1, prev - 1))
+                }
                 disabled={!paginatedPaths.hasPrevPage || loading}
               >
                 Previous
@@ -2221,7 +2304,7 @@ export function LearningPathManagement({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => setCurrentPathPage(prev => prev + 1)}
+                onClick={() => setCurrentPathPage((prev) => prev + 1)}
                 disabled={!paginatedPaths.hasNextPage || loading}
               >
                 Next
