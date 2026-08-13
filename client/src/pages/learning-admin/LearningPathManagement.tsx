@@ -2019,29 +2019,49 @@ export function LearningPathManagement({
                       {learners.map((learner) => {
                         const empNo = String(learner.employeeNumber || "");
                         const already = enrolledEmployeeNumbers.has(empNo);
+                        const isSelected =
+                          assignForm.selectedLearnerEmployeeNumbers.includes(
+                            empNo,
+                          );
+
+                        let rowClassName =
+                          "grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b px-3 py-3 text-sm transition-all duration-200 ";
+
+                        if (already) {
+                          rowClassName +=
+                            "border-slate-100 bg-slate-50/50 opacity-75 cursor-not-allowed text-slate-500 border-l-4 border-l-transparent";
+                        } else if (isSelected) {
+                          rowClassName +=
+                            "border-primary-100 bg-primary-50 text-primary-900 border-l-4 border-l-primary-500 cursor-pointer";
+                        } else {
+                          rowClassName +=
+                            "border-slate-100 text-slate-600 hover:bg-slate-50 hover:shadow-sm border-l-4 border-l-transparent cursor-pointer";
+                        }
+
                         return (
                           <label
                             key={
                               empNo || Math.random().toString(36).slice(2, 8)
                             }
-                            className="grid grid-cols-[44px_1.4fr_0.9fr_1.1fr_0.9fr_1.3fr_1.4fr] items-center gap-3 border-b border-slate-100 px-3 py-3 text-sm text-slate-600 hover:bg-slate-50"
+                            className={rowClassName}
                           >
                             <input
                               type="checkbox"
-                              checked={assignForm.selectedLearnerEmployeeNumbers.includes(
-                                empNo,
-                              )}
+                              checked={isSelected}
                               onChange={() => toggleLearnerSelection(empNo)}
-                              className="shrink-0"
+                              className={`shrink-0 ${already ? "cursor-not-allowed" : "cursor-pointer"}`}
                               disabled={already}
                             />
                             <div>
-                              <div className="font-medium text-slate-900">
+                              <div
+                                className={`font-medium ${isSelected ? "text-primary-900" : already ? "text-slate-500" : "text-slate-900"}`}
+                              >
                                 {learner.employeeName}
                               </div>
                               {already ? (
-                                <div className="text-xs text-amber-700">
-                                  Already enrolled
+                                <div className="text-xs text-amber-600 flex items-center gap-1 mt-0.5 font-medium">
+                                  <CheckCircle size={12} />
+                                  <span>Already enrolled</span>
                                 </div>
                               ) : null}
                             </div>
