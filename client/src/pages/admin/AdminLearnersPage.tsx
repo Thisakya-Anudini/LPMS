@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowRight, ChevronLeft, ChevronRight, Filter, Search, SlidersHorizontal, UserRound, Users, X } from 'lucide-react';
 import { superAdminApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -115,6 +116,14 @@ export function AdminLearnersPage() {
     () => ['ALL', ...designationOptions],
     [designationOptions]
   );
+  const hasActiveFilters = Boolean(employeeNoSearch || nameSearch || designationFilter !== 'ALL');
+  const clearFilters = () => {
+    setEmployeeNoSearch('');
+    setNameSearch('');
+    setDesignationFilter('ALL');
+    setEmployeeNoSearchError('');
+    setNameSearchError('');
+  };
   const skeletonRows = Array.from({ length: 8 }, (_, index) => index);
   const visiblePages = useMemo(() => {
     if (pagination.totalPages <= 1) {
@@ -133,18 +142,40 @@ export function AdminLearnersPage() {
   }, [pagination.page, pagination.totalPages]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Learners</h1>
-        <p className="text-slate-500">View all learners and inspect assigned learning path progress.</p>
+    <div className="space-y-6 pb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary-700">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-100"><Users className="h-4 w-4" /></span>
+            Learner directory
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Learners</h1>
+          <p className="mt-1 text-slate-500">Find employees and review their learning path progress.</p>
+        </div>
+        <div className="rounded-xl border border-primary-100 bg-primary-50 px-4 py-3 sm:min-w-[185px]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary-700">Total learners</p>
+          {loading ? <Skeleton className="mt-2 h-7 w-16" /> : <p className="mt-1 text-2xl font-bold text-primary-900">{pagination.total.toLocaleString()}</p>}
+        </div>
       </div>
 
-      <Card title="All Learners">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <Card className="shadow-sm" bodyClassName="p-0">
+        <div className="border-b border-slate-100 px-6 py-5">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">All learners</h2>
+              <p className="text-sm text-slate-500">Use a name, employee number, or designation to narrow the directory.</p>
+            </div>
+            {hasActiveFilters && <Button type="button" variant="ghost" size="sm" onClick={clearFilters}><X className="h-3.5 w-3.5" /> Clear filters</Button>}
+          </div>
+        </div>
+
+        <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-5">
+          <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500"><SlidersHorizontal className="h-3.5 w-3.5" /> Search & filters</div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Search by Employee No</label>
-            <input
-              className={`w-full rounded-md border px-3 py-2 text-sm ${
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700">Employee number</label>
+            <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input
+              className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:ring-2 ${
                 employeeNoSearchError ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-slate-300'
               }`}
               placeholder="e.g. 011338"
@@ -153,7 +184,7 @@ export function AdminLearnersPage() {
               onChange={handleEmployeeNoSearchChange}
               aria-invalid={Boolean(employeeNoSearchError)}
               aria-describedby={employeeNoSearchError ? 'learner-employee-no-search-error' : undefined}
-            />
+            /></div>
             {employeeNoSearchError && (
               <p id="learner-employee-no-search-error" className="mt-1 text-xs font-medium text-red-600">
                 {employeeNoSearchError}
@@ -161,9 +192,9 @@ export function AdminLearnersPage() {
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Search by Name</label>
-            <input
-              className={`w-full rounded-md border px-3 py-2 text-sm ${
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700">Learner name</label>
+            <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input
+              className={`w-full rounded-lg border bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:ring-2 ${
                 nameSearchError ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-slate-300'
               }`}
               placeholder="e.g. Tennakoon"
@@ -171,7 +202,7 @@ export function AdminLearnersPage() {
               onChange={handleNameSearchChange}
               aria-invalid={Boolean(nameSearchError)}
               aria-describedby={nameSearchError ? 'learner-name-search-error' : undefined}
-            />
+            /></div>
             {nameSearchError && (
               <p id="learner-name-search-error" className="mt-1 text-xs font-medium text-red-600">
                 {nameSearchError}
@@ -179,9 +210,9 @@ export function AdminLearnersPage() {
             )}
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Filter by Designation</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-700">Designation</label>
             <select
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 outline-none transition focus:ring-2 focus:ring-primary-500"
               value={designationFilter}
               onChange={(event) => setDesignationFilter(event.target.value)}
             >
@@ -193,14 +224,15 @@ export function AdminLearnersPage() {
             </select>
           </div>
         </div>
+        </div>
 
-        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             {loading ? (
               <Skeleton className="h-5 w-52" />
             ) : (
-              <p className="text-sm font-semibold text-slate-900">
-                Showing {pageStart}-{pageEnd} of {pagination.total} learners
+              <p className="text-sm font-medium text-slate-700">
+                Showing <span className="font-semibold text-slate-900">{pageStart}-{pageEnd}</span> of <span className="font-semibold text-slate-900">{pagination.total}</span> learners
               </p>
             )}
           </div>
@@ -208,22 +240,23 @@ export function AdminLearnersPage() {
             {loading ? (
               <Skeleton className="h-8 w-28 rounded-full" />
             ) : (
-              <span className="rounded-full bg-white px-3 py-1 font-medium text-slate-700 shadow-sm ring-1 ring-slate-200">
+              <span className="rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">
                 Page {pagination.totalPages === 0 ? 0 : pagination.page} of {pagination.totalPages}
               </span>
             )}
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200">
-          <div className="overflow-x-auto">
+        <div className="mx-3 overflow-hidden rounded-xl border border-slate-200 sm:mx-4">
+          <div className="max-h-[32rem] overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-100">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+              <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-sm">
                 <tr>
                   <th className="px-3 py-2">Learner</th>
                   <th className="px-3 py-2">Employee No</th>
                   <th className="px-3 py-2">Designation</th>
-                  <th className="px-3 py-2">Assigned LPs</th>
+                  <th className="px-3 py-2">Learning progress</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -243,28 +276,32 @@ export function AdminLearnersPage() {
                       <td className="px-3 py-3">
                         <Skeleton className="h-5 w-14" />
                       </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="ml-auto h-8 w-14 rounded-lg" />
+                      </td>
                     </tr>
                   ))
                 ) : learners.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-3 text-slate-500">No learners match current filters.</td>
+                    <td colSpan={5} className="px-3 py-12 text-center"><Filter className="mx-auto mb-3 h-6 w-6 text-slate-300" /><p className="font-medium text-slate-700">No learners found</p><p className="mt-1 text-xs text-slate-500">Try adjusting or clearing your filters.</p>{hasActiveFilters && <Button type="button" variant="ghost" size="sm" className="mt-3" onClick={clearFilters}>Clear filters</Button>}</td>
                   </tr>
                 ) : (
                   learners.map((learner) => (
                     <tr
                       key={learner.principal_id}
-                      className="hover:bg-slate-50 cursor-pointer"
+                      className="group cursor-pointer transition-colors hover:bg-primary-50/40 focus-within:bg-primary-50/40"
                       onClick={() => openLearnerDetails(learner)}
                     >
-                      <td className="px-3 py-2">
-                        <p className="font-medium text-slate-900">{learner.name}</p>
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 ring-8 ring-sky-50/60"><UserRound className="h-5 w-5" strokeWidth={1.75} /></div><div><p className="font-semibold text-slate-900">{learner.name}</p>
                         <p className="text-xs text-slate-500">{learner.email}</p>
+                        </div></div>
                       </td>
-                      <td className="px-3 py-2 text-slate-700">{learner.employee_number}</td>
-                      <td className="px-3 py-2 text-slate-700">{learner.designation}</td>
-                      <td className="px-3 py-2 text-slate-700">
-                        {learner.completed_learning_paths}/{learner.total_learning_paths}
+                      <td className="px-3 py-3 font-medium text-slate-700">{learner.employee_number || '—'}</td>
+                      <td className="px-3 py-3"><p className="text-slate-700">{learner.designation || '—'}</p>{learner.grade_name && <p className="mt-0.5 text-xs text-slate-400">{learner.grade_name}</p>}</td>
+                      <td className="px-3 py-3"><div className="min-w-[150px]"><div className="mb-2 flex items-center justify-between text-xs"><span className="font-semibold text-slate-700">{learner.completed_learning_paths} of {learner.total_learning_paths} completed</span><span className="rounded-full bg-primary-50 px-2 py-0.5 font-bold text-primary-700">{learner.total_learning_paths ? Math.round((learner.completed_learning_paths / learner.total_learning_paths) * 100) : 0}%</span></div><div className={`h-2.5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200 ${learner.total_learning_paths > 0 && learner.completed_learning_paths === 0 ? 'learner-progress-empty' : ''} ${learner.total_learning_paths > learner.completed_learning_paths ? 'learner-progress-pending' : ''}`}><div className={`learner-progress-fill h-full rounded-full bg-gradient-to-r from-primary-500 to-sky-400 shadow-sm ${learner.completed_learning_paths > 0 && learner.completed_learning_paths < learner.total_learning_paths ? 'learner-progress-active' : ''}`} style={{ '--progress-width': `${learner.total_learning_paths ? Math.min(100, Math.round((learner.completed_learning_paths / learner.total_learning_paths) * 100)) : 0}%` } as React.CSSProperties} /></div></div>
                       </td>
+                      <td className="px-3 py-3 text-right"><button type="button" onClick={(event) => { event.stopPropagation(); openLearnerDetails(learner); }} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 focus:outline-none focus:ring-2 focus:ring-primary-500">View <ArrowRight className="h-3.5 w-3.5" /></button></td>
                     </tr>
                   ))
                 )}
@@ -273,7 +310,7 @@ export function AdminLearnersPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="flex justify-end px-6 py-5">
           <div className="flex flex-wrap items-center justify-end gap-2">
             {loading ? (
               <>
@@ -302,7 +339,7 @@ export function AdminLearnersPage() {
                   onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
                   disabled={loading || !canGoPrevious}
                 >
-                  {'<'}
+                  <ChevronLeft className="h-4 w-4" />
                 </Button>
                 {visiblePages.map((pageNumber) => (
                   <Button
@@ -324,7 +361,7 @@ export function AdminLearnersPage() {
                   onClick={() => setPage((prev) => prev + 1)}
                   disabled={loading || !canGoNext}
                 >
-                  {'>'}
+                  <ChevronRight className="h-4 w-4" />
                 </Button>
                 <Button
                   type="button"
