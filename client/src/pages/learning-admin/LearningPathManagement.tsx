@@ -14,6 +14,11 @@ import {
   Trash2,
   Globe,
   Lock,
+  BookOpen,
+  Filter,
+  RotateCcw,
+  CheckCircle,
+  UserPlus,
 } from "lucide-react";
 import { ApiRequestError, courseApi, learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
@@ -399,7 +404,7 @@ export function LearningPathManagement({
 
       setPaths(pathsResponse.learningPaths as LearningPathRow[]);
       setCourses(coursesResponse.courses);
-      
+
       if (coursesResponse.pagination) {
         setCoursePagination(coursesResponse.pagination);
       }
@@ -462,7 +467,7 @@ export function LearningPathManagement({
     const totalPages = Math.ceil(totalRecords / pathPageSize);
     const startIndex = (currentPathPage - 1) * pathPageSize;
     const endIndex = startIndex + pathPageSize;
-    
+
     return {
       data: filteredPaths.slice(startIndex, endIndex),
       totalRecords,
@@ -470,7 +475,7 @@ export function LearningPathManagement({
       currentPage: currentPathPage,
       pageSize: pathPageSize,
       hasNextPage: currentPathPage < totalPages,
-      hasPrevPage: currentPathPage > 1
+      hasPrevPage: currentPathPage > 1,
     };
   }, [filteredPaths, currentPathPage, pathPageSize]);
 
@@ -993,9 +998,15 @@ export function LearningPathManagement({
                 <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-xs text-slate-500">
                     {mode === "edit" ? (
-                      <>Showing {visibleCourses.length} of {courses.length} courses</>
+                      <>
+                        Showing {visibleCourses.length} of {courses.length}{" "}
+                        courses
+                      </>
                     ) : coursePagination ? (
-                      <>Total Courses: {coursePagination.totalRecords} | Page {currentCoursePage} of {coursePagination.totalPages}</>
+                      <>
+                        Total Courses: {coursePagination.totalRecords} | Page{" "}
+                        {currentCoursePage} of {coursePagination.totalPages}
+                      </>
                     ) : (
                       <>Showing {courses.length} courses</>
                     )}
@@ -1006,7 +1017,9 @@ export function LearningPathManagement({
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => setCurrentCoursePage(prev => Math.max(1, prev - 1))}
+                        onClick={() =>
+                          setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                        }
                         disabled={!coursePagination.hasPrevPage || loading}
                       >
                         Previous
@@ -1015,7 +1028,7 @@ export function LearningPathManagement({
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => setCurrentCoursePage(prev => prev + 1)}
+                        onClick={() => setCurrentCoursePage((prev) => prev + 1)}
                         disabled={!coursePagination.hasNextPage || loading}
                       >
                         Next
@@ -1207,8 +1220,7 @@ export function LearningPathManagement({
                     ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
                     : coursePagination
                       ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
-                      : `Showing ${courses.length} courses`
-                  }
+                      : `Showing ${courses.length} courses`}
                 </p>
                 {!createCourseSearch && coursePagination && (
                   <div className="flex gap-2">
@@ -1216,7 +1228,9 @@ export function LearningPathManagement({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentCoursePage(prev => Math.max(1, prev - 1))}
+                      onClick={() =>
+                        setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                      }
                       disabled={!coursePagination.hasPrevPage || loading}
                     >
                       Previous
@@ -1225,7 +1239,7 @@ export function LearningPathManagement({
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setCurrentCoursePage(prev => prev + 1)}
+                      onClick={() => setCurrentCoursePage((prev) => prev + 1)}
                       disabled={!coursePagination.hasNextPage || loading}
                     >
                       Next
@@ -1809,24 +1823,31 @@ export function LearningPathManagement({
       {section === "assign" ? (
         <Card title="Assign Learning Path to Learners">
           <form className="space-y-3" onSubmit={handleAssign}>
-            <Select
-              label="Learning Path"
-              value={assignForm.learningPathId}
-              onChange={(event) =>
-                setAssignForm((prev) => ({
-                  ...prev,
-                  learningPathId: event.target.value,
-                }))
-              }
-              options={[
-                { value: "", label: "Select a path" },
-                ...paths.map((path) => ({
-                  value: path.id,
-                  label: `${path.title} (${path.status})`,
-                })),
-              ]}
-              required
-            />
+            <div className="rounded-lg bg-gradient-to-r from-primary-50 to-blue-50/30 p-4 border border-primary-100 shadow-sm flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-primary-800">
+                <BookOpen size={18} className="text-primary-600" />
+                <span className="text-sm font-semibold">
+                  Select Learning Path to Assign
+                </span>
+              </div>
+              <Select
+                value={assignForm.learningPathId}
+                onChange={(event) =>
+                  setAssignForm((prev) => ({
+                    ...prev,
+                    learningPathId: event.target.value,
+                  }))
+                }
+                options={[
+                  { value: "", label: "Choose a learning path..." },
+                  ...paths.map((path) => ({
+                    value: path.id,
+                    label: `${path.title} (${path.status})`,
+                  })),
+                ]}
+                required
+              />
+            </div>
 
             <div>
               <p className="text-sm font-medium text-slate-700 mb-2">
@@ -2212,7 +2233,9 @@ export function LearningPathManagement({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => setCurrentPathPage(prev => Math.max(1, prev - 1))}
+                onClick={() =>
+                  setCurrentPathPage((prev) => Math.max(1, prev - 1))
+                }
                 disabled={!paginatedPaths.hasPrevPage || loading}
               >
                 Previous
@@ -2221,7 +2244,7 @@ export function LearningPathManagement({
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => setCurrentPathPage(prev => prev + 1)}
+                onClick={() => setCurrentPathPage((prev) => prev + 1)}
                 disabled={!paginatedPaths.hasNextPage || loading}
               >
                 Next
