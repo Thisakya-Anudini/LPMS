@@ -76,7 +76,6 @@ export function AdminLearnerDetailsPage() {
   }, [loadDetails]);
 
   const completedPaths = learningPaths.filter((path) => Number(path.progress || 0) >= 100 || path.status.toUpperCase() === 'COMPLETED').length;
-  const activePaths = learningPaths.filter((path) => Number(path.progress || 0) > 0 && Number(path.progress || 0) < 100).length;
   const averageProgress = learningPaths.length ? Math.round(learningPaths.reduce((total, path) => total + Number(path.progress || 0), 0) / learningPaths.length) : 0;
 
   return (
@@ -103,8 +102,8 @@ export function AdminLearnerDetailsPage() {
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 ring-8 ring-sky-50/60"><UserRound className="h-8 w-8" strokeWidth={1.65} /></div>
               <div className="min-w-0"><p className="text-xl font-bold text-slate-900">{learner.name}</p><p className="mt-1 flex items-center gap-1.5 truncate text-sm text-slate-500"><Mail className="h-4 w-4 shrink-0" />{learner.email}</p></div>
             </div>
-            <div className="grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 lg:border-t-0">
-              {[['Assigned', learningPaths.length, 'text-primary-700'], ['Active', activePaths, 'text-amber-600'], ['Completed', completedPaths, 'text-emerald-600']].map(([label, value, className]) => <div key={label as string} className="px-3 py-5 text-center"><p className={`text-2xl font-bold ${className}`}>{value}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p></div>)}
+            <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 lg:border-t-0">
+              {[['Assigned', learningPaths.length, 'text-primary-700'], ['Completed', completedPaths, 'text-emerald-600']].map(([label, value, className]) => <div key={label as string} className="px-3 py-5 text-center"><p className={`text-2xl font-bold ${className}`}>{value}</p><p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p></div>)}
             </div>
           </div>
         )}
