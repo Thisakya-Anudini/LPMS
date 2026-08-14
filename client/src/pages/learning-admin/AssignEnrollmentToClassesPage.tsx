@@ -13,6 +13,7 @@ import {
   UserPlus,
   RefreshCw,
   ClipboardCheck,
+  Filter,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -1650,96 +1651,105 @@ export function AssignEnrollmentToClassesPage() {
               </div>
             ) : null}
 
-            <div className="mb-4 space-y-3">
-              {/* Search and Batch Actions */}
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
-                <Input
-                  value={learnerSearch}
-                  onChange={(event) => setLearnerSearch(event.target.value)}
-                  placeholder="Search by Employee ID or Name"
-                  aria-label="Search learners"
-                />
-                <Input
-                  type="number"
-                  min="1"
-                  value={batchSize}
-                  onChange={(event) => setBatchSize(event.target.value)}
-                  aria-label="Batch size"
-                />
-                <Button
-                  variant="outline"
-                  onClick={selectNextBatch}
-                  disabled={
-                    assignmentMode === "completion" ||
-                    !selectedCourseCode ||
-                    selectableLearners.length === 0
-                  }
-                >
-                  Select
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={selectVisibleLearners}
-                  disabled={
-                    assignmentMode === "completion" ||
-                    filteredLearners.length === 0
-                  }
-                >
-                  Select All
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={clearSelection}
-                  disabled={selectedEnrollmentIds.length === 0}
-                >
-                  Clear
-                </Button>
+            <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 bg-white">
+                <Filter className="h-4 w-4 text-slate-500" />
+                <h3 className="text-sm font-semibold text-slate-700">
+                  Filter & Select Learners
+                </h3>
               </div>
-
-              {/* Filter Options */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="w-full sm:flex-1">
-                  <Select
-                    label="Filter by Designation"
-                    value={designationFilter}
-                    onChange={(event) =>
-                      setDesignationFilter(event.target.value)
-                    }
-                    options={[
-                      { value: "", label: "All Designations" },
-                      ...designationOptions.map((opt) => ({
-                        value: opt,
-                        label: opt,
-                      })),
-                    ]}
+              <div className="p-4 space-y-4">
+                {/* Search and Batch Actions */}
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
+                  <Input
+                    value={learnerSearch}
+                    onChange={(event) => setLearnerSearch(event.target.value)}
+                    placeholder="Search by Employee ID or Name"
+                    aria-label="Search learners"
                   />
-                </div>
-                <div className="w-full sm:flex-1">
-                  <Select
-                    label="Filter by Grade"
-                    value={gradeFilter}
-                    onChange={(event) => setGradeFilter(event.target.value)}
-                    options={[
-                      { value: "", label: "All Grades" },
-                      ...gradeOptions.map((opt) => ({
-                        value: opt,
-                        label: opt,
-                      })),
-                    ]}
+                  <Input
+                    type="number"
+                    min="1"
+                    value={batchSize}
+                    onChange={(event) => setBatchSize(event.target.value)}
+                    aria-label="Batch size"
                   />
-                </div>
-                <div className="flex pb-1">
                   <Button
-                    type="button"
                     variant="outline"
-                    onClick={handleResetFilters}
+                    onClick={selectNextBatch}
                     disabled={
-                      !learnerSearch && !designationFilter && !gradeFilter
+                      assignmentMode === "completion" ||
+                      !selectedCourseCode ||
+                      selectableLearners.length === 0
                     }
-                    className="w-full sm:w-auto"
                   >
-                    Reset Filters
+                    Select Batch
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={selectVisibleLearners}
+                    disabled={
+                      assignmentMode === "completion" ||
+                      filteredLearners.length === 0
+                    }
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={clearSelection}
+                    disabled={selectedEnrollmentIds.length === 0}
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+
+                {/* Filter Options */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end pt-1 border-t border-slate-200/60">
+                  <div className="w-full sm:flex-1">
+                    <Select
+                      label="Filter by Designation"
+                      value={designationFilter}
+                      onChange={(event) =>
+                        setDesignationFilter(event.target.value)
+                      }
+                      options={[
+                        { value: "", label: "All Designations" },
+                        ...designationOptions.map((opt) => ({
+                          value: opt,
+                          label: opt,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div className="w-full sm:flex-1">
+                    <Select
+                      label="Filter by Grade"
+                      value={gradeFilter}
+                      onChange={(event) => setGradeFilter(event.target.value)}
+                      options={[
+                        { value: "", label: "All Grades" },
+                        ...gradeOptions.map((opt) => ({
+                          value: opt,
+                          label: opt,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div className="flex pb-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleResetFilters}
+                      disabled={
+                        !learnerSearch && !designationFilter && !gradeFilter
+                      }
+                      className="w-full sm:w-auto"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      Reset Filters
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
