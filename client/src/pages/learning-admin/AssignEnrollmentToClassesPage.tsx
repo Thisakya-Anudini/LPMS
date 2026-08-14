@@ -9,6 +9,12 @@ import {
   Search,
   Users,
   X,
+  Settings,
+  UserPlus,
+  RefreshCw,
+  ClipboardCheck,
+  Filter,
+  CheckCircle,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -691,12 +697,7 @@ export function AssignEnrollmentToClassesPage() {
     }
 
     return result.filter((learner) => learnerMatchesSearch(learner, search));
-  }, [
-    learnerSearch,
-    selectableLearners,
-    designationFilter,
-    gradeFilter,
-  ]);
+  }, [learnerSearch, selectableLearners, designationFilter, gradeFilter]);
 
   const selectedLearnersForCourse = useMemo(
     () =>
@@ -1345,35 +1346,38 @@ export function AssignEnrollmentToClassesPage() {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-secondary-200 bg-white px-4 py-3 shadow-soft">
-        <div className="grid grid-cols-1 divide-y divide-secondary-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <div className="flex items-center gap-3 py-2 sm:pr-5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
-              <BookOpen className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                Courses
-              </p>
-              <p className="text-2xl font-bold text-secondary-900">
-                {courses.length}
-              </p>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Courses Card */}
+        <Card
+          className="relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-medium border-l-4 border-l-primary-500 bg-gradient-to-br from-indigo-50/80 to-white"
+          bodyClassName="h-28 px-6 py-5 flex flex-col justify-center relative z-10"
+        >
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-25 transition-transform duration-300 hover:scale-110 hover:opacity-20">
+            <BookOpen size={64} className="text-primary-800" />
           </div>
-          <div className="flex items-center gap-3 py-2 sm:pl-5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-50 text-success-700">
-              <Users className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                Enrolled Learners
-              </p>
-              <p className="text-2xl font-bold text-secondary-900">
-                {learners.length}
-              </p>
-            </div>
+          <p className="text-sm font-semibold tracking-wide text-slate-600 uppercase">
+            Courses
+          </p>
+          <p className="mt-2 text-4xl font-extrabold text-slate-900">
+            {courses.length}
+          </p>
+        </Card>
+
+        {/* Enrolled Learners Card */}
+        <Card
+          className="relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-medium border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/80 to-white"
+          bodyClassName="h-28 px-6 py-5 flex flex-col justify-center relative z-10"
+        >
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-25 transition-transform duration-300 hover:scale-110 hover:opacity-20">
+            <Users size={64} className="text-emerald-800" />
           </div>
-        </div>
+          <p className="text-sm font-semibold tracking-wide text-slate-600 uppercase">
+            Enrolled Learners
+          </p>
+          <p className="mt-2 text-4xl font-extrabold text-slate-900">
+            {learners.length}
+          </p>
+        </Card>
       </div>
 
       <Card
@@ -1394,38 +1398,49 @@ export function AssignEnrollmentToClassesPage() {
           </Button>
         }
       >
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Select
-            label="Learning Path"
-            value={selectedPathId}
-            options={pathOptions}
-            isLoading={pathsLoading}
-            onChange={(event) => {
-              setSelectedPathId(event.target.value);
-              setSelectedCourseCode("");
-              setSelectedClassId("");
-              setSelectedEnrollmentIds([]);
-              setShowCourseStatusPanel(false);
-              setSetupCourseStatusSearch("");
-            }}
-          />
-          <Select
-            label="Course in Learning Path"
-            value={selectedCourseCode}
-            options={courseOptions}
-            disabled={!selectedPathId || optionsLoading || courses.length === 0}
-            onChange={(event) => {
-              const courseCode = event.target.value;
-              setSelectedCourseCode(courseCode);
-              setSelectedClassId("");
-              setSelectedEnrollmentIds([]);
-              setAssignmentMode("assign");
-              setShowCourseStatusPanel(Boolean(courseCode));
-              setSetupCourseStatusTab("notCompleted");
-              setSetupCourseStatusSearch("");
-            }}
-          />
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings className="h-4 w-4 text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+              Configuration Options
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Select
+              label="Learning Path"
+              value={selectedPathId}
+              options={pathOptions}
+              isLoading={pathsLoading}
+              onChange={(event) => {
+                setSelectedPathId(event.target.value);
+                setSelectedCourseCode("");
+                setSelectedClassId("");
+                setSelectedEnrollmentIds([]);
+                setShowCourseStatusPanel(false);
+                setSetupCourseStatusSearch("");
+              }}
+            />
+            <Select
+              label="Course in Learning Path"
+              value={selectedCourseCode}
+              options={courseOptions}
+              disabled={
+                !selectedPathId || optionsLoading || courses.length === 0
+              }
+              onChange={(event) => {
+                const courseCode = event.target.value;
+                setSelectedCourseCode(courseCode);
+                setSelectedClassId("");
+                setSelectedEnrollmentIds([]);
+                setAssignmentMode("assign");
+                setShowCourseStatusPanel(Boolean(courseCode));
+                setSetupCourseStatusTab("notCompleted");
+                setSetupCourseStatusSearch("");
+              }}
+            />
+          </div>
         </div>
+
         {selectedPath ? (
           <div className="mt-4 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3">
             <button
@@ -1492,30 +1507,49 @@ export function AssignEnrollmentToClassesPage() {
                         setSelectedClassId(classItem.id);
                         setSelectedEnrollmentIds([]);
                       }}
-                      className={`rounded-lg border p-4 text-left transition ${
+                      className={`relative overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 ${
                         active
-                          ? "border-primary-500 bg-primary-50 shadow-sm"
-                          : "border-secondary-200 bg-white hover:border-primary-300 hover:bg-secondary-50"
+                          ? "border-primary-500 bg-primary-50 shadow-md ring-1 ring-primary-500"
+                          : "border-slate-200 bg-white hover:scale-[1.01] hover:border-primary-300 hover:shadow-sm"
                       }`}
                     >
+                      {active && (
+                        <div className="absolute right-0 top-0 rounded-bl-xl bg-primary-500 p-1.5 shadow-sm">
+                          <CheckCircle className="h-4 w-4 text-white" />
+                        </div>
+                      )}
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-secondary-900">
+                        <div className="pr-6">
+                          <p
+                            className={`text-sm font-bold ${active ? "text-primary-950" : "text-slate-800"}`}
+                          >
                             {classItem.title}
                           </p>
-                          <p className="mt-1 text-xs text-secondary-500">
+                          <p className="mt-1 text-xs font-medium text-slate-500">
                             {classItem.code}
                           </p>
                         </div>
                         <School
-                          className={`h-5 w-5 ${active ? "text-primary-700" : "text-secondary-400"}`}
+                          className={`h-6 w-6 shrink-0 transition-colors ${active ? "text-primary-600" : "text-slate-300"}`}
                         />
                       </div>
-                      <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-secondary-600 sm:grid-cols-2">
-                        <span>Start Date: {classItem.startDate || "-"}</span>
-                        <span>End Date: {classItem.endDate || "-"}</span>
-                        <span>Mode: {classItem.venue || "-"}</span>
-                        <span>Capacity: {classItem.capacity || "-"}</span>
+                      <div className="mt-4 grid grid-cols-1 gap-2 text-xs font-medium text-slate-600 sm:grid-cols-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Start:</span>{" "}
+                          {classItem.startDate || "-"}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">End:</span>{" "}
+                          {classItem.endDate || "-"}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Mode:</span>{" "}
+                          {classItem.venue || "-"}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Capacity:</span>{" "}
+                          {classItem.capacity || "-"}
+                        </div>
                       </div>
                     </button>
                   );
@@ -1555,19 +1589,27 @@ export function AssignEnrollmentToClassesPage() {
               )
             }
           >
-            <div className="mb-4 grid grid-cols-1 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:grid-cols-3 lg:w-fit">
+            <div className="mb-4 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-2 shadow-sm w-fit">
               <button
                 type="button"
                 onClick={() => {
                   setAssignmentMode("assign");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "assign"
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-secondary-700 hover:bg-white/70"
+                    ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
+                    : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
                 }`}
               >
+                <UserPlus
+                  size={18}
+                  className={
+                    assignmentMode === "assign"
+                      ? "text-primary-100"
+                      : "text-slate-400 group-hover:text-primary-500"
+                  }
+                />
                 Assign new
               </button>
               <button
@@ -1576,12 +1618,20 @@ export function AssignEnrollmentToClassesPage() {
                   setAssignmentMode("reassign");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "reassign"
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-secondary-700 hover:bg-white/70"
+                    ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
+                    : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
                 }`}
               >
+                <RefreshCw
+                  size={18}
+                  className={
+                    assignmentMode === "reassign"
+                      ? "text-primary-100"
+                      : "text-slate-400 group-hover:text-primary-500"
+                  }
+                />
                 Reassign missed session
               </button>
               <button
@@ -1590,12 +1640,20 @@ export function AssignEnrollmentToClassesPage() {
                   setAssignmentMode("completion");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "completion"
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-secondary-700 hover:bg-white/70"
+                    ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
+                    : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
                 }`}
               >
+                <ClipboardCheck
+                  size={18}
+                  className={
+                    assignmentMode === "completion"
+                      ? "text-primary-100"
+                      : "text-slate-400 group-hover:text-primary-500"
+                  }
+                />
                 Completion course status
               </button>
             </div>
@@ -1613,96 +1671,105 @@ export function AssignEnrollmentToClassesPage() {
               </div>
             ) : null}
 
-            <div className="mb-4 space-y-3">
-              {/* Search and Batch Actions */}
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
-                <Input
-                  value={learnerSearch}
-                  onChange={(event) => setLearnerSearch(event.target.value)}
-                  placeholder="Search by Employee ID or Name"
-                  aria-label="Search learners"
-                />
-                <Input
-                  type="number"
-                  min="1"
-                  value={batchSize}
-                  onChange={(event) => setBatchSize(event.target.value)}
-                  aria-label="Batch size"
-                />
-                <Button
-                  variant="outline"
-                  onClick={selectNextBatch}
-                  disabled={
-                    assignmentMode === "completion" ||
-                    !selectedCourseCode ||
-                    selectableLearners.length === 0
-                  }
-                >
-                  Select
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={selectVisibleLearners}
-                  disabled={
-                    assignmentMode === "completion" ||
-                    filteredLearners.length === 0
-                  }
-                >
-                  Select All
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={clearSelection}
-                  disabled={selectedEnrollmentIds.length === 0}
-                >
-                  Clear
-                </Button>
+            <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 bg-white">
+                <Filter className="h-4 w-4 text-slate-500" />
+                <h3 className="text-sm font-semibold text-slate-700">
+                  Filter & Select Learners
+                </h3>
               </div>
-
-              {/* Filter Options */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div className="w-full sm:flex-1">
-                  <Select
-                    label="Filter by Designation"
-                    value={designationFilter}
-                    onChange={(event) =>
-                      setDesignationFilter(event.target.value)
-                    }
-                    options={[
-                      { value: "", label: "All Designations" },
-                      ...designationOptions.map((opt) => ({
-                        value: opt,
-                        label: opt,
-                      })),
-                    ]}
+              <div className="p-4 space-y-4">
+                {/* Search and Batch Actions */}
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_140px_auto_auto_auto]">
+                  <Input
+                    value={learnerSearch}
+                    onChange={(event) => setLearnerSearch(event.target.value)}
+                    placeholder="Search by Employee ID or Name"
+                    aria-label="Search learners"
                   />
-                </div>
-                <div className="w-full sm:flex-1">
-                  <Select
-                    label="Filter by Grade"
-                    value={gradeFilter}
-                    onChange={(event) => setGradeFilter(event.target.value)}
-                    options={[
-                      { value: "", label: "All Grades" },
-                      ...gradeOptions.map((opt) => ({
-                        value: opt,
-                        label: opt,
-                      })),
-                    ]}
+                  <Input
+                    type="number"
+                    min="1"
+                    value={batchSize}
+                    onChange={(event) => setBatchSize(event.target.value)}
+                    aria-label="Batch size"
                   />
-                </div>
-                <div className="flex pb-1">
                   <Button
-                    type="button"
                     variant="outline"
-                    onClick={handleResetFilters}
+                    onClick={selectNextBatch}
                     disabled={
-                      !learnerSearch && !designationFilter && !gradeFilter
+                      assignmentMode === "completion" ||
+                      !selectedCourseCode ||
+                      selectableLearners.length === 0
                     }
-                    className="w-full sm:w-auto"
                   >
-                    Reset Filters
+                    Select Batch
                   </Button>
+                  <Button
+                    variant="outline"
+                    onClick={selectVisibleLearners}
+                    disabled={
+                      assignmentMode === "completion" ||
+                      filteredLearners.length === 0
+                    }
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={clearSelection}
+                    disabled={selectedEnrollmentIds.length === 0}
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+
+                {/* Filter Options */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end pt-1 border-t border-slate-200/60">
+                  <div className="w-full sm:flex-1">
+                    <Select
+                      label="Filter by Designation"
+                      value={designationFilter}
+                      onChange={(event) =>
+                        setDesignationFilter(event.target.value)
+                      }
+                      options={[
+                        { value: "", label: "All Designations" },
+                        ...designationOptions.map((opt) => ({
+                          value: opt,
+                          label: opt,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div className="w-full sm:flex-1">
+                    <Select
+                      label="Filter by Grade"
+                      value={gradeFilter}
+                      onChange={(event) => setGradeFilter(event.target.value)}
+                      options={[
+                        { value: "", label: "All Grades" },
+                        ...gradeOptions.map((opt) => ({
+                          value: opt,
+                          label: opt,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div className="flex pb-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleResetFilters}
+                      disabled={
+                        !learnerSearch && !designationFilter && !gradeFilter
+                      }
+                      className="w-full sm:w-auto"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      Reset Filters
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1725,112 +1792,136 @@ export function AssignEnrollmentToClassesPage() {
             </div>
 
             {assignmentMode === "completion" ? (
-              <div className="overflow-x-auto rounded-lg border border-emerald-200">
-                <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                  <span>Name</span>
-                  <span>ID</span>
-                  <span>Email</span>
-                </div>
-                {optionsLoading ? (
-                  <div className="space-y-2 p-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
+              <div className="rounded-lg border border-emerald-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[34rem]">
+                <div className="overflow-auto flex-1 relative">
+                  <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50/95 backdrop-blur px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700 border-b border-emerald-200 sticky top-0 z-10">
+                    <span>Name</span>
+                    <span>ID</span>
+                    <span>Email</span>
                   </div>
-                ) : filteredCompletedCourseLearners.length === 0 ? (
-                  <p className="p-4 text-sm text-secondary-500">
-                    No completed learners found for this course.
-                  </p>
-                ) : (
-                  <div className="max-h-80 min-w-[712px] divide-y divide-emerald-100 overflow-auto">
-                    {filteredCompletedCourseLearners.map((learner) => (
-                      <div
-                        key={`completed-${learner.enrollmentId}`}
-                        className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm"
-                      >
-                        <span className="flex items-center gap-2 font-medium text-emerald-900">
-                          <Check className="h-4 w-4 text-emerald-600" />
-                          {learner.name || "-"}
-                        </span>
-                        <span className="text-emerald-800">
-                          {learner.employeeNumber || "-"}
-                        </span>
-                        <span className="text-emerald-800">
-                          {learner.email || "-"}
-                        </span>
+                  {optionsLoading ? (
+                    <div className="space-y-2 p-4 min-w-[712px]">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : filteredCompletedCourseLearners.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white min-w-[712px]">
+                      <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center mb-3 border border-emerald-100 shadow-sm">
+                        <Users className="h-6 w-6 text-emerald-500" />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-secondary-200">
-                <div className="grid min-w-[760px] grid-cols-[48px_1.6fr_120px_1fr] bg-secondary-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                  <span />
-                  <span>Learner</span>
-                  <span>Employee No</span>
-                  <span>Current Class</span>
-                </div>
-
-                {optionsLoading ? (
-                  <div className="space-y-2 p-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                ) : filteredLearners.length === 0 ? (
-                  <p className="p-4 text-sm text-secondary-500">
-                    {assignmentMode === "reassign"
-                      ? "No learners are assigned to another class for this course. Choose a different replacement class or course."
-                      : "No unassigned learners found for this course. Use reassignment if a learner missed a previous session."}
-                  </p>
-                ) : (
-                  <div className="max-h-[32rem] min-w-[760px] divide-y divide-secondary-100 overflow-auto">
-                    {filteredLearners.map((learner) => {
-                      const assignedClass = getAssignmentForCourse(
-                        learner,
-                        selectedCourseCode,
-                      );
-                      const checked = selectedEnrollmentIds.includes(
-                        learner.enrollmentId,
-                      );
-                      return (
-                        <label
-                          key={learner.enrollmentId}
-                          className={`grid cursor-pointer grid-cols-[48px_1.6fr_120px_1fr] items-center px-4 py-3 text-sm transition ${
-                            checked
-                              ? "bg-primary-50"
-                              : "bg-white hover:bg-secondary-50"
-                          }`}
+                      <p className="text-sm font-bold text-emerald-950 mb-1">
+                        No completed learners
+                      </p>
+                      <p className="text-xs text-emerald-600/80 max-w-sm">
+                        No learners have completed this course yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-[712px] divide-y divide-emerald-100 flex flex-col">
+                      {filteredCompletedCourseLearners.map((learner) => (
+                        <div
+                          key={`completed-${learner.enrollmentId}`}
+                          className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm hover:bg-emerald-50/30 transition-colors"
                         >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleLearner(learner.enrollmentId)}
-                            className="h-4 w-4 rounded border-secondary-300 text-primary-700 focus:ring-primary-500"
-                          />
-                          <span>
-                            <span className="block font-medium text-secondary-900">
-                              {learner.name}
-                            </span>
-                            <span className="block text-xs text-secondary-500">
-                              {learner.email}
-                            </span>
+                          <span className="flex items-center gap-2 font-bold text-emerald-900">
+                            <CheckCircle className="h-4 w-4 text-emerald-500" />
+                            {learner.name || "-"}
                           </span>
-                          <span className="text-secondary-700">
+                          <span className="text-emerald-800 font-medium">
                             {learner.employeeNumber || "-"}
                           </span>
-                          <span className="text-secondary-700">
-                            {assignedClass
-                              ? assignedClass.classTitle ||
-                                assignedClass.classCode ||
-                                assignedClass.classId
-                              : "-"}
+                          <span className="text-emerald-800">
+                            {learner.email || "-"}
                           </span>
-                        </label>
-                      );
-                    })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[36rem]">
+                <div className="overflow-auto flex-1 relative">
+                  <div className="grid min-w-[760px] grid-cols-[48px_1.6fr_120px_1fr] bg-slate-50/95 backdrop-blur px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-200 border-l-4 border-l-transparent sticky top-0 z-10">
+                    <span />
+                    <span>Learner</span>
+                    <span>Employee No</span>
+                    <span>Current Class</span>
                   </div>
-                )}
+
+                  {optionsLoading ? (
+                    <div className="space-y-2 p-4 min-w-[760px]">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : filteredLearners.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white min-w-[760px]">
+                      <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100 shadow-sm">
+                        <Users className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 mb-1">
+                        No learners found
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        {assignmentMode === "reassign"
+                          ? "No learners are assigned to another class for this course. Choose a different replacement class or course."
+                          : "No unassigned learners found for this course. Use reassignment if a learner missed a previous session."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-[760px] flex flex-col">
+                      {filteredLearners.map((learner) => {
+                        const assignedClass = getAssignmentForCourse(
+                          learner,
+                          selectedCourseCode,
+                        );
+                        const checked = selectedEnrollmentIds.includes(
+                          learner.enrollmentId,
+                        );
+                        return (
+                          <label
+                            key={learner.enrollmentId}
+                            className={`grid cursor-pointer grid-cols-[48px_1.6fr_120px_1fr] items-center px-4 py-3 text-sm transition-all duration-200 border-b border-slate-100 last:border-b-0 ${
+                              checked
+                                ? "bg-primary-50 border-l-4 border-l-primary-500"
+                                : "bg-white hover:bg-slate-50 hover:shadow-sm border-l-4 border-l-transparent"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                toggleLearner(learner.enrollmentId)
+                              }
+                              className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary-500 cursor-pointer ml-1"
+                            />
+                            <span>
+                              <span
+                                className={`block font-bold ${checked ? "text-primary-950" : "text-slate-800"}`}
+                              >
+                                {learner.name}
+                              </span>
+                              <span className="block text-xs text-slate-500 mt-0.5 font-medium">
+                                {learner.email}
+                              </span>
+                            </span>
+                            <span className="text-slate-600 font-medium">
+                              {learner.employeeNumber || "-"}
+                            </span>
+                            <span className="text-slate-500">
+                              {assignedClass
+                                ? assignedClass.classTitle ||
+                                  assignedClass.classCode ||
+                                  assignedClass.classId
+                                : "-"}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </Card>
