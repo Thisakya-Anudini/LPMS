@@ -1792,112 +1792,136 @@ export function AssignEnrollmentToClassesPage() {
             </div>
 
             {assignmentMode === "completion" ? (
-              <div className="overflow-x-auto rounded-lg border border-emerald-200">
-                <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
-                  <span>Name</span>
-                  <span>ID</span>
-                  <span>Email</span>
-                </div>
-                {optionsLoading ? (
-                  <div className="space-y-2 p-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
+              <div className="rounded-lg border border-emerald-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[34rem]">
+                <div className="overflow-auto flex-1 relative">
+                  <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50/95 backdrop-blur px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700 border-b border-emerald-200 sticky top-0 z-10">
+                    <span>Name</span>
+                    <span>ID</span>
+                    <span>Email</span>
                   </div>
-                ) : filteredCompletedCourseLearners.length === 0 ? (
-                  <p className="p-4 text-sm text-secondary-500">
-                    No completed learners found for this course.
-                  </p>
-                ) : (
-                  <div className="max-h-80 min-w-[712px] divide-y divide-emerald-100 overflow-auto">
-                    {filteredCompletedCourseLearners.map((learner) => (
-                      <div
-                        key={`completed-${learner.enrollmentId}`}
-                        className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm"
-                      >
-                        <span className="flex items-center gap-2 font-medium text-emerald-900">
-                          <Check className="h-4 w-4 text-emerald-600" />
-                          {learner.name || "-"}
-                        </span>
-                        <span className="text-emerald-800">
-                          {learner.employeeNumber || "-"}
-                        </span>
-                        <span className="text-emerald-800">
-                          {learner.email || "-"}
-                        </span>
+                  {optionsLoading ? (
+                    <div className="space-y-2 p-4 min-w-[712px]">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : filteredCompletedCourseLearners.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white min-w-[712px]">
+                      <div className="h-12 w-12 rounded-full bg-emerald-50 flex items-center justify-center mb-3 border border-emerald-100 shadow-sm">
+                        <Users className="h-6 w-6 text-emerald-500" />
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-secondary-200">
-                <div className="grid min-w-[760px] grid-cols-[48px_1.6fr_120px_1fr] bg-secondary-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                  <span />
-                  <span>Learner</span>
-                  <span>Employee No</span>
-                  <span>Current Class</span>
-                </div>
-
-                {optionsLoading ? (
-                  <div className="space-y-2 p-4">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-12 w-full" />
-                  </div>
-                ) : filteredLearners.length === 0 ? (
-                  <p className="p-4 text-sm text-secondary-500">
-                    {assignmentMode === "reassign"
-                      ? "No learners are assigned to another class for this course. Choose a different replacement class or course."
-                      : "No unassigned learners found for this course. Use reassignment if a learner missed a previous session."}
-                  </p>
-                ) : (
-                  <div className="max-h-[32rem] min-w-[760px] divide-y divide-secondary-100 overflow-auto">
-                    {filteredLearners.map((learner) => {
-                      const assignedClass = getAssignmentForCourse(
-                        learner,
-                        selectedCourseCode,
-                      );
-                      const checked = selectedEnrollmentIds.includes(
-                        learner.enrollmentId,
-                      );
-                      return (
-                        <label
-                          key={learner.enrollmentId}
-                          className={`grid cursor-pointer grid-cols-[48px_1.6fr_120px_1fr] items-center px-4 py-3 text-sm transition ${
-                            checked
-                              ? "bg-primary-50"
-                              : "bg-white hover:bg-secondary-50"
-                          }`}
+                      <p className="text-sm font-bold text-emerald-950 mb-1">
+                        No completed learners
+                      </p>
+                      <p className="text-xs text-emerald-600/80 max-w-sm">
+                        No learners have completed this course yet.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-[712px] divide-y divide-emerald-100 flex flex-col">
+                      {filteredCompletedCourseLearners.map((learner) => (
+                        <div
+                          key={`completed-${learner.enrollmentId}`}
+                          className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm hover:bg-emerald-50/30 transition-colors"
                         >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleLearner(learner.enrollmentId)}
-                            className="h-4 w-4 rounded border-secondary-300 text-primary-700 focus:ring-primary-500"
-                          />
-                          <span>
-                            <span className="block font-medium text-secondary-900">
-                              {learner.name}
-                            </span>
-                            <span className="block text-xs text-secondary-500">
-                              {learner.email}
-                            </span>
+                          <span className="flex items-center gap-2 font-bold text-emerald-900">
+                            <CheckCircle className="h-4 w-4 text-emerald-500" />
+                            {learner.name || "-"}
                           </span>
-                          <span className="text-secondary-700">
+                          <span className="text-emerald-800 font-medium">
                             {learner.employeeNumber || "-"}
                           </span>
-                          <span className="text-secondary-700">
-                            {assignedClass
-                              ? assignedClass.classTitle ||
-                                assignedClass.classCode ||
-                                assignedClass.classId
-                              : "-"}
+                          <span className="text-emerald-800">
+                            {learner.email || "-"}
                           </span>
-                        </label>
-                      );
-                    })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[36rem]">
+                <div className="overflow-auto flex-1 relative">
+                  <div className="grid min-w-[760px] grid-cols-[48px_1.6fr_120px_1fr] bg-slate-50/95 backdrop-blur px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 border-b border-slate-200 border-l-4 border-l-transparent sticky top-0 z-10">
+                    <span />
+                    <span>Learner</span>
+                    <span>Employee No</span>
+                    <span>Current Class</span>
                   </div>
-                )}
+
+                  {optionsLoading ? (
+                    <div className="space-y-2 p-4 min-w-[760px]">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : filteredLearners.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white min-w-[760px]">
+                      <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100 shadow-sm">
+                        <Users className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 mb-1">
+                        No learners found
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        {assignmentMode === "reassign"
+                          ? "No learners are assigned to another class for this course. Choose a different replacement class or course."
+                          : "No unassigned learners found for this course. Use reassignment if a learner missed a previous session."}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-[760px] flex flex-col">
+                      {filteredLearners.map((learner) => {
+                        const assignedClass = getAssignmentForCourse(
+                          learner,
+                          selectedCourseCode,
+                        );
+                        const checked = selectedEnrollmentIds.includes(
+                          learner.enrollmentId,
+                        );
+                        return (
+                          <label
+                            key={learner.enrollmentId}
+                            className={`grid cursor-pointer grid-cols-[48px_1.6fr_120px_1fr] items-center px-4 py-3 text-sm transition-all duration-200 border-b border-slate-100 last:border-b-0 ${
+                              checked
+                                ? "bg-primary-50 border-l-4 border-l-primary-500"
+                                : "bg-white hover:bg-slate-50 hover:shadow-sm border-l-4 border-l-transparent"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                toggleLearner(learner.enrollmentId)
+                              }
+                              className="h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary-500 cursor-pointer ml-1"
+                            />
+                            <span>
+                              <span
+                                className={`block font-bold ${checked ? "text-primary-950" : "text-slate-800"}`}
+                              >
+                                {learner.name}
+                              </span>
+                              <span className="block text-xs text-slate-500 mt-0.5 font-medium">
+                                {learner.email}
+                              </span>
+                            </span>
+                            <span className="text-slate-600 font-medium">
+                              {learner.employeeNumber || "-"}
+                            </span>
+                            <span className="text-slate-500">
+                              {assignedClass
+                                ? assignedClass.classTitle ||
+                                  assignedClass.classCode ||
+                                  assignedClass.classId
+                                : "-"}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </Card>
