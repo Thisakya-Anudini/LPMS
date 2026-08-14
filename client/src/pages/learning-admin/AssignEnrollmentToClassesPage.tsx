@@ -10,6 +10,9 @@ import {
   Users,
   X,
   Settings,
+  UserPlus,
+  RefreshCw,
+  ClipboardCheck,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -1565,19 +1568,27 @@ export function AssignEnrollmentToClassesPage() {
               )
             }
           >
-            <div className="mb-4 grid grid-cols-1 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:grid-cols-3 lg:w-fit">
+            <div className="mb-4 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-2 shadow-sm w-fit">
               <button
                 type="button"
                 onClick={() => {
                   setAssignmentMode("assign");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "assign"
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-secondary-700 hover:bg-white/70"
+                    ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
+                    : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
                 }`}
               >
+                <UserPlus
+                  size={18}
+                  className={
+                    assignmentMode === "assign"
+                      ? "text-primary-100"
+                      : "text-slate-400 group-hover:text-primary-500"
+                  }
+                />
                 Assign new
               </button>
               <button
@@ -1586,12 +1597,20 @@ export function AssignEnrollmentToClassesPage() {
                   setAssignmentMode("reassign");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "reassign"
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-secondary-700 hover:bg-white/70"
+                    ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
+                    : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
                 }`}
               >
+                <RefreshCw
+                  size={18}
+                  className={
+                    assignmentMode === "reassign"
+                      ? "text-primary-100"
+                      : "text-slate-400 group-hover:text-primary-500"
+                  }
+                />
                 Reassign missed session
               </button>
               <button
@@ -1600,12 +1619,20 @@ export function AssignEnrollmentToClassesPage() {
                   setAssignmentMode("completion");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
+                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "completion"
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-secondary-700 hover:bg-white/70"
+                    ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
+                    : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
                 }`}
               >
+                <ClipboardCheck
+                  size={18}
+                  className={
+                    assignmentMode === "completion"
+                      ? "text-primary-100"
+                      : "text-slate-400 group-hover:text-primary-500"
+                  }
+                />
                 Completion course status
               </button>
             </div>
