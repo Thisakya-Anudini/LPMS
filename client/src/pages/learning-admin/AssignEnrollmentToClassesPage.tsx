@@ -14,6 +14,7 @@ import {
   RefreshCw,
   ClipboardCheck,
   Filter,
+  CheckCircle,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -1506,30 +1507,49 @@ export function AssignEnrollmentToClassesPage() {
                         setSelectedClassId(classItem.id);
                         setSelectedEnrollmentIds([]);
                       }}
-                      className={`rounded-lg border p-4 text-left transition ${
+                      className={`relative overflow-hidden rounded-xl border p-4 text-left transition-all duration-200 ${
                         active
-                          ? "border-primary-500 bg-primary-50 shadow-sm"
-                          : "border-secondary-200 bg-white hover:border-primary-300 hover:bg-secondary-50"
+                          ? "border-primary-500 bg-primary-50 shadow-md ring-1 ring-primary-500"
+                          : "border-slate-200 bg-white hover:scale-[1.01] hover:border-primary-300 hover:shadow-sm"
                       }`}
                     >
+                      {active && (
+                        <div className="absolute right-0 top-0 rounded-bl-xl bg-primary-500 p-1.5 shadow-sm">
+                          <CheckCircle className="h-4 w-4 text-white" />
+                        </div>
+                      )}
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-secondary-900">
+                        <div className="pr-6">
+                          <p
+                            className={`text-sm font-bold ${active ? "text-primary-950" : "text-slate-800"}`}
+                          >
                             {classItem.title}
                           </p>
-                          <p className="mt-1 text-xs text-secondary-500">
+                          <p className="mt-1 text-xs font-medium text-slate-500">
                             {classItem.code}
                           </p>
                         </div>
                         <School
-                          className={`h-5 w-5 ${active ? "text-primary-700" : "text-secondary-400"}`}
+                          className={`h-6 w-6 shrink-0 transition-colors ${active ? "text-primary-600" : "text-slate-300"}`}
                         />
                       </div>
-                      <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-secondary-600 sm:grid-cols-2">
-                        <span>Start Date: {classItem.startDate || "-"}</span>
-                        <span>End Date: {classItem.endDate || "-"}</span>
-                        <span>Mode: {classItem.venue || "-"}</span>
-                        <span>Capacity: {classItem.capacity || "-"}</span>
+                      <div className="mt-4 grid grid-cols-1 gap-2 text-xs font-medium text-slate-600 sm:grid-cols-2">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Start:</span>{" "}
+                          {classItem.startDate || "-"}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">End:</span>{" "}
+                          {classItem.endDate || "-"}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Mode:</span>{" "}
+                          {classItem.venue || "-"}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-slate-400">Capacity:</span>{" "}
+                          {classItem.capacity || "-"}
+                        </div>
                       </div>
                     </button>
                   );
