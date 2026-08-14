@@ -9,6 +9,7 @@ import {
   Search,
   Users,
   X,
+  Settings,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -691,12 +692,7 @@ export function AssignEnrollmentToClassesPage() {
     }
 
     return result.filter((learner) => learnerMatchesSearch(learner, search));
-  }, [
-    learnerSearch,
-    selectableLearners,
-    designationFilter,
-    gradeFilter,
-  ]);
+  }, [learnerSearch, selectableLearners, designationFilter, gradeFilter]);
 
   const selectedLearnersForCourse = useMemo(
     () =>
@@ -1345,35 +1341,38 @@ export function AssignEnrollmentToClassesPage() {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-secondary-200 bg-white px-4 py-3 shadow-soft">
-        <div className="grid grid-cols-1 divide-y divide-secondary-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <div className="flex items-center gap-3 py-2 sm:pr-5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
-              <BookOpen className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                Courses
-              </p>
-              <p className="text-2xl font-bold text-secondary-900">
-                {courses.length}
-              </p>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Courses Card */}
+        <Card
+          className="relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-medium border-l-4 border-l-primary-500 bg-gradient-to-br from-indigo-50/80 to-white"
+          bodyClassName="h-28 px-6 py-5 flex flex-col justify-center relative z-10"
+        >
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-25 transition-transform duration-300 hover:scale-110 hover:opacity-20">
+            <BookOpen size={64} className="text-primary-800" />
           </div>
-          <div className="flex items-center gap-3 py-2 sm:pl-5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-50 text-success-700">
-              <Users className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                Enrolled Learners
-              </p>
-              <p className="text-2xl font-bold text-secondary-900">
-                {learners.length}
-              </p>
-            </div>
+          <p className="text-sm font-semibold tracking-wide text-slate-600 uppercase">
+            Courses
+          </p>
+          <p className="mt-2 text-4xl font-extrabold text-slate-900">
+            {courses.length}
+          </p>
+        </Card>
+
+        {/* Enrolled Learners Card */}
+        <Card
+          className="relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-medium border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50/80 to-white"
+          bodyClassName="h-28 px-6 py-5 flex flex-col justify-center relative z-10"
+        >
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-25 transition-transform duration-300 hover:scale-110 hover:opacity-20">
+            <Users size={64} className="text-emerald-800" />
           </div>
-        </div>
+          <p className="text-sm font-semibold tracking-wide text-slate-600 uppercase">
+            Enrolled Learners
+          </p>
+          <p className="mt-2 text-4xl font-extrabold text-slate-900">
+            {learners.length}
+          </p>
+        </Card>
       </div>
 
       <Card
@@ -1394,38 +1393,49 @@ export function AssignEnrollmentToClassesPage() {
           </Button>
         }
       >
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Select
-            label="Learning Path"
-            value={selectedPathId}
-            options={pathOptions}
-            isLoading={pathsLoading}
-            onChange={(event) => {
-              setSelectedPathId(event.target.value);
-              setSelectedCourseCode("");
-              setSelectedClassId("");
-              setSelectedEnrollmentIds([]);
-              setShowCourseStatusPanel(false);
-              setSetupCourseStatusSearch("");
-            }}
-          />
-          <Select
-            label="Course in Learning Path"
-            value={selectedCourseCode}
-            options={courseOptions}
-            disabled={!selectedPathId || optionsLoading || courses.length === 0}
-            onChange={(event) => {
-              const courseCode = event.target.value;
-              setSelectedCourseCode(courseCode);
-              setSelectedClassId("");
-              setSelectedEnrollmentIds([]);
-              setAssignmentMode("assign");
-              setShowCourseStatusPanel(Boolean(courseCode));
-              setSetupCourseStatusTab("notCompleted");
-              setSetupCourseStatusSearch("");
-            }}
-          />
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings className="h-4 w-4 text-slate-500" />
+            <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wide">
+              Configuration Options
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <Select
+              label="Learning Path"
+              value={selectedPathId}
+              options={pathOptions}
+              isLoading={pathsLoading}
+              onChange={(event) => {
+                setSelectedPathId(event.target.value);
+                setSelectedCourseCode("");
+                setSelectedClassId("");
+                setSelectedEnrollmentIds([]);
+                setShowCourseStatusPanel(false);
+                setSetupCourseStatusSearch("");
+              }}
+            />
+            <Select
+              label="Course in Learning Path"
+              value={selectedCourseCode}
+              options={courseOptions}
+              disabled={
+                !selectedPathId || optionsLoading || courses.length === 0
+              }
+              onChange={(event) => {
+                const courseCode = event.target.value;
+                setSelectedCourseCode(courseCode);
+                setSelectedClassId("");
+                setSelectedEnrollmentIds([]);
+                setAssignmentMode("assign");
+                setShowCourseStatusPanel(Boolean(courseCode));
+                setSetupCourseStatusTab("notCompleted");
+                setSetupCourseStatusSearch("");
+              }}
+            />
+          </div>
         </div>
+
         {selectedPath ? (
           <div className="mt-4 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3">
             <button
