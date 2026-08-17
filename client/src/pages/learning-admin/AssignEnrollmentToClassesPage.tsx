@@ -17,6 +17,8 @@ import {
   CheckCircle,
   ArrowRight,
   MousePointerClick,
+  Activity,
+  Clock,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -495,6 +497,9 @@ export function AssignEnrollmentToClassesPage() {
     "notCompleted" | "completed"
   >("notCompleted");
   const [setupCourseStatusSearch, setSetupCourseStatusSearch] = useState("");
+  const [setupCourseStatusDesignation, setSetupCourseStatusDesignation] =
+    useState("");
+  const [setupCourseStatusGrade, setSetupCourseStatusGrade] = useState("");
   const [learnerSearch, setLearnerSearch] = useState("");
   const [designationFilter, setDesignationFilter] = useState("");
   const [gradeFilter, setGradeFilter] = useState("");
@@ -629,24 +634,52 @@ export function AssignEnrollmentToClassesPage() {
   }, [completedCourseLearners, learnerSearch]);
 
   const filteredSetupNotCompletedLearners = useMemo(() => {
+    let result = notCompletedCourseLearners;
+
+    if (setupCourseStatusDesignation) {
+      result = result.filter(
+        (l) => l.designation === setupCourseStatusDesignation,
+      );
+    }
+    if (setupCourseStatusGrade) {
+      result = result.filter((l) => l.gradeName === setupCourseStatusGrade);
+    }
+
     const search = setupCourseStatusSearch.trim().toLowerCase();
     if (!search) {
-      return notCompletedCourseLearners;
+      return result;
     }
-    return notCompletedCourseLearners.filter((learner) =>
-      learnerMatchesSearch(learner, search),
-    );
-  }, [notCompletedCourseLearners, setupCourseStatusSearch]);
+    return result.filter((learner) => learnerMatchesSearch(learner, search));
+  }, [
+    notCompletedCourseLearners,
+    setupCourseStatusSearch,
+    setupCourseStatusDesignation,
+    setupCourseStatusGrade,
+  ]);
 
   const filteredSetupCompletedLearners = useMemo(() => {
+    let result = completedCourseLearners;
+
+    if (setupCourseStatusDesignation) {
+      result = result.filter(
+        (l) => l.designation === setupCourseStatusDesignation,
+      );
+    }
+    if (setupCourseStatusGrade) {
+      result = result.filter((l) => l.gradeName === setupCourseStatusGrade);
+    }
+
     const search = setupCourseStatusSearch.trim().toLowerCase();
     if (!search) {
-      return completedCourseLearners;
+      return result;
     }
-    return completedCourseLearners.filter((learner) =>
-      learnerMatchesSearch(learner, search),
-    );
-  }, [completedCourseLearners, setupCourseStatusSearch]);
+    return result.filter((learner) => learnerMatchesSearch(learner, search));
+  }, [
+    completedCourseLearners,
+    setupCourseStatusSearch,
+    setupCourseStatusDesignation,
+    setupCourseStatusGrade,
+  ]);
 
   const statusTransferLearners = useMemo(
     () =>
@@ -1947,93 +1980,172 @@ export function AssignEnrollmentToClassesPage() {
       ) : null}
 
       {showCourseStatusPanel && selectedCourse ? (
-        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+        <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
           <div
-            className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-large animate-slide-in"
+            className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-900/5 animate-slide-in"
             role="dialog"
             aria-modal="true"
             aria-labelledby="setup-course-status-title"
           >
-            <div className="flex items-start justify-between gap-4 border-b border-secondary-200 px-5 py-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                  Course Status
-                </p>
-                <h2
-                  id="setup-course-status-title"
-                  className="mt-1 text-lg font-semibold text-secondary-900"
-                >
-                  {selectedCourse.courseCode} - {selectedCourse.title}
-                </h2>
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-white px-6 py-5">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
+                  <Activity className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Course Status
+                  </p>
+                  <h2
+                    id="setup-course-status-title"
+                    className="mt-1 text-xl font-bold text-slate-900"
+                  >
+                    {selectedCourse.courseCode} - {selectedCourse.title}
+                  </h2>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowCourseStatusPanel(false)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-secondary-500 transition hover:bg-secondary-100 hover:text-secondary-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 aria-label="Close course status"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="overflow-y-auto p-5">
-              <div className="grid grid-cols-2 gap-2 rounded-lg border border-secondary-200 bg-secondary-50 p-1 sm:w-fit">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSetupCourseStatusTab("notCompleted");
-                    setSelectedEnrollmentIds([]);
-                  }}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-                    setupCourseStatusTab === "notCompleted"
-                      ? "bg-red-600 text-white shadow-sm"
-                      : "text-red-700 hover:bg-red-50"
-                  }`}
-                >
-                  Not Completed ({notCompletedCourseLearners.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSetupCourseStatusTab("completed");
-                    setSelectedEnrollmentIds([]);
-                  }}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold transition ${
-                    setupCourseStatusTab === "completed"
-                      ? "bg-emerald-600 text-white shadow-sm"
-                      : "text-emerald-700 hover:bg-emerald-50"
-                  }`}
-                >
-                  Completed ({completedCourseLearners.length})
-                </button>
+            <div className="flex flex-1 flex-col overflow-hidden bg-slate-50/50 p-6">
+              {/* Top Control Panel */}
+              <div className="mb-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:flex-row xl:items-end xl:justify-between">
+                {/* Segmented Tabs */}
+                <div className="flex h-10 shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100 p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSetupCourseStatusTab("notCompleted");
+                      setSelectedEnrollmentIds([]);
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
+                      setupCourseStatusTab === "notCompleted"
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <Clock
+                      className={`h-4 w-4 ${setupCourseStatusTab === "notCompleted" ? "text-amber-500" : ""}`}
+                    />
+                    Not Completed ({notCompletedCourseLearners.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSetupCourseStatusTab("completed");
+                      setSelectedEnrollmentIds([]);
+                    }}
+                    className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
+                      setupCourseStatusTab === "completed"
+                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <CheckCircle
+                      className={`h-4 w-4 ${setupCourseStatusTab === "completed" ? "text-emerald-500" : ""}`}
+                    />
+                    Completed ({completedCourseLearners.length})
+                  </button>
+                </div>
+
+                {/* Filters */}
+                <div className="flex flex-1 flex-wrap items-end gap-3 xl:justify-end">
+                  <div className="w-full sm:w-48">
+                    <Select
+                      label="Designation"
+                      value={setupCourseStatusDesignation}
+                      onChange={(e) =>
+                        setSetupCourseStatusDesignation(e.target.value)
+                      }
+                      options={[
+                        { value: "", label: "All Designations" },
+                        ...designationOptions.map((opt) => ({
+                          value: opt,
+                          label: opt,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div className="w-full sm:w-40">
+                    <Select
+                      label="Grade"
+                      value={setupCourseStatusGrade}
+                      onChange={(e) =>
+                        setSetupCourseStatusGrade(e.target.value)
+                      }
+                      options={[
+                        { value: "", label: "All Grades" },
+                        ...gradeOptions.map((opt) => ({
+                          value: opt,
+                          label: opt,
+                        })),
+                      ]}
+                    />
+                  </div>
+                  <div className="w-full sm:w-64">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        value={setupCourseStatusSearch}
+                        onChange={(e) =>
+                          setSetupCourseStatusSearch(e.target.value)
+                        }
+                        placeholder="Search learners..."
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSetupCourseStatusSearch("");
+                      setSetupCourseStatusDesignation("");
+                      setSetupCourseStatusGrade("");
+                    }}
+                    disabled={
+                      !setupCourseStatusSearch &&
+                      !setupCourseStatusDesignation &&
+                      !setupCourseStatusGrade
+                    }
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    Reset
+                  </Button>
+                </div>
               </div>
 
-              <div className="mt-4">
-                <Input
-                  value={setupCourseStatusSearch}
-                  onChange={(event) =>
-                    setSetupCourseStatusSearch(event.target.value)
-                  }
-                  placeholder="Search learners by name or ID"
-                  aria-label="Search course status learners"
-                />
-              </div>
-
-              <div className="mt-4 overflow-x-auto rounded-lg border border-secondary-200">
+              {/* Data Table */}
+              <div className="flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm flex flex-col">
                 {setupCourseStatusTab === "notCompleted" ? (
                   <>
-                    <div className="grid min-w-[760px] grid-cols-[48px_1.4fr_140px_1.4fr] bg-red-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-red-700">
+                    <div className="grid min-w-[760px] grid-cols-[48px_1.4fr_140px_1.4fr] bg-slate-50/90 backdrop-blur px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200 sticky top-0 z-10 border-l-4 border-l-transparent">
                       <span />
                       <span>Name</span>
                       <span>ID</span>
                       <span>Email</span>
                     </div>
                     {filteredSetupNotCompletedLearners.length === 0 ? (
-                      <p className="p-4 text-sm text-secondary-500">
-                        No not completed learners found for this course.
-                      </p>
+                      <div className="flex flex-1 flex-col items-center justify-center py-16 px-4 text-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 border border-slate-100 shadow-sm mb-3">
+                          <Users className="h-6 w-6 text-slate-400" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-900 mb-1">
+                          No learners found
+                        </p>
+                        <p className="text-xs text-slate-500 max-w-sm">
+                          Try adjusting your search or filter criteria.
+                        </p>
+                      </div>
                     ) : (
-                      <div className="max-h-80 min-w-[760px] divide-y divide-red-100 overflow-auto">
+                      <div className="flex-1 overflow-y-auto min-w-[760px]">
                         {filteredSetupNotCompletedLearners.map((learner) => {
                           const checked = selectedEnrollmentIds.includes(
                             learner.enrollmentId,
@@ -2041,10 +2153,10 @@ export function AssignEnrollmentToClassesPage() {
                           return (
                             <label
                               key={`setup-not-completed-${learner.enrollmentId}`}
-                              className={`grid cursor-pointer grid-cols-[48px_1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm transition ${
+                              className={`grid cursor-pointer grid-cols-[48px_1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm transition-all duration-200 border-b border-slate-100 last:border-b-0 ${
                                 checked
-                                  ? "bg-red-100"
-                                  : "bg-white hover:bg-red-50"
+                                  ? "bg-primary-50 border-l-4 border-l-primary-500"
+                                  : "bg-white hover:bg-slate-50 hover:shadow-sm border-l-4 border-l-transparent"
                               }`}
                             >
                               <input
@@ -2053,16 +2165,23 @@ export function AssignEnrollmentToClassesPage() {
                                 onChange={() =>
                                   toggleLearner(learner.enrollmentId)
                                 }
-                                className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                                className="ml-1 h-4 w-4 rounded border-slate-300 text-primary-700 focus:ring-primary-500 cursor-pointer"
                               />
-                              <span className="flex items-center gap-2 font-medium text-red-900">
-                                <X className="h-4 w-4 text-red-600" />
-                                {learner.name || "-"}
+                              <span className="flex flex-col">
+                                <span
+                                  className={`font-bold ${checked ? "text-primary-950" : "text-slate-800"}`}
+                                >
+                                  {learner.name}
+                                </span>
+                                <span className="text-xs text-slate-500 font-medium mt-0.5">
+                                  {learner.designation || "No Designation"} •{" "}
+                                  {learner.gradeName || "No Grade"}
+                                </span>
                               </span>
-                              <span className="text-red-800">
+                              <span className="font-medium text-slate-600">
                                 {learner.employeeNumber || "-"}
                               </span>
-                              <span className="text-red-800">
+                              <span className="text-slate-600">
                                 {learner.email || "-"}
                               </span>
                             </label>
@@ -2073,30 +2192,45 @@ export function AssignEnrollmentToClassesPage() {
                   </>
                 ) : (
                   <>
-                    <div className="grid min-w-[712px] grid-cols-[1.4fr_140px_1.4fr] bg-emerald-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    <div className="grid min-w-[760px] grid-cols-[1.4fr_140px_1.4fr] bg-slate-50/90 backdrop-blur px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200 sticky top-0 z-10">
                       <span>Name</span>
                       <span>ID</span>
                       <span>Email</span>
                     </div>
                     {filteredSetupCompletedLearners.length === 0 ? (
-                      <p className="p-4 text-sm text-secondary-500">
-                        No completed learners found for this course.
-                      </p>
+                      <div className="flex flex-1 flex-col items-center justify-center py-16 px-4 text-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 border border-slate-100 shadow-sm mb-3">
+                          <CheckCircle className="h-6 w-6 text-slate-400" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-900 mb-1">
+                          No completed learners
+                        </p>
+                        <p className="text-xs text-slate-500 max-w-sm">
+                          Adjust your filters or search to see completed
+                          learners.
+                        </p>
+                      </div>
                     ) : (
-                      <div className="max-h-80 min-w-[712px] divide-y divide-emerald-100 overflow-auto">
+                      <div className="flex-1 overflow-y-auto min-w-[760px]">
                         {filteredSetupCompletedLearners.map((learner) => (
                           <div
                             key={`setup-completed-${learner.enrollmentId}`}
-                            className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm"
+                            className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-b-0"
                           >
-                            <span className="flex items-center gap-2 font-medium text-emerald-900">
-                              <Check className="h-4 w-4 text-emerald-600" />
-                              {learner.name || "-"}
+                            <span className="flex flex-col">
+                              <span className="flex items-center gap-2 font-bold text-slate-800">
+                                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                                {learner.name || "-"}
+                              </span>
+                              <span className="text-xs text-slate-500 font-medium mt-0.5 ml-6">
+                                {learner.designation || "No Designation"} •{" "}
+                                {learner.gradeName || "No Grade"}
+                              </span>
                             </span>
-                            <span className="text-emerald-800">
+                            <span className="font-medium text-slate-600">
                               {learner.employeeNumber || "-"}
                             </span>
-                            <span className="text-emerald-800">
+                            <span className="text-slate-600">
                               {learner.email || "-"}
                             </span>
                           </div>
@@ -2108,7 +2242,8 @@ export function AssignEnrollmentToClassesPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 border-t border-secondary-200 bg-secondary-50 px-5 py-4">
+            {/* Footer */}
+            <div className="flex justify-end gap-3 border-t border-slate-100 bg-white px-6 py-4">
               <Button
                 type="button"
                 variant="outline"
