@@ -963,6 +963,12 @@ export function AssignEnrollmentToClassesPage() {
     loadClasses();
   }, [loadClasses]);
 
+  const handleGlobalRefresh = useCallback(async () => {
+    setSelectedPathId("");
+
+    await loadLearningPaths();
+  }, [loadLearningPaths]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -1338,8 +1344,8 @@ export function AssignEnrollmentToClassesPage() {
         </div>
         <Button
           variant="outline"
-          onClick={loadPathOptions}
-          disabled={!selectedPathId || optionsLoading}
+          onClick={handleGlobalRefresh}
+          disabled={pathsLoading || optionsLoading}
         >
           <RefreshCcw className="h-4 w-4" />
           Refresh
