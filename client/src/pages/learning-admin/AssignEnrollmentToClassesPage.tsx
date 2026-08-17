@@ -15,6 +15,8 @@ import {
   ClipboardCheck,
   Filter,
   CheckCircle,
+  ArrowRight,
+  MousePointerClick,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -1427,6 +1429,7 @@ export function AssignEnrollmentToClassesPage() {
               }}
             />
             <Select
+              id="course-selector-input"
               label="Course in Learning Path"
               value={selectedCourseCode}
               options={courseOptions}
@@ -1448,19 +1451,20 @@ export function AssignEnrollmentToClassesPage() {
         </div>
 
         {selectedPath ? (
-          <div className="mt-4 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3">
+          <div className="mt-4 rounded-lg border border-primary-100 bg-primary-50 px-4 py-3 transition-colors hover:bg-primary-100/50">
             <button
               type="button"
               onClick={() => {
                 if (selectedCourse) {
                   setShowCourseStatusPanel(true);
+                } else {
+                  document.getElementById("course-selector-input")?.focus();
                 }
               }}
-              disabled={!selectedCourse}
-              className="flex w-full items-center justify-between gap-3 text-left text-sm text-primary-900 transition disabled:cursor-not-allowed disabled:opacity-70"
+              className="group flex w-full items-center justify-between gap-3 text-left text-sm text-primary-900 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded-md"
             >
               <span>
-                <span className="block text-xs font-semibold uppercase tracking-wide text-primary-700">
+                <span className="block text-xs font-bold uppercase tracking-wide text-primary-700">
                   Selected setup
                 </span>
                 <span className="mt-1 block font-semibold">
@@ -1469,8 +1473,16 @@ export function AssignEnrollmentToClassesPage() {
                     : `${selectedPath.title} / Select course`}
                 </span>
               </span>
-              <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-primary-700">
-                {selectedCourse ? "View course status" : "Select course"}
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary-700 transition-transform group-hover:translate-x-1 group-hover:text-primary-800">
+                {selectedCourse ? (
+                  <>
+                    View Status <ArrowRight className="h-4 w-4" />
+                  </>
+                ) : (
+                  <>
+                    Choose <MousePointerClick className="h-4 w-4" />
+                  </>
+                )}
               </span>
             </button>
           </div>
