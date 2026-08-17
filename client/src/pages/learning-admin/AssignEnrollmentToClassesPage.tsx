@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BookOpen,
-  Check,
   Download,
   FileText,
   RefreshCcw,
@@ -2018,46 +2017,63 @@ export function AssignEnrollmentToClassesPage() {
             <div className="flex flex-1 flex-col overflow-hidden bg-slate-50/50 p-6">
               {/* Top Control Panel */}
               <div className="mb-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm xl:flex-row xl:items-end xl:justify-between">
-                {/* Segmented Tabs */}
-                <div className="flex h-10 shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100 p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSetupCourseStatusTab("notCompleted");
-                      setSelectedEnrollmentIds([]);
-                    }}
-                    className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
-                      setupCourseStatusTab === "notCompleted"
-                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
-                        : "text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    <Clock
-                      className={`h-4 w-4 ${setupCourseStatusTab === "notCompleted" ? "text-amber-500" : ""}`}
-                    />
-                    Not Completed ({notCompletedCourseLearners.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSetupCourseStatusTab("completed");
-                      setSelectedEnrollmentIds([]);
-                    }}
-                    className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
-                      setupCourseStatusTab === "completed"
-                        ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
-                        : "text-slate-500 hover:text-slate-700"
-                    }`}
-                  >
-                    <CheckCircle
-                      className={`h-4 w-4 ${setupCourseStatusTab === "completed" ? "text-emerald-500" : ""}`}
-                    />
-                    Completed ({completedCourseLearners.length})
-                  </button>
+                {/* Left Side: Tabs & Search */}
+                <div className="flex flex-col flex-wrap gap-4 sm:flex-row sm:items-end">
+                  {/* Segmented Tabs */}
+                  <div className="flex h-10 shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSetupCourseStatusTab("notCompleted");
+                        setSelectedEnrollmentIds([]);
+                      }}
+                      className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
+                        setupCourseStatusTab === "notCompleted"
+                          ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
+                          : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      <Clock
+                        className={`h-4 w-4 ${setupCourseStatusTab === "notCompleted" ? "text-amber-500" : ""}`}
+                      />
+                      Not Completed ({notCompletedCourseLearners.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSetupCourseStatusTab("completed");
+                        setSelectedEnrollmentIds([]);
+                      }}
+                      className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
+                        setupCourseStatusTab === "completed"
+                          ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
+                          : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      <CheckCircle
+                        className={`h-4 w-4 ${setupCourseStatusTab === "completed" ? "text-emerald-500" : ""}`}
+                      />
+                      Completed ({completedCourseLearners.length})
+                    </button>
+                  </div>
+                  {/* Search Input */}
+                  <div className="w-full sm:w-72">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        value={setupCourseStatusSearch}
+                        onChange={(e) =>
+                          setSetupCourseStatusSearch(e.target.value)
+                        }
+                        placeholder="Search by learner name or ID..."
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {/* Filters */}
-                <div className="flex flex-1 flex-wrap items-end gap-3 xl:justify-end">
+                {/* Right Side: Filters & Reset */}
+                <div className="flex flex-wrap items-end gap-3 xl:justify-end">
                   <div className="w-full sm:w-48">
                     <Select
                       label="Designation"
@@ -2089,19 +2105,6 @@ export function AssignEnrollmentToClassesPage() {
                         })),
                       ]}
                     />
-                  </div>
-                  <div className="w-full sm:w-64">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                      <Input
-                        value={setupCourseStatusSearch}
-                        onChange={(e) =>
-                          setSetupCourseStatusSearch(e.target.value)
-                        }
-                        placeholder="Search learners..."
-                        className="pl-9"
-                      />
-                    </div>
                   </div>
                   <Button
                     variant="outline"
