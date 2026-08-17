@@ -2029,7 +2029,7 @@ export function AssignEnrollmentToClassesPage() {
                       }}
                       className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
                         setupCourseStatusTab === "notCompleted"
-                          ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
+                          ? "bg-red-100 text-slate-900 shadow-sm ring-1 ring-slate-200/50"
                           : "text-slate-500 hover:text-slate-700"
                       }`}
                     >
@@ -2046,7 +2046,7 @@ export function AssignEnrollmentToClassesPage() {
                       }}
                       className={`flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-semibold transition-all duration-200 ${
                         setupCourseStatusTab === "completed"
-                          ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
+                          ? "bg-green-100 text-slate-900 shadow-sm ring-1 ring-slate-200/50"
                           : "text-slate-500 hover:text-slate-700"
                       }`}
                     >
@@ -2159,7 +2159,7 @@ export function AssignEnrollmentToClassesPage() {
                               className={`grid cursor-pointer grid-cols-[48px_1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm transition-all duration-200 border-b border-slate-100 last:border-b-0 ${
                                 checked
                                   ? "bg-primary-50 border-l-4 border-l-primary-500"
-                                  : "bg-white hover:bg-slate-50 hover:shadow-sm border-l-4 border-l-transparent"
+                                  : "bg-red-100 hover:bg-primary-50 hover:shadow-sm border-l-4 border-l-transparent"
                               }`}
                             >
                               <input
@@ -2218,7 +2218,7 @@ export function AssignEnrollmentToClassesPage() {
                         {filteredSetupCompletedLearners.map((learner) => (
                           <div
                             key={`setup-completed-${learner.enrollmentId}`}
-                            className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-b-0"
+                            className="grid grid-cols-[1.4fr_140px_1.4fr] items-center px-4 py-3 text-sm bg-green-100 hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-b-0"
                           >
                             <span className="flex flex-col">
                               <span className="flex items-center gap-2 font-bold text-slate-800">
