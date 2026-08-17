@@ -36,7 +36,7 @@ const formatStatusLabel = (value: AssignmentReport['report_status']) =>
 const getStatusSelectClassName = (value: AssignmentReport['report_status']) =>
   value === 'ASSIGNED_IN_LPMS'
     ? 'border border-[#034c96] bg-[#034c96] text-white focus:ring-[#034c96]'
-    : 'border border-[#3faa45] bg-[#3faa45] text-white focus:ring-[#3faa45]';
+    : 'border border-[#7CFC00] bg-[#7CFC00] text-white focus:ring-[#7CFC00]';
 
 function StatusSelect({
   value,
@@ -81,6 +81,7 @@ export function AssignmentReportsPage() {
   const [selectedReport, setSelectedReport] = useState<AssignmentReport | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const PAGE_SIZE = 10;
   const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
   const rowSkeletons = Array.from({ length: 4 }, (_, index) => index);
@@ -153,6 +154,20 @@ export function AssignmentReportsPage() {
     return reports.slice(startIndex, startIndex + PAGE_SIZE);
   }, [page, PAGE_SIZE, reports]);
 
+  const toggleSelect = (id: string) => {
+    setSelectedRowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const toggleSelectAllOnPage = () => {
+    const pageIds = paginatedReports.map((r) => r.id);
+    const allSelected = pageIds.every((id) => selectedRowIds.includes(id));
+    if (allSelected) {
+      setSelectedRowIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+    } else {
+      setSelectedRowIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+    }
+  };
+
   const totalPages = Math.max(1, Math.ceil(reports.length / PAGE_SIZE));
   const pageStart = reports.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const pageEnd = reports.length === 0 ? 0 : Math.min(page * PAGE_SIZE, reports.length);
@@ -216,72 +231,122 @@ export function AssignmentReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Assignment Reports</h1>
-        <p className="text-slate-500">
-          Review enrollments assigned from Learning Admin and Supervisor workflows.
-        </p>
+      <div className="rounded-lg bg-gradient-to-r from-[#0b66b2] via-[#0fb2ff] to-[#25a33a] p-4 text-white flex items-center justify-between shadow-lg ring-1 ring-white/20">
+        <div>
+          <h1 className="text-2xl font-bold">Assignment Reports</h1>
+          <p className="text-sm opacity-90 mt-1">Review enrollments assigned from Learning Admin and Supervisor workflows.</p>
+        </div>
+        <div>
+          <button type="button" className="rounded-full bg-gradient-to-r from-white/90 to-white/70 px-4 py-2 text-[#0b66b2] font-semibold shadow-md ring-1 ring-white/40">New Assignment</button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {statSkeletons.map((index) => (
-          <Card key={`report-stat-${index}`} className="p-4">
-            <p className="text-sm text-slate-500">
-              {index === 0 ? 'Total Reports' : index === 1 ? 'Pending ERP Enrollment' : 'Enrolled in ERP'}
-            </p>
-            {loading ? (
-              <Skeleton className="mt-2 h-8 w-16" />
-            ) : (
-              <p
-                className={`text-2xl font-bold ${
-                  index === 1 ? 'text-[#034c96]' : index === 2 ? 'text-[#3faa45]' : 'text-slate-900'
-                }`}
-              >
-                {index === 0 ? stats.totalReports : index === 1 ? stats.assignedInLpms : stats.enrolledInErp}
-              </p>
-            )}
-          </Card>
-        ))}
-      </div>
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {statSkeletons.map((index) => {
+          const title = index === 0 ? 'Total Reports' : index === 1 ? 'Pending ERP Enrollment' : 'Enrolled in ERP';
+          const value = index === 0 ? stats.totalReports : index === 1 ? stats.assignedInLpms : stats.enrolledInErp;
+          const accent = index === 0 ? ['#d8ecff', '#1E90FF'] : index === 1 ? ['#cffaf6', '#2dd6c9'] : ['#e6f9e8', '#7CFC00'];
+          const percent = stats.totalReports > 0 ? Math.round((value / stats.totalReports) * 100) : index === 0 ? 100 : 0;
+
+          return (
+            <Card
+              key={`report-stat-${index}`}
+              className={`relative overflow-hidden p-4 rounded-2xl shadow-sm transform transition-all duration-200 hover:scale-[1.02] ${index === 0 ? 'bg-gradient-to-r from-[#e8f7ff] to-[#cfe9ff]' : index === 1 ? 'bg-gradient-to-r from-[#f6fffd] to-[#e6fbfd]' : 'bg-gradient-to-r from-[#f7fff7] to-[#d4ffb8]'}`}
+            >
+              <div className={`absolute right-4 top-3 h-14 w-14 rounded-full flex items-center justify-center ${index === 0 ? 'bg-gradient-to-br from-white/80 to-[#e8f7ff] ring-1 ring-white/60 shadow' : 'bg-white/70 ring-1 ring-white/50 shadow-sm'}`}>
+                {index === 0 ? (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <defs>
+                        <linearGradient id="g1" x1="0" x2="1">
+                          <stop offset="0%" stopColor="#d8ecff" />
+                          <stop offset="100%" stopColor="#1E90FF" />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="12" cy="12" r="9" stroke="url(#g1)" strokeWidth="1.2" fill="none" />
+                      <rect x="8" y="8" width="8" height="8" rx="2" fill="#e8f7ff" />
+                  </svg>
+                ) : index === 2 ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="9" stroke="#7CFC00" strokeWidth="1.4" fill="none" />
+                    <path d="M8 12a4 4 0 018 0" stroke="#7CFC00" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="9" stroke={accent[0]} strokeWidth="1.4" fill="none" />
+                    <path d="M8 12a4 4 0 018 0" stroke={accent[1]} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+
+              <div className="flex flex-col">
+                <p className="text-sm text-slate-500">{title}</p>
+                {loading ? (
+                  <Skeleton className="mt-3 h-8 w-20" />
+                ) : (
+                  <div className="mt-3 flex items-center justify-between">
+                    <p className={`text-3xl font-extrabold ${index === 2 ? 'text-[#0b7a00]' : 'text-[#0b66b2]'}`}>{value}</p>
+                    <div className="ml-4 w-28">
+                      <div className="h-2 w-full rounded-full bg-white/60">
+                        <div
+                          className="h-2 rounded-full"
+                          style={{
+                            width: `${percent}%`,
+                            background: index === 2 ? 'linear-gradient(90deg, #bffb7e, #7CFC00)' : `linear-gradient(90deg, ${accent[0]}, ${accent[1]})`,
+                            boxShadow: index === 2 ? '0 2px 8px #7CFC0030' : `0 1px 6px ${accent[1]}30`
+                          }}
+                        />
+                      </div>
+                      <p className={`mt-1 text-xs ${index === 2 ? 'text-[#7CFC00]' : 'text-slate-500'}`}>{percent}%</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          );
+        })}
+      </section>
 
       <Card title="Assignment Report List">
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
-            {loading ? (
-              <Skeleton className="h-5 w-52" />
-            ) : (
-              <p className="text-sm font-semibold text-slate-900">
-                Showing {pageStart}-{pageEnd} of {reports.length} reports
-              </p>
-            )}
+            {loading ? <Skeleton className="h-5 w-52" /> : <p className="text-sm font-semibold text-slate-900">Showing {pageStart}-{pageEnd} of {reports.length} reports</p>}
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            {loading ? (
-              <Skeleton className="h-8 w-28 rounded-full" />
-            ) : (
-              <span className="rounded-full bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-3 py-1 font-medium text-white shadow-sm">
-                Page {reports.length === 0 ? 0 : page} of {totalPages}
-              </span>
-            )}
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <input type="search" placeholder="Search" className="h-9 w-56 rounded-full border border-slate-200 bg-white px-4 text-sm shadow-sm placeholder:text-slate-400" />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</div>
+            </div>
+            {loading ? <Skeleton className="h-8 w-28 rounded-full" /> : <span className="rounded-full bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-3 py-1 font-medium text-white shadow-sm">Page {reports.length === 0 ? 0 : page} of {totalPages}</span>}
           </div>
         </div>
 
         <div className="max-h-[420px] overflow-y-auto overflow-x-auto pb-2">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] text-white">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Learning Path</th>
-                <th className="px-4 py-3 font-semibold">Learners</th>
-                <th className="px-4 py-3 font-semibold">Assigned By</th>
-                <th className="px-4 py-3 font-semibold">Assigned At</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {loading ? (
-                rowSkeletons.map((row) => (
+          <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="bg-white text-slate-600 sticky top-0 z-20">
+                <tr>
+                  <th className="px-4 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 text-[#034c96]"
+                      onChange={toggleSelectAllOnPage}
+                      checked={paginatedReports.length > 0 && paginatedReports.every((r) => selectedRowIds.includes(r.id))}
+                    />
+                  </th>
+                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 font-semibold">Learning Path</th>
+                  <th className="px-4 py-3 font-semibold">Learners</th>
+                  <th className="px-4 py-3 font-semibold">Assigned By</th>
+                  <th className="px-4 py-3 font-semibold">Assigned At</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {loading ? rowSkeletons.map((row) => (
                   <tr key={`report-skeleton-${row}`}>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-5 rounded" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-3 w-3 rounded-full" /></td>
                     <td className="px-4 py-4"><Skeleton className="h-5 w-40" /></td>
                     <td className="px-4 py-4"><Skeleton className="h-5 w-10" /></td>
                     <td className="px-4 py-4"><Skeleton className="h-5 w-28" /></td>
@@ -289,153 +354,85 @@ export function AssignmentReportsPage() {
                     <td className="px-4 py-4"><Skeleton className="h-8 w-36 rounded-full" /></td>
                     <td className="px-4 py-4"><Skeleton className="h-8 w-28 rounded-lg" /></td>
                   </tr>
-                ))
-              ) : reports.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-4 text-slate-500" colSpan={6}>
-                    No assignment reports available yet.
-                  </td>
-                </tr>
-              ) : (
-                paginatedReports.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-4 font-medium text-slate-900">{report.learning_path_title}</td>
-                    <td className="px-4 py-4 text-slate-600">{report.learners.length}</td>
-                    <td className="px-4 py-4 text-slate-600">
-                      <p className="font-medium text-slate-800">{report.assigned_by_name}</p>
-                    </td>
-                    <td className="px-4 py-4 text-slate-600">
-                      {new Date(report.assigned_at).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-4">
-                      <StatusSelect
-                        value={report.report_status}
-                        disabled={updatingReportId === report.id}
-                        onChange={(value) => handleStatusChange(report.id, value)}
-                      />
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex flex-wrap gap-2">
-                        <Button type="button" size="sm" variant="outline" onClick={() => setSelectedReport(report)}>
-                          <Eye className="h-4 w-4" />
-                          View
-                        </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => downloadReport(report)}>
-                          Download Report
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                )) : (reports.length === 0 ? (
+                  <tr><td className="px-4 py-4 text-slate-500" colSpan={8}>No assignment reports available yet.</td></tr>
+                ) : (
+                  paginatedReports.map((report, idx) => {
+                    const isSelected = selectedRowIds.includes(report.id);
+                    return (
+                      <tr
+                        key={report.id}
+                        className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} ${isSelected ? 'bg-slate-100 ring-1 ring-slate-200' : ''} hover:bg-slate-100 transition-shadow transition-transform duration-150 hover:shadow-md`}
+                      >
+                        <td className={`px-4 py-4 ${isSelected ? 'bg-slate-100' : ''}`}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            style={{ accentColor: isSelected ? '#6B7280' : undefined }}
+                            checked={isSelected}
+                            onChange={() => toggleSelect(report.id)}
+                          />
+                        </td>
+                        <td className={`px-4 py-4 ${isSelected ? 'bg-slate-100' : ''}`}><span className={`inline-block h-3 w-3 rounded-full ${report.report_status === 'ASSIGNED_IN_LPMS' ? 'bg-[#0b66b2]' : 'bg-[#7CFC00]'}`} /></td>
+                        <td className={`px-4 py-4 font-medium text-slate-900 ${isSelected ? 'bg-slate-100' : ''}`}>{report.learning_path_title}</td>
+                        <td className={`px-4 py-4 text-slate-600 ${isSelected ? 'bg-slate-100' : ''}`}>{report.learners.length}</td>
+                        <td className={`px-4 py-4 text-slate-600 ${isSelected ? 'bg-slate-100' : ''}`}><p className="font-medium text-slate-800">{report.assigned_by_name}</p></td>
+                        <td className={`px-4 py-4 text-slate-600 ${isSelected ? 'bg-slate-100' : ''}`}>{new Date(report.assigned_at).toLocaleString()}</td>
+                        <td className={`px-4 py-4 ${isSelected ? 'bg-slate-100' : ''}`}><StatusSelect value={report.report_status} disabled={updatingReportId === report.id} onChange={(value) => handleStatusChange(report.id, value)} /></td>
+                        <td className={`px-4 py-4 ${isSelected ? 'bg-slate-100' : ''}`}>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedReport(report)}><Eye className="h-4 w-4" /><span className="ml-2">View</span></Button>
+                            <Button type="button" size="sm" variant="outline" onClick={() => downloadReport(report)}>Download Report</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div className="mt-4 flex justify-end">
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="mt-4 flex justify-center">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             {loading ? (
               <>
                 <Skeleton className="h-8 w-12" />
                 <Skeleton className="h-8 w-8" />
                 <Skeleton className="h-8 w-8" />
-                <Skeleton className="h-8 w-8" />
-                <Skeleton className="h-8 w-8" />
-                <Skeleton className="h-8 w-12" />
               </>
             ) : (
               <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPage(1)}
-                  disabled={!canGoPrevious}
-                >
-                  First
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={!canGoPrevious}
-                >
-                  {'<'}
-                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setPage(1)} disabled={!canGoPrevious}>Prev</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(prev - 1, 1))} disabled={!canGoPrevious}>{'<'}</Button>
                 {visiblePages.map((pageNumber) => (
-                  <Button
-                    key={pageNumber}
-                    type="button"
-                    variant={pageNumber === page ? 'primary' : 'outline'}
-                    size="sm"
-                    onClick={() => setPage(pageNumber)}
-                    className="min-w-9"
-                  >
-                    {pageNumber}
-                  </Button>
+                  <Button key={pageNumber} type="button" variant={pageNumber === page ? 'primary' : 'outline'} size="sm" onClick={() => setPage(pageNumber)} className="min-w-9">{pageNumber}</Button>
                 ))}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((prev) => prev + 1)}
-                  disabled={!canGoNext}
-                >
-                  {'>'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setPage(totalPages)}
-                  disabled={!canGoNext}
-                >
-                  Last
-                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => prev + 1)} disabled={!canGoNext}>{'>'}</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setPage(totalPages)} disabled={!canGoNext}>Next</Button>
               </>
             )}
           </div>
         </div>
       </Card>
 
-      {selectedReport ? (
+      {selectedReport && (
         <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-[#034c96]/50 p-4">
           <div className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#034c96] bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">{selectedReport.learning_path_title}</h2>
-                <p className="text-sm text-white/75">
-                  Assigned by {selectedReport.assigned_by_name} on{' '}
-                  {new Date(selectedReport.assigned_at).toLocaleString()}
-                </p>
+                <p className="text-sm text-white/75">Assigned by {selectedReport.assigned_by_name} on {new Date(selectedReport.assigned_at).toLocaleString()}</p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-white bg-white text-[#034c96] hover:bg-white/90"
-                onClick={() => setSelectedReport(null)}
-              >
-                Close
-              </Button>
+              <Button type="button" variant="outline" className="border-white bg-white text-[#034c96] hover:bg-white/90" onClick={() => setSelectedReport(null)}>Close</Button>
             </div>
 
             <div className="space-y-5 p-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <Card className="p-4">
-                  <p className="text-sm text-slate-500">Assigned By</p>
-                  <p className="text-base font-semibold text-slate-900">{selectedReport.assigned_by_name}</p>
-                </Card>
-                <Card className="p-4">
-                  <p className="text-sm text-slate-500">Learner Count</p>
-                  <p className="text-base font-semibold text-slate-900">{selectedReport.learners.length}</p>
-                </Card>
-                <Card className="p-4">
-                  <p className="text-sm text-slate-500">Report Status</p>
-                  <div className="mt-2">
-                    <StatusBadge value={selectedReport.report_status} />
-                  </div>
-                </Card>
+                <Card className="p-4"><p className="text-sm text-slate-500">Assigned By</p><p className="text-base font-semibold text-slate-900">{selectedReport.assigned_by_name}</p></Card>
+                <Card className="p-4"><p className="text-sm text-slate-500">Learner Count</p><p className="text-base font-semibold text-slate-900">{selectedReport.learners.length}</p></Card>
+                <Card className="p-4"><p className="text-sm text-slate-500">Report Status</p><div className="mt-2"><StatusBadge value={selectedReport.report_status} /></div></Card>
               </div>
 
               <Card title="Assigned Learners">
@@ -467,7 +464,7 @@ export function AssignmentReportsPage() {
             </div>
           </div>
         </ModalOverlay>
-      ) : null}
+      )}
     </div>
   );
 }
