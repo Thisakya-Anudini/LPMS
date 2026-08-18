@@ -36,7 +36,7 @@ const formatStatusLabel = (value: AssignmentReport['report_status']) =>
 const getStatusSelectClassName = (value: AssignmentReport['report_status']) =>
   value === 'ASSIGNED_IN_LPMS'
     ? 'border border-[#034c96] bg-[#034c96] text-white focus:ring-[#034c96]'
-    : 'border border-[#7CFC00] bg-[#7CFC00] text-white focus:ring-[#7CFC00]';
+    : 'border border-transparent bg-gradient-to-r from-[#bffb7e] to-[#7CFC00] text-[#064c00] focus:ring-[#7CFC00]/40 shadow-md hover:brightness-105';
 
 function StatusSelect({
   value,
@@ -236,9 +236,7 @@ export function AssignmentReportsPage() {
           <h1 className="text-2xl font-bold">Assignment Reports</h1>
           <p className="text-sm opacity-90 mt-1">Review enrollments assigned from Learning Admin and Supervisor workflows.</p>
         </div>
-        <div>
-          <button type="button" className="rounded-full bg-gradient-to-r from-white/90 to-white/70 px-4 py-2 text-[#0b66b2] font-semibold shadow-md ring-1 ring-white/40">New Assignment</button>
-        </div>
+        {/* New Assignment button removed per request */}
       </div>
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
