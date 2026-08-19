@@ -274,24 +274,28 @@ export function AdminDashboard() {
       label: "Super Admins",
       value: superAdminCount,
       icon: UserCheck,
-      iconClass: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-      detail: "Full platform access",
+      containerClass:
+        "border-l-emerald-500 bg-gradient-to-br from-emerald-50/80 to-white",
+      iconClass: "text-emerald-800",
     },
     {
       label: "Learning Admins",
       value: learningAdminCount,
       icon: ShieldCheck,
-      iconClass: "bg-amber-50 text-amber-700 ring-amber-100",
-      detail: "Assigned from ERP employees",
+      containerClass:
+        "border-l-amber-500 bg-gradient-to-br from-amber-50/80 to-white",
+      iconClass: "text-amber-800",
     },
     {
       label: "Learners",
       value: learnerTotal,
       icon: Users,
-      iconClass: "bg-sky-50 text-sky-700 ring-sky-100",
-      detail: "Active learner records",
+      containerClass:
+        "border-l-sky-500 bg-gradient-to-br from-sky-50/80 to-white",
+      iconClass: "text-sky-800",
     },
   ];
+
   const usersByRole = useMemo(
     () =>
       roleSections.map((section) => ({
@@ -491,36 +495,29 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {dashboardStats.map((stat) => {
           const Icon = stat.icon;
 
           return (
             <Card
               key={stat.label}
-              className="border-slate-200 shadow-sm"
-              bodyClassName="p-5"
+              className={`relative overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-medium border-l-4 ${stat.containerClass}`}
+              bodyClassName="flex h-28 flex-col justify-center px-6 py-5 relative z-10"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-500">
-                    {stat.label}
-                  </p>
-                  {loading ? (
-                    <Skeleton className="mt-3 h-9 w-20" />
-                  ) : (
-                    <p className="mt-2 text-3xl font-bold leading-none text-slate-950">
-                      {stat.value}
-                    </p>
-                  )}
-                  <p className="mt-3 text-xs font-medium text-slate-500">
-                    {stat.detail}
-                  </p>
-                </div>
-                <div className={`rounded-xl p-3 ring-1 ${stat.iconClass}`}>
-                  <Icon className="h-5 w-5" />
-                </div>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-25 transition-transform duration-300 hover:scale-110 hover:opacity-20">
+                <Icon size={64} className={stat.iconClass} />
               </div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+                {stat.label}
+              </p>
+              {loading ? (
+                <Skeleton className="mt-3 h-10 w-16" />
+              ) : (
+                <p className="mt-2 text-4xl font-extrabold text-slate-900">
+                  {stat.value}
+                </p>
+              )}
             </Card>
           );
         })}
