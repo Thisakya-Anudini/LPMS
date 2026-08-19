@@ -608,34 +608,45 @@ export function AdminDashboard() {
       </Card>
 
       <Card
-        title="Assign Learning Admin Access"
+        title={
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <span>Assign Learning Admin Access</span>
+          </div>
+        }
         description="Search ERP employees and grant or remove Learning Admin privileges."
-        className="shadow-sm"
+        className="shadow-sm overflow-hidden"
         bodyClassName="p-0"
       >
-        <div className="bg-white">
-          <div className="grid grid-cols-1 gap-4 border-b border-slate-200 bg-slate-50/80 p-4 md:grid-cols-2 xl:grid-cols-3">
-            <Input
-              label="Search by Employee No"
-              value={assignEmployeeNoSearch}
-              onFocus={activateAssignEmployeeSearch}
-              onChange={(event) =>
-                handleAssignEmployeeNoChange(event.target.value)
-              }
-              placeholder="e.g. 011338"
-              inputMode="numeric"
-              error={assignSearchErrors.employeeNo}
-            />
-            <Input
-              label="Search by Name"
-              value={assignSurnameSearch}
-              onFocus={activateAssignNameSearch}
-              onChange={(event) =>
-                handleAssignNameSearchChange(event.target.value)
-              }
-              placeholder="e.g. Mohamed"
-              error={assignSearchErrors.name}
-            />
+        <div className="flex flex-col bg-white">
+          <div className="grid grid-cols-1 gap-4 border-b border-slate-200 bg-slate-50/80 p-5 md:grid-cols-2 xl:grid-cols-3">
+            <div className="relative">
+              <Input
+                label="Search by Employee No"
+                value={assignEmployeeNoSearch}
+                onFocus={activateAssignEmployeeSearch}
+                onChange={(event) =>
+                  handleAssignEmployeeNoChange(event.target.value)
+                }
+                placeholder="e.g. 011338"
+                inputMode="numeric"
+                error={assignSearchErrors.employeeNo}
+              />
+            </div>
+            <div className="relative">
+              <Input
+                label="Search by Name"
+                value={assignSurnameSearch}
+                onFocus={activateAssignNameSearch}
+                onChange={(event) =>
+                  handleAssignNameSearchChange(event.target.value)
+                }
+                placeholder="e.g. Mohamed"
+                error={assignSearchErrors.name}
+              />
+            </div>
             <Select
               label="Filter by Designation"
               value={assignDesignationFilter}
@@ -700,11 +711,11 @@ export function AdminDashboard() {
             />
           </div>
 
-          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-medium text-slate-500">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
               ERP results: {erpEmployees.length}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -719,7 +730,7 @@ export function AdminDashboard() {
                   erpEmployees.length === 0
                 }
               >
-                Reset
+                Reset Filters
               </Button>
               <Button
                 type="button"
@@ -736,16 +747,18 @@ export function AdminDashboard() {
                     !assignOrganizationFilter &&
                     !assignPayrollFilter)
                 }
+                className="bg-primary-600 hover:bg-primary-700"
               >
-                Search
+                <Search className="mr-2 h-4 w-4" />
+                Search ERP
               </Button>
             </div>
           </div>
 
-          <div className="max-h-[26rem] overflow-auto">
+          <div className="max-h-[26rem] overflow-auto bg-slate-50/30">
             {assignSearchLoading ? (
               <div className="min-w-[1080px]">
-                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-50/90 backdrop-blur px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 sticky top-0 z-10 border-l-4 border-l-transparent">
                   <span>Name</span>
                   <span>Emp No</span>
                   <span>Designation</span>
@@ -757,7 +770,7 @@ export function AdminDashboard() {
                 {assignResultsSkeletonRows.map((row) => (
                   <div
                     key={`assign-skeleton-${row}`}
-                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-4 py-3"
+                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-5 py-3 border-l-4 border-l-transparent bg-white"
                   >
                     <Skeleton className="h-5 w-40" />
                     <Skeleton className="h-5 w-20" />
@@ -770,12 +783,21 @@ export function AdminDashboard() {
                 ))}
               </div>
             ) : erpEmployees.length === 0 ? (
-              <p className="p-4 text-sm text-slate-500">
-                Search ERP to load employees for Learning Admin assignment.
-              </p>
+              <div className="flex flex-1 flex-col items-center justify-center py-16 px-4 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-50 border border-slate-100 shadow-sm mb-4">
+                  <Search className="h-8 w-8 text-slate-300" />
+                </div>
+                <p className="text-base font-bold text-slate-900 mb-1">
+                  No employees loaded
+                </p>
+                <p className="text-sm text-slate-500 max-w-sm">
+                  Search the ERP system using the filters above to find
+                  employees and assign Learning Admin roles.
+                </p>
+              </div>
             ) : (
               <div className="min-w-[1080px]">
-                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                <div className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] gap-3 border-b border-slate-200 bg-slate-50/90 backdrop-blur px-5 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 sticky top-0 z-10 border-l-4 border-l-transparent">
                   <span>Name</span>
                   <span>Emp No</span>
                   <span>Designation</span>
@@ -784,45 +806,64 @@ export function AdminDashboard() {
                   <span>Email</span>
                   <span>Learning Admin</span>
                 </div>
-                {erpEmployees.map((employee) => (
-                  <div
-                    key={employee.employeeNumber}
-                    className="grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 transition-colors hover:bg-slate-50"
-                  >
-                    <span className="font-semibold text-slate-900">
-                      {employee.employeeName}
-                    </span>
-                    <span>{employee.employeeNumber}</span>
-                    <span>{employee.designation || "-"}</span>
-                    <span>{employee.gradeName || "-"}</span>
-                    <span>{employee.organizationName || "-"}</span>
-                    <span className="break-all">{employee.email || "-"}</span>
-                    <span>
-                      {employee.isLearningAdmin ? (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleAssignLearningAdmin(employee, false)
-                          }
-                        >
-                          Remove
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() =>
-                            handleAssignLearningAdmin(employee, true)
-                          }
-                        >
-                          Assign
-                        </Button>
-                      )}
-                    </span>
-                  </div>
-                ))}
+                {erpEmployees.map((employee) => {
+                  const isAdmin = employee.isLearningAdmin;
+                  return (
+                    <div
+                      key={employee.employeeNumber}
+                      className={`grid grid-cols-[1.3fr_0.9fr_1.1fr_0.8fr_1.4fr_1.2fr_0.9fr] items-center gap-3 border-b border-slate-100 px-5 py-3 text-sm transition-all duration-200 ${
+                        isAdmin
+                          ? "bg-amber-50/50 hover:bg-amber-50 border-l-4 border-l-amber-500"
+                          : "bg-white hover:bg-slate-50 hover:shadow-sm border-l-4 border-l-transparent hover:border-l-primary-400"
+                      }`}
+                    >
+                      <span className="font-bold text-slate-900">
+                        {employee.employeeName}
+                      </span>
+                      <span className="font-medium text-slate-600">
+                        {employee.employeeNumber}
+                      </span>
+                      <span className="text-slate-600">
+                        {employee.designation || "-"}
+                      </span>
+                      <span className="text-slate-600">
+                        {employee.gradeName || "-"}
+                      </span>
+                      <span className="text-slate-600">
+                        {employee.organizationName || "-"}
+                      </span>
+                      <span className="break-all text-slate-500">
+                        {employee.email || "-"}
+                      </span>
+                      <span>
+                        {isAdmin ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="bg-white hover:bg-amber-100 hover:text-amber-700 border-amber-200 text-amber-700"
+                            onClick={() =>
+                              handleAssignLearningAdmin(employee, false)
+                            }
+                          >
+                            Remove Admin
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-slate-700 hover:bg-slate-900 shadow-sm"
+                            onClick={() =>
+                              handleAssignLearningAdmin(employee, true)
+                            }
+                          >
+                            Assign Admin
+                          </Button>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
