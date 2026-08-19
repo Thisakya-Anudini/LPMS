@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, ShieldCheck, UserCheck, Users } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  ShieldCheck,
+  UserCheck,
+  Users,
+  UserPlus,
+  Search,
+} from "lucide-react";
 import { learningApi, superAdminApi, userApi } from "../../api/lpmsApi";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
@@ -530,12 +537,19 @@ export function AdminDashboard() {
       </div>
 
       <Card
-        title="Create Super Admin Account"
+        title={
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <UserPlus className="h-5 w-5" />
+            </div>
+            <span>Create Super Admin Account</span>
+          </div>
+        }
         description="Register a trusted administrator with full access to system account management."
-        className="shadow-sm"
+        className="shadow-sm border-indigo-100"
       >
-        <form className="space-y-5" onSubmit={handleCreateUser}>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <form className="space-y-6" onSubmit={handleCreateUser}>
+          <div className="grid grid-cols-1 gap-5 rounded-xl border border-slate-100 bg-slate-50 p-5 md:grid-cols-3">
             <Input
               label="Name"
               value={userForm.name}
@@ -582,7 +596,11 @@ export function AdminDashboard() {
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" isLoading={userFormLoading}>
+            <Button
+              type="submit"
+              isLoading={userFormLoading}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all hover:-translate-y-0.5"
+            >
               Create Super Admin
             </Button>
           </div>
