@@ -4,8 +4,8 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   bodyClassName?: string;
-  title?: string;
-  description?: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
   footer?: React.ReactNode;
   action?: React.ReactNode;
   variant?: 'default' | 'elevated' | 'outlined';
