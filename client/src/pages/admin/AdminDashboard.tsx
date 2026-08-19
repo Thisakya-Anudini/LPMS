@@ -883,7 +883,7 @@ export function AdminDashboard() {
                 >
                   {section.label}
                 </h3>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-slate-600">
                   {section.users.length} users
                 </span>
               </div>
@@ -924,20 +924,20 @@ export function AdminDashboard() {
                       section.users.map((user) => (
                         <tr
                           key={user.id}
-                          className="border-b border-slate-100 last:border-0"
+                          className="border-b border-slate-100 last:border-0 hover:bg-emerald-50/50 transition-colors"
                         >
-                          <td className="py-3 px-4 font-medium text-slate-900">
+                          <td className="py-3 px-4 font-bold text-slate-900">
                             {user.name}
                           </td>
-                          <td className="py-3 px-4 text-slate-700 break-words">
+                          <td className="py-3 px-4 text-slate-600 font-medium break-words">
                             {user.email}
                           </td>
                           <td className="py-3 px-4">
                             <span
                               className={
                                 user.is_active
-                                  ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
-                                  : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                                  ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
+                                  : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 ring-1 ring-inset ring-rose-600/20"
                               }
                             >
                               {user.is_active ? "Active" : "Inactive"}
@@ -948,20 +948,33 @@ export function AdminDashboard() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                className="bg-white hover:bg-red-200 hover:text-red-700 border-red-300 text-red-600"
                                 onClick={() => setPendingDeleteUser(user)}
                               >
                                 Delete
                               </Button>
                             ) : (
-                              <span className="text-xs text-slate-400">-</span>
+                              <span className="text-xs font-medium text-slate-400">
+                                -
+                              </span>
                             )}
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td className="py-4 px-4 text-slate-500" colSpan={4}>
-                          No users found.
+                        <td className="py-12 px-4 text-center" colSpan={4}>
+                          <div className="flex flex-col items-center justify-center">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 border border-slate-100 shadow-sm mb-3">
+                              <Users className="h-6 w-6 text-slate-400" />
+                            </div>
+                            <p className="text-sm font-bold text-slate-900 mb-1">
+                              No {section.label} found
+                            </p>
+                            <p className="text-xs text-slate-500 max-w-sm">
+                              No users currently assigned to this role.
+                            </p>
+                          </div>
                         </td>
                       </tr>
                     )}
@@ -975,7 +988,7 @@ export function AdminDashboard() {
               <h3 className="text-base font-semibold text-slate-900">
                 Learning Admins
               </h3>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-slate-600">
                 {assignedLearningAdmins.length} users
               </span>
             </div>
@@ -1015,25 +1028,25 @@ export function AdminDashboard() {
                     assignedLearningAdmins.map((admin) => (
                       <tr
                         key={admin.employee_number}
-                        className="border-b border-slate-100 last:border-0"
+                        className="border-b border-slate-100 last:border-0 hover:bg-amber-50/50 transition-colors"
                       >
                         <td className="py-3 px-4">
-                          <p className="font-medium text-slate-900">
+                          <p className="font-bold text-slate-900">
                             {admin.name}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs font-medium text-slate-500 mt-0.5">
                             {admin.employee_number}
                           </p>
                         </td>
-                        <td className="py-3 px-4 text-slate-700 break-words">
+                        <td className="py-3 px-4 font-medium text-slate-600 break-words">
                           {admin.email}
                         </td>
                         <td className="py-3 px-4">
                           <span
                             className={
                               admin.is_active
-                                ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
-                                : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700"
+                                ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
+                                : "rounded-full bg-rose-50 px-2.5 py-1 text-xs font-bold text-rose-700 ring-1 ring-inset ring-rose-600/20"
                             }
                           >
                             {admin.is_active ? "Active" : "Inactive"}
@@ -1043,6 +1056,7 @@ export function AdminDashboard() {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="bg-white hover:bg-red-200 hover:text-red-700 border-red-300 text-red-600"
                             onClick={() =>
                               handleAssignLearningAdmin(
                                 {
@@ -1071,8 +1085,19 @@ export function AdminDashboard() {
                     ))
                   ) : (
                     <tr>
-                      <td className="py-4 px-4 text-slate-500" colSpan={4}>
-                        No learning admins assigned.
+                      <td className="py-12 px-4 text-center" colSpan={4}>
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 border border-slate-100 shadow-sm mb-3">
+                            <ShieldCheck className="h-6 w-6 text-slate-400" />
+                          </div>
+                          <p className="text-sm font-bold text-slate-900 mb-1">
+                            No learning admins assigned
+                          </p>
+                          <p className="text-xs text-slate-500 max-w-sm">
+                            Use the search panel above to assign Learning Admin
+                            privileges to ERP employees.
+                          </p>
+                        </div>
                       </td>
                     </tr>
                   )}
