@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { BookOpen, UserRound } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, CircleDot, Mail, Network, UserRound, UsersRound } from "lucide-react";
 import {
   EmployeeHierarchyPanel,
   type SelectedHierarchyEmployee,
@@ -30,6 +30,13 @@ type EnrollmentCourse = {
   stageTitle: string;
   progress: number;
   isCompleted: boolean;
+};
+
+const getPathStatus = (path: LearnerPath) => {
+  const progress = Math.min(100, Math.max(0, Number(path.progress || 0)));
+  if (progress === 100 || path.status.toUpperCase() === "COMPLETED") return { label: "Completed", className: "bg-emerald-50 text-emerald-700 ring-emerald-600/10", variant: "success" as const };
+  if (progress > 0) return { label: "In progress", className: "bg-amber-50 text-amber-700 ring-amber-600/10", variant: "warning" as const };
+  return { label: "Not started", className: "bg-slate-100 text-slate-600 ring-slate-500/10", variant: "default" as const };
 };
 
 function PathCoursesList({ enrollmentId }: { enrollmentId: string }) {
@@ -154,19 +161,18 @@ export function AdminEmployeeHierarchyPage() {
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">
-          Employee Hierarchy
-        </h1>
-        <p className="text-slate-500">
-          Browse the organization structure and inspect learner progress from
-          one workspace.
-        </p>
+    <div className="space-y-6 pb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-primary-700"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-100"><Network className="h-4 w-4" /></span>Organization workspace</div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Employee Hierarchy</h1>
+          <p className="mt-1 text-slate-500">Explore reporting lines and review learner progress in one place.</p>
+        </div>
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><UsersRound className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-slate-900">Interactive hierarchy</p><p className="text-xs text-slate-500">Select View to inspect a learner</p></div></div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)]">
-        <aside className="min-w-0">
+        <aside className="min-w-0 self-stretch">
           <EmployeeHierarchyPanel
             selectedEmployeeNumber={selectedEmployee?.employeeNumber}
             onViewDetails={loadLearnerDetails}
@@ -174,27 +180,18 @@ export function AdminEmployeeHierarchyPage() {
           />
         </aside>
 
-        <section className="min-w-0">
-          <Card
-            title="Learner Details"
-            description={
-              selectedEmployee
-                ? `${selectedEmployee.employeeNumber}`
-                : "Select an employee from the hierarchy."
-            }
-            className="h-full"
-          >
+        <section className="min-w-0 self-stretch">
+          <Card className="min-h-[520px] shadow-sm xl:h-[calc(100vh-170px)]" bodyClassName="h-full overflow-y-auto p-0">
+            <div className="border-b border-slate-100 px-6 py-5"><div className="flex items-start justify-between gap-3"><div><div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary-700"><BookOpen className="h-3.5 w-3.5" /> Learner inspection</div><h2 className="text-lg font-semibold text-slate-900">Learner Details</h2><p className="mt-1 text-sm text-slate-500">{selectedEmployee ? `Employee no. ${selectedEmployee.employeeNumber}` : "Select an employee from the hierarchy."}</p></div>{selectedEmployee && <span className="rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700">Selected</span>}</div></div>
+            <div className="p-6">
             {!selectedEmployee ? (
-              <div className="flex min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
+              <div className="flex min-h-[410px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white text-primary-600 shadow-sm">
                   <UserRound className="h-6 w-6" />
                 </div>
-                <p className="text-sm font-semibold text-slate-900">
-                  No hierarchy employee selected
-                </p>
+                <p className="text-base font-semibold text-slate-900">No employee selected</p>
                 <p className="mt-1 max-w-sm text-sm text-slate-500">
-                  Use the View button on a hierarchy employee to load their
-                  assigned learning paths here.
+                  Choose <span className="font-medium text-slate-700">View</span> on any hierarchy employee to inspect their assigned learning paths.
                 </p>
               </div>
             ) : loadingDetails ? (
@@ -220,14 +217,9 @@ export function AdminEmployeeHierarchyPage() {
               </div>
             ) : learner ? (
               <div className="space-y-5">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <p className="text-lg font-semibold text-slate-900">
-                    {learner.name}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {selectedEmployee?.designation ||
-                      "No designation available"}
-                  </p>
+                <div className="flex items-center gap-4 rounded-2xl border border-primary-100 bg-gradient-to-r from-primary-50 to-white p-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 ring-4 ring-white"><UserRound className="h-6 w-6" /></div>
+                  <div className="min-w-0"><p className="text-lg font-semibold text-slate-900">{learner.name}</p><p className="truncate text-sm text-slate-500">{selectedEmployee?.designation || "No designation available"}</p>{learner.email && <p className="mt-1 flex items-center gap-1 text-xs text-slate-500"><Mail className="h-3 w-3" />{learner.email}</p>}</div>
                 </div>
 
                 <div>
@@ -244,10 +236,13 @@ export function AdminEmployeeHierarchyPage() {
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {learningPaths.map((path) => (
+                      {learningPaths.map((path) => {
+                        const pathStatus = getPathStatus(path);
+                        const isExpanded = expandedPathId === path.enrollment_id;
+                        return (
                         <div
                           key={path.enrollment_id}
-                          className="rounded-xl border border-slate-200 bg-white p-3 cursor-pointer transition-colors hover:border-primary-300 hover:shadow-soft"
+                          className={`cursor-pointer rounded-xl border bg-white p-4 transition-all ${isExpanded ? "border-primary-300 shadow-md ring-1 ring-primary-100" : "border-slate-200 hover:border-primary-200 hover:shadow-sm"}`}
                           onClick={() =>
                             setExpandedPathId(
                               expandedPathId === path.enrollment_id
@@ -256,30 +251,25 @@ export function AdminEmployeeHierarchyPage() {
                             )
                           }
                         >
-                          <div className="mb-2 flex items-start justify-between gap-3">
-                            <p className="min-w-0 font-medium text-slate-900">
-                              {path.title}
-                            </p>
-                            <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                              {path.status.replace("_", " ")}
-                            </span>
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0"><p className="font-semibold text-slate-900">{path.title}</p>{path.description && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{path.description}</p>}</div>
+                            <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${pathStatus.className}`}>{pathStatus.label === "Completed" ? <CheckCircle2 className="h-3 w-3" /> : <CircleDot className="h-3 w-3" />}{pathStatus.label}</span><ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`} /></div>
                           </div>
                           <ProgressBar
                             progress={Number(path.progress || 0)}
                             showLabel
                             size="sm"
+                            variant={pathStatus.variant}
                           />
-                          <p className="mt-2 text-xs text-slate-500">
-                            {path.category.replace("_", " ")} |{" "}
-                            {path.total_duration}
-                          </p>
-                          {expandedPathId === path.enrollment_id && (
+                          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500"><span className="rounded-md bg-slate-100 px-2 py-1 font-medium">{path.category.replace("_", " ")}</span><span>{path.total_duration}</span></div>
+                          {isExpanded && (
                             <PathCoursesList
                               enrollmentId={path.enrollment_id}
                             />
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -289,6 +279,7 @@ export function AdminEmployeeHierarchyPage() {
                 Learner details are not available.
               </p>
             )}
+            </div>
           </Card>
         </section>
       </div>
