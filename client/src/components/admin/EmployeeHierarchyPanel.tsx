@@ -67,33 +67,33 @@ const mapHierarchyEmployee = (row: Record<string, unknown>) => {
 const hierarchyDepthStyles = [
   {
     cardClass:
-      "border-sky-200 bg-gradient-to-r from-sky-50 via-cyan-50 to-white hover:border-sky-300",
-    iconWrapClass: "border-sky-200 bg-sky-100 text-sky-700",
-    countClass: "border-sky-200 bg-sky-50 text-sky-700",
+      "border-sky-200 bg-gradient-to-r from-sky-50 via-cyan-50 to-white hover:border-sky-300 hover:shadow-md hover:shadow-sky-100 hover:-translate-y-0.5",
+    iconWrapClass: "border-sky-200 bg-sky-100 text-sky-700 group-hover:scale-105 group-hover:bg-sky-200/80 transition-all duration-200",
+    countClass: "border-sky-200 bg-sky-50 text-sky-700 group-hover:bg-sky-100 transition-colors duration-200",
     accentClass: "bg-sky-400",
     icon: Briefcase,
   },
   {
     cardClass:
-      "border-violet-200 bg-gradient-to-r from-violet-50 via-fuchsia-50/70 to-white hover:border-violet-300",
-    iconWrapClass: "border-violet-200 bg-violet-100 text-violet-700",
-    countClass: "border-violet-200 bg-violet-50 text-violet-700",
+      "border-violet-200 bg-gradient-to-r from-violet-50 via-fuchsia-50/70 to-white hover:border-violet-300 hover:shadow-md hover:shadow-violet-100 hover:-translate-y-0.5",
+    iconWrapClass: "border-violet-200 bg-violet-100 text-violet-700 group-hover:scale-105 group-hover:bg-violet-200/80 transition-all duration-200",
+    countClass: "border-violet-200 bg-violet-50 text-violet-700 group-hover:bg-violet-100 transition-colors duration-200",
     accentClass: "bg-violet-400",
     icon: UsersRound,
   },
   {
     cardClass:
-      "border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50/70 to-white hover:border-emerald-300",
-    iconWrapClass: "border-emerald-200 bg-emerald-100 text-emerald-700",
-    countClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      "border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50/70 to-white hover:border-emerald-300 hover:shadow-md hover:shadow-emerald-100 hover:-translate-y-0.5",
+    iconWrapClass: "border-emerald-200 bg-emerald-100 text-emerald-700 group-hover:scale-105 group-hover:bg-emerald-200/80 transition-all duration-200",
+    countClass: "border-emerald-200 bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100 transition-colors duration-200",
     accentClass: "bg-emerald-400",
     icon: Building2,
   },
   {
     cardClass:
-      "border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50/70 to-white hover:border-rose-300",
-    iconWrapClass: "border-rose-200 bg-rose-100 text-rose-700",
-    countClass: "border-rose-200 bg-rose-50 text-rose-700",
+      "border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50/70 to-white hover:border-rose-300 hover:shadow-md hover:shadow-rose-100 hover:-translate-y-0.5",
+    iconWrapClass: "border-rose-200 bg-rose-100 text-rose-700 group-hover:scale-105 group-hover:bg-rose-200/80 transition-all duration-200",
+    countClass: "border-rose-200 bg-rose-50 text-rose-700 group-hover:bg-rose-100 transition-colors duration-200",
     accentClass: "bg-rose-400",
     icon: Layers3,
   },
@@ -304,11 +304,11 @@ export function EmployeeHierarchyPanel({
         ) : null}
 
         <div
-          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all ${
+          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all duration-200 ease-out ${
             isRoot
-              ? "border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm hover:border-amber-300 hover:shadow-md"
-              : `${depthStyle.cardClass} hover:shadow-sm`
-          } ${isSelected ? "ring-2 ring-primary-600 ring-offset-1" : ""}`}
+              ? "border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm hover:border-amber-300 hover:shadow-md hover:shadow-amber-100 hover:-translate-y-0.5"
+              : depthStyle.cardClass
+          } ${isSelected ? "ring-2 ring-primary-600 ring-offset-1 shadow-md" : ""}`}
         >
           <button
             type="button"
@@ -319,7 +319,7 @@ export function EmployeeHierarchyPanel({
               hasChildren ? "cursor-pointer" : "cursor-default"
             } ${
               isRoot
-                ? "border-amber-200 bg-amber-100 text-amber-700"
+                ? "border-amber-200 bg-amber-100 text-amber-700 group-hover:scale-105 group-hover:bg-amber-200/80 transition-all duration-200"
                 : depthStyle.iconWrapClass
               }`}
             disabled={!canExpand && !nodeState?.loading}

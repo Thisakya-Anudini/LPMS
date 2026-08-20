@@ -168,7 +168,7 @@ export function AdminEmployeeHierarchyPage() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Employee Hierarchy</h1>
           <p className="mt-1 text-slate-500">Explore reporting lines and review learner progress in one place.</p>
         </div>
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600"><UsersRound className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-slate-900">Interactive hierarchy</p><p className="text-xs text-slate-500">Select View to inspect a learner</p></div></div>
+        <div className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md"><div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-50 text-sky-600 transition-transform duration-200 group-hover:scale-105"><UsersRound className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-slate-900">Interactive hierarchy</p><p className="text-xs text-slate-500">Select View to inspect a learner</p></div></div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(420px,0.9fr)_minmax(0,1.1fr)]">
@@ -217,7 +217,7 @@ export function AdminEmployeeHierarchyPage() {
               </div>
             ) : learner ? (
               <div className="space-y-5">
-                <div className="flex items-center gap-4 rounded-2xl border border-primary-100 bg-gradient-to-r from-primary-50 to-white p-4">
+                <div className="flex items-center gap-4 rounded-2xl border border-primary-100 bg-gradient-to-r from-primary-50 to-white p-4 shadow-sm transition-all duration-200 hover:border-primary-200 hover:shadow-md">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 ring-4 ring-white"><UserRound className="h-6 w-6" /></div>
                   <div className="min-w-0"><p className="text-lg font-semibold text-slate-900">{learner.name}</p><p className="truncate text-sm text-slate-500">{selectedEmployee?.designation || "No designation available"}</p>{learner.email && <p className="mt-1 flex items-center gap-1 text-xs text-slate-500"><Mail className="h-3 w-3" />{learner.email}</p>}</div>
                 </div>
@@ -242,7 +242,7 @@ export function AdminEmployeeHierarchyPage() {
                         return (
                         <div
                           key={path.enrollment_id}
-                          className={`cursor-pointer rounded-xl border bg-white p-4 transition-all ${isExpanded ? "border-primary-300 shadow-md ring-1 ring-primary-100" : "border-slate-200 hover:border-primary-200 hover:shadow-sm"}`}
+                          className={`cursor-pointer rounded-xl border bg-white p-4 transition-all duration-200 ease-out ${isExpanded ? "border-primary-300 shadow-md ring-1 ring-primary-100" : "border-slate-200 hover:border-primary-300 hover:shadow-md hover:-translate-y-0.5"}`}
                           onClick={() =>
                             setExpandedPathId(
                               expandedPathId === path.enrollment_id
