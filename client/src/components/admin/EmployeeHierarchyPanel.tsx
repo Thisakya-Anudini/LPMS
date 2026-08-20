@@ -443,7 +443,7 @@ export function EmployeeHierarchyPanel({
   return (
     <Card
       title="Employee Hierarchy"
-      className="flex h-full min-h-[520px] flex-col xl:h-[calc(100vh-170px)]"
+      className="flex h-full min-h-[520px] flex-col xl:h-[calc(100vh-170px)] transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-xl"
       bodyClassName="min-h-0 flex-1 overflow-y-auto"
       action={
         <Button
@@ -480,10 +480,10 @@ export function EmployeeHierarchyPanel({
           ))}
         </div>
       ) : hierarchyRoot ? (
-        <div className="rounded-3xl border border-slate-200 bg-[#fcfcfd] p-3 shadow-[0_8px_30px_rgba(15,23,42,0.04)]">
+        <div className="rounded-3xl border border-slate-200 bg-[#fcfcfd] p-3 shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-slate-300 hover:shadow-[0_12px_36px_rgba(15,23,42,0.08)]">
           <div className="mb-3 flex items-center justify-between px-2">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm">
+              <div className="flex h-8 w-8 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-transform duration-200 group-hover:scale-105">
                 <Network className="h-4 w-4" />
               </div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">

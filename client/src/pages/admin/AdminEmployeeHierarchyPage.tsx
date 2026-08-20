@@ -181,7 +181,7 @@ export function AdminEmployeeHierarchyPage() {
         </aside>
 
         <section className="min-w-0 self-stretch">
-          <Card className="min-h-[520px] shadow-sm xl:h-[calc(100vh-170px)]" bodyClassName="h-full overflow-y-auto p-0">
+          <Card className="min-h-[520px] shadow-sm xl:h-[calc(100vh-170px)] transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-xl" bodyClassName="h-full overflow-y-auto p-0">
             <div className="border-b border-slate-100 px-6 py-5"><div className="flex items-start justify-between gap-3"><div><div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary-700"><BookOpen className="h-3.5 w-3.5" /> Learner inspection</div><h2 className="text-lg font-semibold text-slate-900">Learner Details</h2><p className="mt-1 text-sm text-slate-500">{selectedEmployee ? `Employee no. ${selectedEmployee.employeeNumber}` : "Select an employee from the hierarchy."}</p></div>{selectedEmployee && <span className="rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700">Selected</span>}</div></div>
             <div className="p-6">
             {!selectedEmployee ? (
