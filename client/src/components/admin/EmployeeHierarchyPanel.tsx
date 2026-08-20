@@ -7,6 +7,7 @@ import {
   Crown,
   Layers3,
   Network,
+  RotateCw,
   UsersRound,
 } from "lucide-react";
 import { integrationApi } from "../../api/lpmsApi";
@@ -455,8 +456,12 @@ export function EmployeeHierarchyPanel({
             onRefresh?.();
           }}
           isLoading={hierarchyLoading}
+          className="group transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-700 hover:shadow-sm active:translate-y-0"
         >
-          Refresh
+          {!hierarchyLoading && (
+            <RotateCw className="h-3.5 w-3.5 text-slate-400 transition-transform duration-500 group-hover:rotate-180 group-hover:text-primary-600" />
+          )}
+          <span>Refresh</span>
         </Button>
       }
     >
