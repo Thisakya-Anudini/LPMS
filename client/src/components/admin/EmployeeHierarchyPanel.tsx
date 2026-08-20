@@ -60,8 +60,9 @@ const mapHierarchyEmployee = (row: Record<string, unknown>) => {
   return {
     employeeNumber,
     name: normalizeHierarchyName(row, employeeNumber),
-    designation: String(row.designation || row.designationName || "").trim() || "Employee",
-    orgName: String(row.orgName || row.empSection || row.empDivision || "").trim()
+    designation:
+      String(row.designation || row.designationName || "").trim() || "Employee",
+    orgName: String(row.orgName || row.empSection || row.empDivision || "").trim(),
   };
 };
 
@@ -69,32 +70,40 @@ const hierarchyDepthStyles = [
   {
     cardClass:
       "border-sky-200 bg-gradient-to-r from-sky-50 via-cyan-50 to-white hover:border-sky-300 hover:shadow-md hover:shadow-sky-100 hover:-translate-y-0.5",
-    iconWrapClass: "border-sky-200 bg-sky-100 text-sky-700 group-hover:scale-105 group-hover:bg-sky-200/80 transition-all duration-200",
-    countClass: "border-sky-200 bg-sky-50 text-sky-700 group-hover:bg-sky-100 transition-colors duration-200",
+    iconWrapClass:
+      "border-sky-200 bg-sky-100 text-sky-700 group-hover:scale-105 group-hover:bg-sky-200/80 transition-all duration-200",
+    countClass:
+      "border-sky-200 bg-sky-50 text-sky-700 group-hover:bg-sky-100 transition-colors duration-200",
     accentClass: "bg-sky-400",
     icon: Briefcase,
   },
   {
     cardClass:
       "border-violet-200 bg-gradient-to-r from-violet-50 via-fuchsia-50/70 to-white hover:border-violet-300 hover:shadow-md hover:shadow-violet-100 hover:-translate-y-0.5",
-    iconWrapClass: "border-violet-200 bg-violet-100 text-violet-700 group-hover:scale-105 group-hover:bg-violet-200/80 transition-all duration-200",
-    countClass: "border-violet-200 bg-violet-50 text-violet-700 group-hover:bg-violet-100 transition-colors duration-200",
+    iconWrapClass:
+      "border-violet-200 bg-violet-100 text-violet-700 group-hover:scale-105 group-hover:bg-violet-200/80 transition-all duration-200",
+    countClass:
+      "border-violet-200 bg-violet-50 text-violet-700 group-hover:bg-violet-100 transition-colors duration-200",
     accentClass: "bg-violet-400",
     icon: UsersRound,
   },
   {
     cardClass:
       "border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50/70 to-white hover:border-emerald-300 hover:shadow-md hover:shadow-emerald-100 hover:-translate-y-0.5",
-    iconWrapClass: "border-emerald-200 bg-emerald-100 text-emerald-700 group-hover:scale-105 group-hover:bg-emerald-200/80 transition-all duration-200",
-    countClass: "border-emerald-200 bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100 transition-colors duration-200",
+    iconWrapClass:
+      "border-emerald-200 bg-emerald-100 text-emerald-700 group-hover:scale-105 group-hover:bg-emerald-200/80 transition-all duration-200",
+    countClass:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 group-hover:bg-emerald-100 transition-colors duration-200",
     accentClass: "bg-emerald-400",
     icon: Building2,
   },
   {
     cardClass:
       "border-rose-200 bg-gradient-to-r from-rose-50 via-orange-50/70 to-white hover:border-rose-300 hover:shadow-md hover:shadow-rose-100 hover:-translate-y-0.5",
-    iconWrapClass: "border-rose-200 bg-rose-100 text-rose-700 group-hover:scale-105 group-hover:bg-rose-200/80 transition-all duration-200",
-    countClass: "border-rose-200 bg-rose-50 text-rose-700 group-hover:bg-rose-100 transition-colors duration-200",
+    iconWrapClass:
+      "border-rose-200 bg-rose-100 text-rose-700 group-hover:scale-105 group-hover:bg-rose-200/80 transition-all duration-200",
+    countClass:
+      "border-rose-200 bg-rose-50 text-rose-700 group-hover:bg-rose-100 transition-colors duration-200",
     accentClass: "bg-rose-400",
     icon: Layers3,
   },
@@ -230,7 +239,7 @@ export function EmployeeHierarchyPanel({
         designation:
           String(detailRow.designation || detailRow.designationName || "").trim() ||
           "Chief Executive Officer",
-        orgName: String(detailRow.orgName || "").trim()
+        orgName: String(detailRow.orgName || "").trim(),
       });
       setHierarchyChildrenByEmployee({
         [ROOT_EMPLOYEE_NO]: {
@@ -322,7 +331,7 @@ export function EmployeeHierarchyPanel({
               isRoot
                 ? "border-amber-200 bg-amber-100 text-amber-700 group-hover:scale-105 group-hover:bg-amber-200/80 transition-all duration-200"
                 : depthStyle.iconWrapClass
-              }`}
+            }`}
             disabled={!canExpand && !nodeState?.loading}
             aria-label={`${isExpanded ? "Collapse" : "Expand"} ${employee.name}`}
           >
