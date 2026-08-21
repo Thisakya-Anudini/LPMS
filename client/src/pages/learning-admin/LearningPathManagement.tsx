@@ -1165,7 +1165,7 @@ export function LearningPathManagement({
   };
 
   const renderCreateStageBuilder = () => (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-2">
       {(() => {
         const liveFilteredCourses = filterCoursesByQuery(
           courses,
@@ -1173,37 +1173,49 @@ export function LearningPathManagement({
         );
 
         return (
-          <div className="border border-slate-200 rounded-lg p-3 space-y-3">
-            <div className="flex items-end gap-2">
-              <Input
-                label="Stage Name"
-                value={pathForm.draftStage.title}
-                onChange={(event) =>
-                  updateStageTitle(
-                    "create",
-                    pathForm.stages.length,
-                    event.target.value,
-                  )
-                }
-                required
-              />
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-100">
+            <div className="flex items-end gap-3 border-b border-slate-100 pb-5">
+              <div className="flex-1">
+                <Input
+                  label="Draft Stage Name"
+                  value={pathForm.draftStage.title}
+                  onChange={(event) =>
+                    updateStageTitle(
+                      "create",
+                      pathForm.stages.length,
+                      event.target.value,
+                    )
+                  }
+                  placeholder="e.g. Stage 1 - Foundations"
+                  required
+                />
+              </div>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => addStage("create")}
-                className="h-11"
+                className="h-[42px] bg-slate-800 text-white hover:bg-slate-900 shadow-sm"
               >
-                <Plus className="h-5 w-5" />
+                <Plus className="mr-1 h-4 w-4" />
                 Add Stage
               </Button>
             </div>
 
-            <div>
-              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <p className="text-sm font-medium text-slate-700">
-                  Select Courses
-                </p>
-                <div className="w-full md:w-80">
+            <div className="pt-4">
+              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">
+                    Select Courses
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {createCourseSearch
+                      ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
+                      : coursePagination
+                        ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
+                        : `Showing ${courses.length} courses`}
+                  </p>
+                </div>
+                <div className="w-full md:w-72">
                   <Input
                     id="create-course-search"
                     key="create-course-search"
@@ -1215,50 +1227,46 @@ export function LearningPathManagement({
                   />
                 </div>
               </div>
-              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <p className="text-xs text-slate-500">
-                  {createCourseSearch
-                    ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
-                    : coursePagination
-                      ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
-                      : `Showing ${courses.length} courses`}
-                </p>
-                {!createCourseSearch && coursePagination && (
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        setCurrentCoursePage((prev) => Math.max(1, prev - 1))
-                      }
-                      disabled={!coursePagination.hasPrevPage || loading}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setCurrentCoursePage((prev) => prev + 1)}
-                      disabled={!coursePagination.hasNextPage || loading}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="max-h-[30rem] overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+
+              {!createCourseSearch && coursePagination && (
+                <div className="mb-3 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={!coursePagination.hasPrevPage || loading}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentCoursePage((prev) => prev + 1)}
+                    disabled={!coursePagination.hasNextPage || loading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+
+              <div className="max-h-[22rem] overflow-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-1">
                 {loading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
+                  <div className="space-y-2 p-2">
+                    <Skeleton className="h-14 w-full rounded-md" />
+                    <Skeleton className="h-14 w-full rounded-md" />
+                    <Skeleton className="h-14 w-full rounded-md" />
                   </div>
                 ) : liveFilteredCourses.length === 0 ? (
-                  <p className="p-3 text-sm text-slate-500">
-                    No courses match "{createCourseSearch.trim()}".
-                  </p>
+                  <div className="flex flex-col items-center justify-center p-8 text-center">
+                    <BookOpen className="h-8 w-8 text-slate-300 mb-2" />
+                    <p className="text-sm font-semibold text-slate-500">
+                      No courses match "{createCourseSearch.trim()}"
+                    </p>
+                  </div>
                 ) : (
                   liveFilteredCourses.map((course, courseIndex) => (
                     <label
@@ -1267,10 +1275,17 @@ export function LearningPathManagement({
                         courseIndex,
                         `create-${pathForm.draftStage.stageId}`,
                       )}
-                      className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                      className={`flex cursor-pointer items-start gap-3 p-3 transition-colors border-l-4 ${
+                        pathForm.draftStage.selectedCourseIds.includes(
+                          course.id,
+                        )
+                          ? "border-l-primary-500 bg-primary-50/50"
+                          : "border-l-transparent bg-white hover:bg-slate-100 hover:border-l-primary-300 shadow-sm"
+                      }`}
                     >
                       <input
                         type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-600"
                         checked={pathForm.draftStage.selectedCourseIds.includes(
                           course.id,
                         )}
@@ -1282,6 +1297,7 @@ export function LearningPathManagement({
                           )
                         }
                       />
+
                       <span className="text-sm">
                         <span className="block font-medium text-slate-900">
                           {course.title}
@@ -1596,18 +1612,54 @@ export function LearningPathManagement({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">
-          {sectionMeta[section].title}
-        </h1>
-        <p className="text-slate-500">{sectionMeta[section].description}</p>
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {/* Subtle Background Pattern/Gradient */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-50 to-white/50" />
+
+        <div className="relative flex flex-col gap-4 px-5 py-6 md:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600">
+              Learning Administration
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+              {sectionMeta[section].title}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              {sectionMeta[section].description}
+            </p>
+          </div>
+
+          <div className="flex w-full flex-col gap-1 rounded-xl border border-primary-100 bg-primary-50/50 px-5 py-4 sm:w-auto sm:min-w-[280px]">
+            <div className="flex items-center gap-2 text-sm font-bold text-primary-950">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary-100 text-primary-700">
+                <BookOpen className="h-3.5 w-3.5" />
+              </div>
+              Learning Paths
+            </div>
+            <p className="mt-1 text-xs font-medium text-primary-700">
+              {loading
+                ? "Loading paths..."
+                : `${paths.length} active learning paths managed`}
+            </p>
+          </div>
+        </div>
       </div>
 
       {section === "create" ? (
-        <div className="grid grid-cols-1 xl:grid-cols-9 gap-6">
-          <Card title="Create Learning Path" className="xl:col-span-5">
-            <form className="space-y-4" onSubmit={handleCreatePath}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-9">
+          <Card
+            title={
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <span>Create Learning Path</span>
+              </div>
+            }
+            className="shadow-sm border-slate-200 xl:col-span-5"
+          >
+            <form className="space-y-6" onSubmit={handleCreatePath}>
+              <div className="grid grid-cols-1 items-start gap-5 rounded-xl border border-slate-100 bg-slate-50 p-5 md:grid-cols-2">
                 <Input
                   label="Title"
                   value={pathForm.title}
@@ -1628,7 +1680,7 @@ export function LearningPathManagement({
                     <p className="font-medium">
                       {pathDuplicateWarning.message}
                     </p>
-                    <ul className="list-disc list-inside">
+                    <ul className="list-inside list-disc">
                       {pathDuplicateWarning.existing.map((e) => (
                         <li key={e.id || e.title || "duplicate-path"}>
                           {e.title}{" "}
@@ -1656,11 +1708,11 @@ export function LearningPathManagement({
                   ]}
                 />
                 {pathDuplicateWarning ? (
-                  <div className="md:col-span-2 mt-1 text-sm text-amber-700">
+                  <div className="mt-1 text-sm text-amber-700 md:col-span-2">
                     <p className="font-medium">
                       {pathDuplicateWarning.message}
                     </p>
-                    <ul className="list-disc list-inside">
+                    <ul className="list-inside list-disc">
                       {pathDuplicateWarning.existing.map((e) => (
                         <li key={e.id ?? String(e.title)}>
                           {e.title}{" "}
@@ -1689,36 +1741,58 @@ export function LearningPathManagement({
 
               {renderCreateStageBuilder()}
 
-              <Button type="submit" isLoading={pathFormLoading}>
-                Create Path
-              </Button>
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
+                  isLoading={pathFormLoading}
+                  className="bg-primary-600 hover:bg-primary-700 text-white shadow-sm transition-all hover:-translate-y-0.5"
+                >
+                  Create Path
+                </Button>
+              </div>
             </form>
           </Card>
 
-          <Card title="Learning Path Preview" className="xl:col-span-4">
-            <div className="space-y-4">
-              <div className="p-3 rounded-lg border border-slate-200 bg-slate-50">
-                <p className="font-semibold text-slate-900">
+          <Card
+            title="Learning Path Preview"
+            className="xl:col-span-4 shadow-sm border-slate-200 self-start sticky top-6"
+            bodyClassName="p-0 overflow-hidden"
+          >
+            <div className="flex flex-col h-full max-h-[calc(100vh-8rem)]">
+              {/* Preview Header */}
+              <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white p-5">
+                <p className="text-lg font-black text-slate-900 tracking-tight">
                   {pathForm.title.trim() || "Untitled Learning Path"}
                 </p>
-                <p className="text-sm text-slate-600 mt-1">
+                <p className="mt-1.5 text-sm text-slate-600">
                   {pathForm.description.trim() ||
                     "Add a description to preview details."}
                 </p>
-                <p className="text-xs text-slate-500 mt-2">
+                <div className="mt-3 inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-bold text-primary-700 ring-1 ring-inset ring-primary-600/20">
                   {pathForm.category.replace("_", " ")}
-                </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800 mb-2">
-                  Stages & Courses
+
+              {/* Stages List */}
+              <div className="overflow-y-auto p-5 bg-slate-50/30 flex-1">
+                <p className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Stages & Course Order
                 </p>
-                <div className="space-y-2">
+                <div className="space-y-4">
                   {pathForm.stages.length === 0 &&
                   pathForm.draftStage.selectedCourseIds.length === 0 ? (
-                    <p className="text-sm text-slate-500">
-                      No stages added yet.
-                    </p>
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-12 text-center shadow-sm">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
+                        <BookOpen className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 mb-1">
+                        No stages added yet
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-[200px]">
+                        Select courses on the left and click "Add Stage" to
+                        build your path.
+                      </p>
+                    </div>
                   ) : (
                     [...pathForm.stages, pathForm.draftStage].map(
                       (stage, stageIndex) => {
@@ -1734,23 +1808,30 @@ export function LearningPathManagement({
                         return (
                           <div
                             key={`preview-${stage.stageId}`}
-                            className="p-3 rounded border border-slate-200 bg-white text-sm text-slate-800"
+                            className={`overflow-hidden rounded-xl border shadow-sm ${
+                              isDraftStage
+                                ? "border-blue-200 bg-blue-50/30 ring-1 ring-blue-100"
+                                : "border-slate-200 bg-white"
+                            }`}
                           >
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="font-semibold text-slate-900">
+                            <div
+                              className={`flex items-center justify-between border-b px-4 py-3 ${isDraftStage ? "border-blue-100 bg-blue-50/50" : "border-slate-100 bg-slate-50/80"}`}
+                            >
+                              <p className="font-bold text-slate-900">
                                 {isDraftStage
                                   ? `Current Stage: ${stage.title || `Stage ${stageIndex + 1}`}`
                                   : `Stage ${stageIndex + 1}: ${stage.title || `Stage ${stageIndex + 1}`}`}
                               </p>
                               {isDraftStage ? (
-                                <span className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-medium text-blue-700">
+                                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-700">
                                   Draft
                                 </span>
                               ) : null}
                             </div>
-                            <div className="mt-2 space-y-2">
+
+                            <div className="p-2 space-y-1">
                               {stage.selectedCourseIds.length === 0 ? (
-                                <p className="text-xs text-slate-500">
+                                <p className="px-3 py-4 text-center text-xs text-slate-500">
                                   No courses selected.
                                 </p>
                               ) : (
@@ -1762,21 +1843,21 @@ export function LearningPathManagement({
                                     return (
                                       <div
                                         key={`preview-${stage.stageId}-${courseId}`}
-                                        className="flex items-center justify-between gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-2"
+                                        className="group flex items-center justify-between gap-3  border border-slate-100 bg-white p-3 text-sm transition-all hover:border-slate-200 hover:shadow-sm border-l-4 border-l-transparent hover:border-l-primary-400"
                                       >
                                         <div>
-                                          <p className="text-slate-800">
+                                          <p className="font-bold text-slate-800">
                                             {courseIndex + 1}.{" "}
                                             {course?.title || courseId}
                                           </p>
-                                          <p className="text-xs text-slate-500">
+                                          <p className="mt-0.5 text-xs font-medium text-slate-500">
                                             {course?.code || courseId}
                                           </p>
                                         </div>
-                                        <div className="flex gap-1">
+                                        <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                                           <button
                                             type="button"
-                                            className="rounded p-1 hover:bg-slate-200"
+                                            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                                             onClick={() =>
                                               moveCourse(
                                                 stageIndex,
@@ -1790,7 +1871,7 @@ export function LearningPathManagement({
                                           </button>
                                           <button
                                             type="button"
-                                            className="rounded p-1 hover:bg-slate-200"
+                                            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                                             onClick={() =>
                                               moveCourse(
                                                 stageIndex,
