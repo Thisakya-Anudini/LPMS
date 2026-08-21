@@ -1165,7 +1165,7 @@ export function LearningPathManagement({
   };
 
   const renderCreateStageBuilder = () => (
-    <div className="space-y-4">
+    <div className="space-y-4 pt-2">
       {(() => {
         const liveFilteredCourses = filterCoursesByQuery(
           courses,
@@ -1173,37 +1173,49 @@ export function LearningPathManagement({
         );
 
         return (
-          <div className="border border-slate-200 rounded-lg p-3 space-y-3">
-            <div className="flex items-end gap-2">
-              <Input
-                label="Stage Name"
-                value={pathForm.draftStage.title}
-                onChange={(event) =>
-                  updateStageTitle(
-                    "create",
-                    pathForm.stages.length,
-                    event.target.value,
-                  )
-                }
-                required
-              />
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-100">
+            <div className="flex items-end gap-3 border-b border-slate-100 pb-5">
+              <div className="flex-1">
+                <Input
+                  label="Draft Stage Name"
+                  value={pathForm.draftStage.title}
+                  onChange={(event) =>
+                    updateStageTitle(
+                      "create",
+                      pathForm.stages.length,
+                      event.target.value,
+                    )
+                  }
+                  placeholder="e.g. Stage 1 - Foundations"
+                  required
+                />
+              </div>
               <Button
                 type="button"
                 variant="secondary"
                 onClick={() => addStage("create")}
-                className="h-11"
+                className="h-[42px] bg-slate-800 text-white hover:bg-slate-900 shadow-sm"
               >
-                <Plus className="h-5 w-5" />
+                <Plus className="mr-1 h-4 w-4" />
                 Add Stage
               </Button>
             </div>
 
-            <div>
-              <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <p className="text-sm font-medium text-slate-700">
-                  Select Courses
-                </p>
-                <div className="w-full md:w-80">
+            <div className="pt-4">
+              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">
+                    Select Courses
+                  </p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {createCourseSearch
+                      ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
+                      : coursePagination
+                        ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
+                        : `Showing ${courses.length} courses`}
+                  </p>
+                </div>
+                <div className="w-full md:w-72">
                   <Input
                     id="create-course-search"
                     key="create-course-search"
@@ -1215,50 +1227,46 @@ export function LearningPathManagement({
                   />
                 </div>
               </div>
-              <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <p className="text-xs text-slate-500">
-                  {createCourseSearch
-                    ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
-                    : coursePagination
-                      ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
-                      : `Showing ${courses.length} courses`}
-                </p>
-                {!createCourseSearch && coursePagination && (
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        setCurrentCoursePage((prev) => Math.max(1, prev - 1))
-                      }
-                      disabled={!coursePagination.hasPrevPage || loading}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setCurrentCoursePage((prev) => prev + 1)}
-                      disabled={!coursePagination.hasNextPage || loading}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <div className="max-h-[30rem] overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
+
+              {!createCourseSearch && coursePagination && (
+                <div className="mb-3 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={!coursePagination.hasPrevPage || loading}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setCurrentCoursePage((prev) => prev + 1)}
+                    disabled={!coursePagination.hasNextPage || loading}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+
+              <div className="max-h-[22rem] overflow-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-1">
                 {loading ? (
-                  <div className="space-y-2">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
+                  <div className="space-y-2 p-2">
+                    <Skeleton className="h-14 w-full rounded-md" />
+                    <Skeleton className="h-14 w-full rounded-md" />
+                    <Skeleton className="h-14 w-full rounded-md" />
                   </div>
                 ) : liveFilteredCourses.length === 0 ? (
-                  <p className="p-3 text-sm text-slate-500">
-                    No courses match "{createCourseSearch.trim()}".
-                  </p>
+                  <div className="flex flex-col items-center justify-center p-8 text-center">
+                    <BookOpen className="h-8 w-8 text-slate-300 mb-2" />
+                    <p className="text-sm font-semibold text-slate-500">
+                      No courses match "{createCourseSearch.trim()}"
+                    </p>
+                  </div>
                 ) : (
                   liveFilteredCourses.map((course, courseIndex) => (
                     <label
@@ -1267,10 +1275,17 @@ export function LearningPathManagement({
                         courseIndex,
                         `create-${pathForm.draftStage.stageId}`,
                       )}
-                      className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                      className={`flex cursor-pointer items-start gap-3 p-3 transition-colors border-l-4 ${
+                        pathForm.draftStage.selectedCourseIds.includes(
+                          course.id,
+                        )
+                          ? "border-l-primary-500 bg-primary-50/50"
+                          : "border-l-transparent bg-white hover:bg-slate-100 hover:border-l-primary-300 shadow-sm"
+                      }`}
                     >
                       <input
                         type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-600"
                         checked={pathForm.draftStage.selectedCourseIds.includes(
                           course.id,
                         )}
@@ -1282,6 +1297,7 @@ export function LearningPathManagement({
                           )
                         }
                       />
+
                       <span className="text-sm">
                         <span className="block font-medium text-slate-900">
                           {course.title}
