@@ -1630,10 +1630,20 @@ export function LearningPathManagement({
       </div>
 
       {section === "create" ? (
-        <div className="grid grid-cols-1 xl:grid-cols-9 gap-6">
-          <Card title="Create Learning Path" className="xl:col-span-5">
-            <form className="space-y-4" onSubmit={handleCreatePath}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-9">
+          <Card
+            title={
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <span>Create Learning Path</span>
+              </div>
+            }
+            className="shadow-sm border-slate-200 xl:col-span-5"
+          >
+            <form className="space-y-6" onSubmit={handleCreatePath}>
+              <div className="grid grid-cols-1 items-start gap-5 rounded-xl border border-slate-100 bg-slate-50 p-5 md:grid-cols-2">
                 <Input
                   label="Title"
                   value={pathForm.title}
@@ -1654,7 +1664,7 @@ export function LearningPathManagement({
                     <p className="font-medium">
                       {pathDuplicateWarning.message}
                     </p>
-                    <ul className="list-disc list-inside">
+                    <ul className="list-inside list-disc">
                       {pathDuplicateWarning.existing.map((e) => (
                         <li key={e.id || e.title || "duplicate-path"}>
                           {e.title}{" "}
@@ -1682,11 +1692,11 @@ export function LearningPathManagement({
                   ]}
                 />
                 {pathDuplicateWarning ? (
-                  <div className="md:col-span-2 mt-1 text-sm text-amber-700">
+                  <div className="mt-1 text-sm text-amber-700 md:col-span-2">
                     <p className="font-medium">
                       {pathDuplicateWarning.message}
                     </p>
-                    <ul className="list-disc list-inside">
+                    <ul className="list-inside list-disc">
                       {pathDuplicateWarning.existing.map((e) => (
                         <li key={e.id ?? String(e.title)}>
                           {e.title}{" "}
@@ -1715,9 +1725,15 @@ export function LearningPathManagement({
 
               {renderCreateStageBuilder()}
 
-              <Button type="submit" isLoading={pathFormLoading}>
-                Create Path
-              </Button>
+              <div className="flex justify-end pt-2">
+                <Button
+                  type="submit"
+                  isLoading={pathFormLoading}
+                  className="bg-primary-600 hover:bg-primary-700 text-white shadow-sm transition-all hover:-translate-y-0.5"
+                >
+                  Create Path
+                </Button>
+              </div>
             </form>
           </Card>
 
