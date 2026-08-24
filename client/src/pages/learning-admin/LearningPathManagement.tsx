@@ -1519,6 +1519,7 @@ export function LearningPathManagement({
     setAssignOrganizationFilter("");
     setAssignPayrollFilter("");
     setLearners([]);
+    setAssignForm((prev) => ({ ...prev, selectedLearnerEmployeeNumbers: [] }));
   };
 
   const handleManageReset = () => {
