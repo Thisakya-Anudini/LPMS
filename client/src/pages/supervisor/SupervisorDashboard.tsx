@@ -88,7 +88,7 @@ const getEmployeeDisplayName = (row: Record<string, unknown>) => {
 };
 
 export function SupervisorDashboard() {
-  const { getAccessToken } = useAuth();
+  const { user, getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -431,13 +431,13 @@ export function SupervisorDashboard() {
                     onChange={(event) =>
                       setEmployeeNoSearch(event.target.value)
                     }
-                    placeholder="e.g. 011338"
+                    placeholder={`e.g. ${user?.employeeNo?.trim() || "123456"}`}
                   />
                   <Input
                     label="Search by Name"
                     value={nameSearch}
                     onChange={(event) => setNameSearch(event.target.value)}
-                    placeholder="e.g. Tennakoon"
+                    placeholder={`e.g. ${user?.name?.trim() || "name"}`}
                   />
                   <Select
                     label="Filter by Designation"
@@ -761,13 +761,13 @@ export function SupervisorDashboard() {
                     onChange={(event) =>
                       setEmployeeNoSearch(event.target.value)
                     }
-                    placeholder="e.g. 011338"
+                    placeholder={`e.g. ${user?.employeeNo?.trim() || "123456"}`}
                   />
                   <Input
                     label="Search by Name"
                     value={nameSearch}
                     onChange={(event) => setNameSearch(event.target.value)}
-                    placeholder="e.g. Tennakoon"
+                    placeholder={`e.g. ${user?.name?.trim() || "name"}`}
                   />
                   <Select
                     label="Filter by Designation"
