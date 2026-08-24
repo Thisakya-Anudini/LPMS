@@ -403,11 +403,11 @@ export function AdminEmployeeHierarchyPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">
-                      {selectedEmployee
-                        ? `Inspecting Employee #${selectedEmployee.employeeNumber}`
-                        : "Select an employee from the hierarchy tree to inspect details."}
-                    </p>
+                    {!selectedEmployee && (
+                      <p className="text-xs text-slate-500">
+                        Select an employee from the hierarchy tree to inspect details.
+                      </p>
+                    )}
                   </div>
                 </div>
 
