@@ -474,15 +474,16 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5">
         {/* Subtle Background Pattern/Gradient */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-50 to-white/50" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white/50 opacity-80 transition-opacity duration-300 group-hover:opacity-100" />
 
         <div className="relative flex flex-col gap-4 px-5 py-6 md:px-8 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary-600">
-              Administration
-            </p>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-primary-600">
+              <BriefcaseBusiness className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
+              <span>Administration</span>
+            </div>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
               System Accounts
             </h1>
@@ -492,9 +493,9 @@ export function AdminDashboard() {
             </p>
           </div>
 
-          <div className="flex w-full flex-col gap-1 rounded-xl border border-primary-100 bg-primary-50/50 px-5 py-4 sm:w-auto sm:min-w-[280px]">
+          <div className="flex w-full flex-col gap-1 rounded-xl border border-primary-100 bg-primary-50/50 px-5 py-4 sm:w-auto sm:min-w-[280px] transition-all duration-200 hover:border-primary-200 hover:bg-primary-50/90 hover:shadow-xs">
             <div className="flex items-center gap-2 text-sm font-bold text-primary-950">
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary-100 text-primary-700">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary-100 text-primary-700 transition-transform duration-200 group-hover:scale-105">
                 <BriefcaseBusiness className="h-3.5 w-3.5" />
               </div>
               Account Overview

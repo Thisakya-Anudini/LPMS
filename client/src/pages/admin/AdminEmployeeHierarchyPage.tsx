@@ -335,48 +335,35 @@ export function AdminEmployeeHierarchyPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Modern Hero & Command Bar */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-gradient-to-r from-sky-900 via-primary-900 to-slate-900 p-6 sm:p-8 text-white shadow-xl">
-        {/* Ambient Glow Circles */}
-        <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-sky-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-16 left-1/3 h-64 w-64 rounded-full bg-purple-500/20 blur-3xl" />
+      {/* Administration Box Banner (Matching System Accounts style with smooth hover effect) */}
+      <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5">
+        {/* Subtle Background Pattern/Gradient */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-50 via-sky-50/20 to-white/50 opacity-80 transition-opacity duration-300 group-hover:opacity-100" />
 
-        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-sky-200 backdrop-blur-md">
-              <Network className="h-3.5 w-3.5 text-sky-300" />
-              <span>Enterprise Organization Structure</span>
+        <div className="relative flex flex-col gap-4 px-5 py-6 md:px-8 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-primary-600">
+              <Network className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
+              <span>Administration</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Employee Hierarchy & Learner Journey
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+              Employee Hierarchy
             </h1>
-            <p className="max-w-2xl text-sm text-sky-100/80">
-              Navigate real-time reporting relationships across the enterprise,
-              inspect learner learning paths, track module progress, and evaluate team
-              skills.
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              Explore reporting lines and review learner progress in one place.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-md">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/30 text-sky-200 ring-1 ring-white/20">
-                <UsersRound className="h-5 w-5" />
+          <div className="flex w-full flex-col gap-1 rounded-xl border border-primary-100 bg-primary-50/50 px-5 py-4 sm:w-auto sm:min-w-[280px] transition-all duration-200 hover:border-primary-200 hover:bg-primary-50/90 hover:shadow-xs">
+            <div className="flex items-center gap-2 text-sm font-bold text-primary-950">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary-100 text-primary-700 transition-transform duration-200 group-hover:scale-105">
+                <UsersRound className="h-3.5 w-3.5" />
               </div>
-              <div>
-                <p className="text-xs font-medium text-sky-200">Inspect Mode</p>
-                <p className="text-sm font-bold text-white">Live Reporting Lines</p>
-              </div>
+              Interactive Hierarchy
             </div>
-
-            <div className="flex items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 backdrop-blur-md">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/30 text-amber-200 ring-1 ring-white/20">
-                <GraduationCap className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs font-medium text-amber-200">Learning Analytics</p>
-                <p className="text-sm font-bold text-white">Path Progression</p>
-              </div>
-            </div>
+            <p className="mt-1 text-xs font-medium text-primary-700">
+              Select View to inspect a learner
+            </p>
           </div>
         </div>
       </div>
@@ -416,11 +403,11 @@ export function AdminEmployeeHierarchyPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">
-                      {selectedEmployee
-                        ? `Inspecting Employee #${selectedEmployee.employeeNumber}`
-                        : "Select an employee from the hierarchy tree to inspect details."}
-                    </p>
+                    {!selectedEmployee && (
+                      <p className="text-xs text-slate-500">
+                        Select an employee from the hierarchy tree to inspect details.
+                      </p>
+                    )}
                   </div>
                 </div>
 
