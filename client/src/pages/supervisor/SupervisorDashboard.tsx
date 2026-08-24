@@ -216,6 +216,7 @@ export function SupervisorDashboard() {
     setEmployeeNoSearch("");
     setNameSearch("");
     setDesignationFilter("ALL");
+    setSelectedTeamNumbers([]);
   };
 
   const toggleTeamMember = (employeeNumber: string) => {

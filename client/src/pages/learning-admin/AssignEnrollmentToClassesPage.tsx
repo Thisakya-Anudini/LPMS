@@ -1362,6 +1362,7 @@ export function AssignEnrollmentToClassesPage() {
     setLearnerSearch("");
     setDesignationFilter("");
     setGradeFilter("");
+    setSelectedEnrollmentIds([]);
   };
 
   return (
