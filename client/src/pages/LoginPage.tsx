@@ -42,18 +42,36 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-primary-50 via-white to-secondary-50 p-4">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50/70 p-4">
+      {/* 4-Corner / 4-Side Logo Color Shadow Orbs */}
+      {/* Top-Left: SLT Cyan / Sky Blue Glow */}
+      <div className="pointer-events-none absolute -left-20 -top-20 h-96 w-96 rounded-full bg-cyan-400/25 blur-[100px] animate-pulse" style={{ animationDuration: '6s' }} />
+
+      {/* Top-Right: Mobitel Green / Emerald Glow */}
+      <div className="pointer-events-none absolute -right-20 -top-20 h-96 w-96 rounded-full bg-emerald-500/25 blur-[100px] animate-pulse" style={{ animationDuration: '7s' }} />
+
+      {/* Bottom-Left: Teal / Lime Green Glow */}
+      <div className="pointer-events-none absolute -bottom-20 -left-20 h-96 w-96 rounded-full bg-teal-400/25 blur-[100px] animate-pulse" style={{ animationDuration: '8s' }} />
+
+      {/* Bottom-Right: SLT Royal Blue Glow */}
+      <div className="pointer-events-none absolute -bottom-20 -right-20 h-96 w-96 rounded-full bg-sky-600/25 blur-[100px] animate-pulse" style={{ animationDuration: '6.5s' }} />
+
+      {/* 4-Side Perimeter Vignette / Ambient Inner Shadows */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-sky-500/5 via-transparent to-emerald-500/5" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-teal-500/5" />
 
       <div className="relative w-full max-w-md">
-        <div className="mb-12 text-center">
+        <div className="relative mb-10 text-center">
+          {/* Subtle Ambient Glow behind logo */}
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-28 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gradient-to-r from-cyan-300/30 to-emerald-300/30 blur-2xl" />
           <img
             src="/assets/logo.png"
             alt="SLT Mobitel"
-            className="mx-auto h-20 w-auto"
+            className="relative mx-auto h-20 w-auto drop-shadow-sm transition-transform duration-300 hover:scale-105"
           />
         </div>
 
-        <Card className="w-full border-secondary-200/50 bg-white/90 shadow-large backdrop-blur-sm">
+        <Card className="w-full border-slate-200/80 bg-white/95 shadow-2xl shadow-slate-900/5 backdrop-blur-md transition-all duration-300 hover:border-slate-300">
           <div className="mb-6 text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/30">
               <Shield className="h-8 w-8 text-white" />
