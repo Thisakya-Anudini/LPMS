@@ -2110,92 +2110,65 @@ export function LearningPathManagement({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <div className="max-h-[600px] overflow-y-auto space-y-4 p-4 bg-white rounded-md border border-slate-100">
-                {loading ? (
-                  <div className="text-slate-500 p-6">Loading learning paths...</div>
-                ) : paginatedPaths.data.length === 0 ? (
-                  <div className="text-slate-500 p-6">No learning paths found.</div>
-                ) : (
-                  paginatedPaths.data.map((path) => (
-                    <div key={path.id} className="bg-white rounded-lg shadow-sm border border-slate-100 p-4 flex items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-3">
-                          <div className="font-medium text-slate-900 truncate">{path.title}</div>
-                        </div>
-                        <div className="text-slate-500 text-xs mt-1 truncate">{path.description}</div>
+          <div>
+            <div className="max-h-[600px] overflow-y-auto space-y-4 p-4 bg-white rounded-md border border-slate-100">
+              {loading ? (
+                <div className="text-slate-500 p-6">Loading learning paths...</div>
+              ) : paginatedPaths.data.length === 0 ? (
+                <div className="text-slate-500 p-6">No learning paths found.</div>
+              ) : (
+                paginatedPaths.data.map((path) => (
+                  <div key={path.id} className="bg-white rounded-lg shadow-sm border border-slate-100 p-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <div className="font-medium text-slate-900 truncate">{path.title}</div>
                       </div>
+                      <div className="text-slate-500 text-xs mt-1 truncate">{path.description}</div>
+                    </div>
 
-                      <div className="flex items-center gap-6 shrink-0">
-                        <div>
-                          <Badge variant={path.category === 'RESTRICTED' ? 'danger' : 'success'}>
-                            <span className="flex items-center gap-1.5">
-                              {path.category === 'RESTRICTED' ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3 text-blue-500" />} {path.category.replace('_',' ')}
-                            </span>
-                          </Badge>
-                        </div>
-                        <div>
-                          <Badge variant={path.status === 'ACTIVE' ? 'success' : path.status === 'DRAFT' ? 'warning' : 'default'}>
-                            {path.status}
-                          </Badge>
-                        </div>
-                        <div className="flex gap-2">
-                          <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-blue-600 bg-blue-50/60" onClick={() => startEdit(path)}>
-                            <Pencil className="h-4 w-4" />
-                            Edit
-                          </button>
-                          <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-red-600 bg-red-50/60" onClick={() => setPendingDeletePath(path)}>
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </button>
-                        </div>
+                    <div className="flex items-center gap-6 shrink-0">
+                      <div>
+                        <Badge variant={path.category === 'RESTRICTED' ? 'danger' : 'success'}>
+                          <span className="flex items-center gap-1.5">
+                            {path.category === 'RESTRICTED' ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3 text-blue-500" />} {path.category.replace('_',' ')}
+                          </span>
+                        </Badge>
+                      </div>
+                      <div>
+                        <Badge variant={path.status === 'ACTIVE' ? 'success' : path.status === 'DRAFT' ? 'warning' : 'default'}>
+                          {path.status}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-blue-600 bg-blue-50/60" onClick={() => startEdit(path)}>
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </button>
+                        <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-red-600 bg-red-50/60" onClick={() => setPendingDeletePath(path)}>
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </button>
                       </div>
                     </div>
-                  ))
-                )}
+                  </div>
+                ))
+              )}
 
-                {/* pagination controls below list */}
-                <div className="flex items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-4 py-3 mt-4">
-                  <div className="text-xs text-slate-600">
-                    <span className="font-medium">
-                      {paginatedPaths.totalRecords === 0
-                        ? 'No learning paths'
-                        : `${(paginatedPaths.currentPage - 1) * paginatedPaths.pageSize + 1}–${Math.min(paginatedPaths.currentPage * paginatedPaths.pageSize, paginatedPaths.totalRecords)} of ${paginatedPaths.totalRecords}`}
-                    </span>
-                    {' | Page '}
-                    <span className="font-medium">{paginatedPaths.currentPage}</span>
-                    {' of '}
-                    <span className="font-medium">{paginatedPaths.totalPages}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="button" size="sm" variant="outline" onClick={() => setCurrentPathPage(prev => Math.max(1, prev - 1))} disabled={!paginatedPaths.hasPrevPage || loading}>Previous</Button>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setCurrentPathPage(prev => prev + 1)} disabled={!paginatedPaths.hasNextPage || loading}>Next</Button>
-                  </div>
+              <div className="flex items-center justify-between gap-4 border-t border-slate-200 bg-slate-50 px-4 py-3 mt-4">
+                <div className="text-xs text-slate-600">
+                  <span className="font-medium">
+                    {paginatedPaths.totalRecords === 0
+                      ? 'No learning paths'
+                      : `${(paginatedPaths.currentPage - 1) * paginatedPaths.pageSize + 1}–${Math.min(paginatedPaths.currentPage * paginatedPaths.pageSize, paginatedPaths.totalRecords)} of ${paginatedPaths.totalRecords}`}
+                  </span>
+                  {' | Page '}
+                  <span className="font-medium">{paginatedPaths.currentPage}</span>
+                  {' of '}
+                  <span className="font-medium">{paginatedPaths.totalPages}</span>
                 </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="bg-white rounded-md border border-slate-100 p-4">
-                <h3 className="text-sm font-semibold text-slate-700">Path Completions</h3>
-                <p className="text-xs text-slate-400">(Last 30 Days)</p>
-                <div className="h-28 mt-3 bg-gradient-to-b from-emerald-50 to-white rounded-md" />
-              </div>
-              <div className="bg-white rounded-md border border-slate-100 p-4">
-                <h3 className="text-sm font-semibold text-slate-700">Global User Engagement</h3>
-                <div className="flex items-center justify-between mt-3">
-                  <div>
-                    <div className="text-2xl font-semibold">85%</div>
-                    <div className="text-xs text-slate-400">Top Performing Path: Saman (ai)</div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white rounded-md border border-slate-100 p-4">
-                <h3 className="text-sm font-semibold text-slate-700">Customer Satisfaction (CSAT)</h3>
-                <div className="mt-3">
-                  <div className="text-xl font-semibold">4.8/5</div>
-                  <div className="text-xs text-amber-500">★★★★★</div>
+                <div className="flex gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setCurrentPathPage(prev => Math.max(1, prev - 1))} disabled={!paginatedPaths.hasPrevPage || loading}>Previous</Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => setCurrentPathPage(prev => prev + 1)} disabled={!paginatedPaths.hasNextPage || loading}>Next</Button>
                 </div>
               </div>
             </div>
