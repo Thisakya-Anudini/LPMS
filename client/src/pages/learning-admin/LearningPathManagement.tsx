@@ -2130,14 +2130,14 @@ export function LearningPathManagement({
                     <div className="flex items-center gap-4 shrink-0">
                       <div>
                         {path.category === 'RESTRICTED' ? (
-                          <Badge className="bg-rose-50 text-rose-700">
+                          <Badge variant="danger">
                             <span className="flex items-center gap-1.5 text-xs">
                               <Lock className="h-3 w-3" />
                               RESTRICTED
                             </span>
                           </Badge>
                         ) : (
-                          <Badge className="bg-emerald-50 text-emerald-700">
+                          <Badge variant="success">
                             <span className="flex items-center gap-1.5 text-xs">
                               <Globe className="h-3 w-3 text-emerald-700" />
                               PUBLIC
@@ -2147,11 +2147,11 @@ export function LearningPathManagement({
                       </div>
                       <div>
                         {path.status === 'ACTIVE' ? (
-                          <Badge className="bg-emerald-50 text-emerald-700">ACTIVE</Badge>
+                          <Badge variant="success">ACTIVE</Badge>
                         ) : path.status === 'DRAFT' ? (
-                          <Badge className="bg-amber-50 text-amber-700">DRAFT</Badge>
+                          <Badge variant="warning">DRAFT</Badge>
                         ) : (
-                          <Badge>{path.status}</Badge>
+                          <Badge variant="default">{path.status}</Badge>
                         )}
                       </div>
                       <div className="flex gap-2">
