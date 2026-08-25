@@ -452,7 +452,7 @@ export function EmployeeHierarchyPanel({
 
   return (
     <Card
-      title="Employee Hierarchy"
+      title={<span className="text-xl">Employee Hierarchy</span>}
       className="flex h-full min-h-[520px] flex-col xl:h-[calc(100vh-170px)] transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-xl"
       bodyClassName="min-h-0 flex-1 overflow-y-auto"
       action={
