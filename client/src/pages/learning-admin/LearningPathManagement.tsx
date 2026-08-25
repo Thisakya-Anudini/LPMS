@@ -2116,35 +2116,50 @@ export function LearningPathManagement({
                 <div className="text-slate-500 p-6">Loading learning paths...</div>
               ) : paginatedPaths.data.length === 0 ? (
                 <div className="text-slate-500 p-6">No learning paths found.</div>
-              ) : (
+                ) : (
                 paginatedPaths.data.map((path) => (
-                  <div key={path.id} className="bg-white rounded-lg shadow-sm border border-slate-100 p-4 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
+                  <div key={path.id} className="relative bg-white rounded-lg shadow-sm border border-slate-100 p-4 flex items-center justify-between gap-4 overflow-hidden hover:shadow-md transition-shadow">
+                    <div className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-sky-400 to-emerald-400" />
+                    <div className="min-w-0 ml-3">
                       <div className="flex items-center gap-3">
-                        <div className="font-medium text-slate-900 truncate">{path.title}</div>
+                        <div className="font-semibold text-slate-900 text-lg truncate">{path.title}</div>
                       </div>
-                      <div className="text-slate-500 text-xs mt-1 truncate">{path.description}</div>
+                      <div className="text-slate-500 text-sm mt-1 truncate">{path.description}</div>
                     </div>
 
-                    <div className="flex items-center gap-6 shrink-0">
+                    <div className="flex items-center gap-4 shrink-0">
                       <div>
-                        <Badge variant={path.category === 'RESTRICTED' ? 'danger' : 'success'}>
-                          <span className="flex items-center gap-1.5">
-                            {path.category === 'RESTRICTED' ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3 text-blue-500" />} {path.category.replace('_',' ')}
-                          </span>
-                        </Badge>
+                        {path.category === 'RESTRICTED' ? (
+                          <Badge className="bg-rose-50 text-rose-700">
+                            <span className="flex items-center gap-1.5 text-xs">
+                              <Lock className="h-3 w-3" />
+                              RESTRICTED
+                            </span>
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-emerald-50 text-emerald-700">
+                            <span className="flex items-center gap-1.5 text-xs">
+                              <Globe className="h-3 w-3 text-emerald-700" />
+                              PUBLIC
+                            </span>
+                          </Badge>
+                        )}
                       </div>
                       <div>
-                        <Badge variant={path.status === 'ACTIVE' ? 'success' : path.status === 'DRAFT' ? 'warning' : 'default'}>
-                          {path.status}
-                        </Badge>
+                        {path.status === 'ACTIVE' ? (
+                          <Badge className="bg-emerald-50 text-emerald-700">ACTIVE</Badge>
+                        ) : path.status === 'DRAFT' ? (
+                          <Badge className="bg-amber-50 text-amber-700">DRAFT</Badge>
+                        ) : (
+                          <Badge>{path.status}</Badge>
+                        )}
                       </div>
                       <div className="flex gap-2">
-                        <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-blue-600 bg-blue-50/60" onClick={() => startEdit(path)}>
-                          <Pencil className="h-4 w-4" />
+                        <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-sm" onClick={() => startEdit(path)}>
+                          <Pencil className="h-4 w-4 text-white" />
                           Edit
                         </button>
-                        <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-red-600 bg-red-50/60" onClick={() => setPendingDeletePath(path)}>
+                        <button type="button" className="flex items-center gap-1.5 rounded-md px-3 py-1 text-sm text-red-600 border border-red-100 bg-red-50 hover:bg-red-100" onClick={() => setPendingDeletePath(path)}>
                           <Trash2 className="h-4 w-4" />
                           Delete
                         </button>
