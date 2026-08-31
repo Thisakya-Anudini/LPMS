@@ -382,9 +382,11 @@ export function EmployeeHierarchyPanel({
         >
           <button
             type="button"
-            onClick={() =>
-              void toggleHierarchyEmployee(employee.employeeNumber)
-            }
+            onClick={() => {
+              toggleHierarchyEmployee(employee.employeeNumber).catch(
+                console.error,
+              );
+            }}
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
               hasChildren ? "cursor-pointer" : "cursor-default"
             } ${
@@ -400,9 +402,11 @@ export function EmployeeHierarchyPanel({
 
           <button
             type="button"
-            onClick={() =>
-              void toggleHierarchyEmployee(employee.employeeNumber)
-            }
+            onClick={() => {
+              toggleHierarchyEmployee(employee.employeeNumber).catch(
+                console.error,
+              );
+            }}
             className="min-w-0 flex-1 text-left"
             disabled={!canExpand && !nodeState?.loading}
           >
@@ -443,9 +447,11 @@ export function EmployeeHierarchyPanel({
 
           <button
             type="button"
-            onClick={() =>
-              void toggleHierarchyEmployee(employee.employeeNumber)
-            }
+            onClick={() => {
+              toggleHierarchyEmployee(employee.employeeNumber).catch(
+                console.error,
+              );
+            }}
             className={`shrink-0 rounded-full p-1.5 text-slate-400 transition ${
               hasChildren
                 ? "group-hover:bg-slate-100 group-hover:text-slate-600"
@@ -486,7 +492,7 @@ export function EmployeeHierarchyPanel({
           variant="outline"
           size="sm"
           onClick={() => {
-            void loadHierarchy();
+            loadHierarchy().catch(console.error);
             onRefresh?.();
           }}
           isLoading={hierarchyLoading}
