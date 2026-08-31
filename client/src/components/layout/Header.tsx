@@ -1,33 +1,44 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   Bell,
   ChevronDown,
   ChevronRight,
   GraduationCap,
   LogOut,
-  Menu
-} from 'lucide-react';
-import { notificationsApi } from '../../api/lpmsApi';
-import { useAuth } from '../../contexts/useAuth';
-import { Button } from '../ui/Button';
-import { getNavigationModel, isGroupActive, isLinkActive, NavigationGroup, NavigationLink } from './navigation';
+  Menu,
+} from "lucide-react";
+import { notificationsApi } from "../../api/lpmsApi";
+import { useAuth } from "../../contexts/useAuth";
+import { Button } from "../ui/Button";
+import {
+  getNavigationModel,
+  isGroupActive,
+  isLinkActive,
+  NavigationGroup,
+  NavigationLink,
+} from "./navigation";
 
 type NotificationRow = {
   id: string;
   title: string;
   message: string;
-  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+  type: "INFO" | "SUCCESS" | "WARNING" | "ERROR";
   is_read: boolean;
   created_at: string;
 };
 
-type OpenMenu = 'mobile' | 'profile' | 'notifications' | `group:${string}` | null;
+type OpenMenu =
+  | "mobile"
+  | "profile"
+  | "notifications"
+  | `group:${string}`
+  | null;
 
 function TopNavLink({
   link,
   pathname,
-  suppressActive
+  suppressActive,
 }: {
   link: NavigationLink;
   pathname: string;
@@ -37,12 +48,12 @@ function TopNavLink({
 
   return (
     <NavLink
-      to={link.to || '#'}
-      end={link.matchMode === 'exact'}
+      to={link.to || "#"}
+      end={link.matchMode === "exact"}
       className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
         active
-          ? 'bg-slate-950/85 text-white shadow-sm'
-          : 'text-white/80 hover:bg-white/10 hover:text-white'
+          ? "bg-slate-950/85 text-white shadow-sm"
+          : "text-white/80 hover:bg-white/10 hover:text-white"
       }`}
     >
       {link.label}
@@ -53,7 +64,7 @@ function TopNavLink({
 function DesktopDropdownLink({
   link,
   pathname,
-  onClose
+  onClose,
 }: {
   link: NavigationLink;
   pathname: string;
@@ -67,7 +78,9 @@ function DesktopDropdownLink({
         <button
           type="button"
           className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm transition-colors ${
-            active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+            active
+              ? "bg-slate-900 text-white"
+              : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
           }`}
         >
           <link.icon className="h-4 w-4" />
@@ -77,7 +90,12 @@ function DesktopDropdownLink({
 
         <div className="invisible absolute left-[calc(100%-0.25rem)] top-0 z-50 w-80 rounded-3xl border border-slate-200 bg-white p-2 opacity-0 shadow-2xl transition group-hover/nested:visible group-hover/nested:opacity-100">
           {link.children.map((child) => (
-            <DesktopDropdownLink key={`${child.to}-${child.label}`} link={child} pathname={pathname} onClose={onClose} />
+            <DesktopDropdownLink
+              key={`${child.to}-${child.label}`}
+              link={child}
+              pathname={pathname}
+              onClose={onClose}
+            />
           ))}
         </div>
       </div>
@@ -87,12 +105,14 @@ function DesktopDropdownLink({
   return (
     <NavLink
       key={link.to}
-      to={link.to || '#'}
-      end={link.matchMode === 'exact'}
+      to={link.to || "#"}
+      end={link.matchMode === "exact"}
       onClick={onClose}
       className={({ isActive }) =>
         `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-          isActive || active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
+          isActive || active
+            ? "bg-slate-900 text-white"
+            : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
         }`
       }
     >
@@ -108,7 +128,7 @@ function DesktopDropdown({
   menuKey,
   openMenu,
   onToggle,
-  onClose
+  onClose,
 }: {
   group: NavigationGroup;
   pathname: string;
@@ -126,24 +146,35 @@ function DesktopDropdown({
         onClick={() => onToggle(menuKey)}
         className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
           active || openMenu === menuKey
-            ? 'bg-slate-950/85 text-white shadow-sm'
-            : 'text-white/80 hover:bg-white/10 hover:text-white'
+            ? "bg-slate-950/85 text-white shadow-sm"
+            : "text-white/80 hover:bg-white/10 hover:text-white"
         }`}
       >
         <group.icon className="h-4 w-4" />
         {group.label}
-        <ChevronDown className={`h-4 w-4 transition-transform ${openMenu === menuKey ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          className={`h-4 w-4 transition-transform ${openMenu === menuKey ? "rotate-180" : ""}`}
+        />
       </button>
 
       {openMenu === menuKey ? (
         <div className="absolute left-0 top-12 z-50 w-72 rounded-3xl border border-slate-200 bg-white shadow-2xl">
           <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">{group.label}</p>
-            <p className="mt-1 text-xs text-slate-500">Jump straight to tools in this workspace.</p>
+            <p className="text-sm font-semibold text-slate-900">
+              {group.label}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Jump straight to tools in this workspace.
+            </p>
           </div>
           <div className="p-2">
             {group.links.map((link) => (
-              <DesktopDropdownLink key={`${link.to}-${link.label}`} link={link} pathname={pathname} onClose={onClose} />
+              <DesktopDropdownLink
+                key={`${link.to}-${link.label}`}
+                link={link}
+                pathname={pathname}
+                onClose={onClose}
+              />
             ))}
           </div>
         </div>
@@ -158,13 +189,19 @@ export function Header() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
-  const [notificationError, setNotificationError] = useState<string | null>(null);
+  const [notificationError, setNotificationError] = useState<string | null>(
+    null,
+  );
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
-  const [showAllUnreadNotifications, setShowAllUnreadNotifications] = useState(false);
+  const [showAllUnreadNotifications, setShowAllUnreadNotifications] =
+    useState(false);
 
-  const navigation = useMemo(() => (user ? getNavigationModel(user) : null), [user]);
+  const navigation = useMemo(
+    () => (user ? getNavigationModel(user) : null),
+    [user],
+  );
 
   const loadNotifications = useCallback(async () => {
     if (!user) {
@@ -182,7 +219,9 @@ export function Header() {
         return;
       }
       const response = await notificationsApi.getMyNotifications(token);
-      const unread = response.notifications.filter((notification) => !notification.is_read).length;
+      const unread = response.notifications.filter(
+        (notification) => !notification.is_read,
+      ).length;
       setUnreadCount(unread);
       setNotifications(response.notifications);
     } catch {
@@ -197,11 +236,14 @@ export function Header() {
     const onNotificationUpdated = () => {
       loadNotifications();
     };
-    window.addEventListener('notifications:updated', onNotificationUpdated);
+    window.addEventListener("notifications:updated", onNotificationUpdated);
 
     return () => {
       window.clearInterval(intervalId);
-      window.removeEventListener('notifications:updated', onNotificationUpdated);
+      window.removeEventListener(
+        "notifications:updated",
+        onNotificationUpdated,
+      );
     };
   }, [loadNotifications]);
 
@@ -214,9 +256,9 @@ export function Header() {
       setOpenMenu(null);
     };
 
-    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener("mousedown", onPointerDown);
     return () => {
-      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener("mousedown", onPointerDown);
     };
   }, []);
 
@@ -230,7 +272,7 @@ export function Header() {
     setOpenMenu(nextMenu);
     setShowAllUnreadNotifications(false);
 
-    if (nextMenu === 'notifications') {
+    if (nextMenu === "notifications") {
       try {
         setLoadingNotifications(true);
         await loadNotifications();
@@ -245,14 +287,18 @@ export function Header() {
       setMarkingId(id);
       const token = await getAccessToken();
       if (!token) {
-        setNotificationError('Session expired. Please login again.');
+        setNotificationError("Session expired. Please login again.");
         return;
       }
       await notificationsApi.markAsRead(token, id);
       await loadNotifications();
-      window.dispatchEvent(new Event('notifications:updated'));
+      window.dispatchEvent(new Event("notifications:updated"));
     } catch (error) {
-      setNotificationError(error instanceof Error ? error.message : 'Failed to update notification.');
+      setNotificationError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update notification.",
+      );
     } finally {
       setMarkingId(null);
     }
@@ -263,14 +309,18 @@ export function Header() {
       setMarkingAll(true);
       const token = await getAccessToken();
       if (!token) {
-        setNotificationError('Session expired. Please login again.');
+        setNotificationError("Session expired. Please login again.");
         return;
       }
       await notificationsApi.markAllAsRead(token);
       await loadNotifications();
-      window.dispatchEvent(new Event('notifications:updated'));
+      window.dispatchEvent(new Event("notifications:updated"));
     } catch (error) {
-      setNotificationError(error instanceof Error ? error.message : 'Failed to update notifications.');
+      setNotificationError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update notifications.",
+      );
     } finally {
       setMarkingAll(false);
     }
@@ -281,7 +331,7 @@ export function Header() {
       return null;
     }
     if (unreadCount > 9) {
-      return '9+';
+      return "9+";
     }
     return String(unreadCount);
   }, [unreadCount]);
@@ -293,25 +343,235 @@ export function Header() {
         .sort(
           (firstNotification, secondNotification) =>
             new Date(secondNotification.created_at).getTime() -
-            new Date(firstNotification.created_at).getTime()
+            new Date(firstNotification.created_at).getTime(),
         ),
-    [notifications]
+    [notifications],
   );
 
   const visibleUnreadNotifications = showAllUnreadNotifications
     ? unreadNotifications
     : unreadNotifications.slice(0, 1);
 
-  const hiddenUnreadCount = Math.max(unreadNotifications.length - visibleUnreadNotifications.length, 0);
+  const hiddenUnreadCount = Math.max(
+    unreadNotifications.length - visibleUnreadNotifications.length,
+    0,
+  );
 
   if (!user || !navigation) {
     return null;
   }
 
   const currentSection =
-    navigation.primaryLinks.find((link) => isLinkActive(pathname, link))?.label ||
+    navigation.primaryLinks.find((link) => isLinkActive(pathname, link))
+      ?.label ||
     navigation.groups.find((group) => isGroupActive(pathname, group))?.label ||
-    'Workspace';
+    "Workspace";
+
+  const renderNotificationsMenu = () => {
+    if (openMenu !== "notifications") return null;
+
+    return (
+      <div className="absolute right-0 top-14 z-50 w-[380px] max-w-[90vw] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2">
+          <p className="text-lg font-semibold text-slate-900">Notifications</p>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleMarkAllAsRead}
+            isLoading={markingAll}
+            disabled={unreadCount === 0}
+            className="shrink-0 px-2 text-xs"
+          >
+            Clear all
+          </Button>
+        </div>
+        <div className="max-h-80 overflow-auto">
+          {loadingNotifications ? (
+            <p className="px-4 py-2.5 text-sm text-slate-500">
+              Loading notifications...
+            </p>
+          ) : notificationError ? (
+            <p className="px-4 py-3 text-sm text-red-600">
+              {notificationError}
+            </p>
+          ) : unreadNotifications.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-slate-500">
+              No unread notifications.
+            </p>
+          ) : (
+            <>
+              {visibleUnreadNotifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className="border-b border-slate-100 bg-violet-50/60 px-4 py-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {notification.title}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-slate-600">
+                        {notification.message}
+                      </p>
+                      <p className="mt-2 text-[11px] text-slate-500">
+                        {new Date(notification.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      isLoading={markingId === notification.id}
+                      onClick={() => handleMarkAsRead(notification.id)}
+                    >
+                      Read
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {hiddenUnreadCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllUnreadNotifications(true)}
+                  className="flex w-full items-center justify-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
+                >
+                  Show {hiddenUnreadCount} more unread
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+              ) : null}
+            </>
+          )}
+        </div>
+        <div className="border-t border-slate-100 px-4 py-3">
+          <NavLink
+            to="/notifications"
+            onClick={() => setOpenMenu(null)}
+            className="text-sm font-semibold text-slate-700 hover:text-slate-950"
+          >
+            View all notifications
+          </NavLink>
+        </div>
+      </div>
+    );
+  };
+
+  const renderProfileMenu = () => {
+    if (openMenu !== "profile") return null;
+
+    return (
+      <div className="absolute right-0 top-14 z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="border-b border-slate-100 px-4 py-4">
+          <p className="text-base font-semibold text-slate-900">{user.name}</p>
+          <p className="mt-1 text-sm text-slate-500">{user.email}</p>
+        </div>
+        <div className="p-2">
+          <NavLink
+            to={navigation.primaryLinks[0]?.to || "/"}
+            onClick={() => setOpenMenu(null)}
+            className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
+          >
+            <GraduationCap className="h-4 w-4" />
+            Go to workspace
+          </NavLink>
+          <button
+            type="button"
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm text-rose-600 transition-colors hover:bg-rose-50"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderMobileMenu = () => {
+    if (openMenu !== "mobile") return null;
+
+    return (
+      <div
+        className="border-t border-white/25 py-3 lg:hidden"
+        data-header-menu-root="true"
+      >
+        <div className="space-y-2">
+          {navigation.primaryLinks.map((link) => (
+            <NavLink
+              key={link.label}
+              to={link.to || "#"}
+              end={link.matchMode === "exact"}
+              onClick={() => setOpenMenu(null)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
+                  isActive || isLinkActive(pathname, link)
+                    ? "bg-slate-900 text-white"
+                    : "bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+                }`
+              }
+            >
+              <link.icon className="h-4 w-4" />
+              {link.label}
+            </NavLink>
+          ))}
+
+          {navigation.groups.map((group) => (
+            <div
+              key={group.label}
+              className="rounded-3xl border border-slate-200 bg-white p-2"
+            >
+              <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                {group.label}
+              </div>
+              {group.links.map((link) => (
+                <React.Fragment key={`${link.to}-${link.label}`}>
+                  {link.children?.length ? (
+                    <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                      {link.label}
+                    </div>
+                  ) : (
+                    <NavLink
+                      to={link.to || "#"}
+                      end={link.matchMode === "exact"}
+                      onClick={() => setOpenMenu(null)}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                          isActive || isLinkActive(pathname, link)
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+                        }`
+                      }
+                    >
+                      <link.icon className="h-4 w-4" />
+                      {link.label}
+                    </NavLink>
+                  )}
+
+                  {link.children?.map((child) => (
+                    <NavLink
+                      key={child.label}
+                      to={child.to || "#"}
+                      end={child.matchMode === "exact"}
+                      onClick={() => setOpenMenu(null)}
+                      className={({ isActive }) =>
+                        `ml-3 flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+                          isActive || isLinkActive(pathname, child)
+                            ? "bg-slate-900 text-white"
+                            : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+                        }`
+                      }
+                    >
+                      <child.icon className="h-4 w-4" />
+                      {child.label}
+                    </NavLink>
+                  ))}
+                </React.Fragment>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/20 bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] backdrop-blur">
@@ -319,18 +579,26 @@ export function Header() {
         <div className="flex h-16 items-center gap-4">
           <Link to="/" className="flex shrink-0 items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/50 bg-white/10 backdrop-blur-md text-white shadow-sm">
-              <img src="/assets/ShortLogo2.png" alt="LPMS logo" className="h-7 w-7 object-contain" />
+              <img
+                src="/assets/ShortLogo2.png"
+                alt="LPMS logo"
+                className="h-7 w-7 object-contain"
+              />
             </div>
             <div>
-              <p className="text-lg font-black tracking-tight text-white">LPMS</p>
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/70">Learning Portal</p>
+              <p className="text-lg font-black tracking-tight text-white">
+                LPMS
+              </p>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-white/70">
+                Learning Portal
+              </p>
             </div>
           </Link>
 
           <div className="ml-auto flex items-center gap-2 lg:gap-3">
             <button
               type="button"
-              onClick={() => handleToggleMenu('mobile')}
+              onClick={() => handleToggleMenu("mobile")}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-white transition-colors hover:bg-white/20 lg:hidden"
             >
               <Menu className="h-5 w-5" />
@@ -339,7 +607,7 @@ export function Header() {
             <div className="relative" data-header-menu-root="true">
               <button
                 type="button"
-                onClick={() => handleToggleMenu('notifications')}
+                onClick={() => handleToggleMenu("notifications")}
                 className="relative inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
                 aria-label="Notifications"
               >
@@ -351,124 +619,34 @@ export function Header() {
                 ) : null}
               </button>
 
-              {openMenu === 'notifications' ? (
-                <div className="absolute right-0 top-14 z-50 w-[380px] max-w-[90vw] overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2">
-                    <p className="text-lg font-semibold text-slate-900">Notifications</p>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleMarkAllAsRead}
-                      isLoading={markingAll}
-                      disabled={unreadCount === 0}
-                      className="shrink-0 px-2 text-xs"
-                    >
-                      Clear all
-                    </Button>
-                  </div>
-                  <div className="max-h-80 overflow-auto">
-                    {loadingNotifications ? (
-                      <p className="px-4 py-2.5 text-sm text-slate-500">Loading notifications...</p>
-                    ) : notificationError ? (
-                      <p className="px-4 py-3 text-sm text-red-600">{notificationError}</p>
-                    ) : unreadNotifications.length === 0 ? (
-                      <p className="px-4 py-3 text-sm text-slate-500">No unread notifications.</p>
-                    ) : (
-                      <>
-                        {visibleUnreadNotifications.map((notification) => (
-                          <div key={notification.id} className="border-b border-slate-100 bg-violet-50/60 px-4 py-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{notification.title}</p>
-                                <p className="mt-1 text-xs leading-5 text-slate-600">{notification.message}</p>
-                                <p className="mt-2 text-[11px] text-slate-500">
-                                  {new Date(notification.created_at).toLocaleString()}
-                                </p>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                isLoading={markingId === notification.id}
-                                onClick={() => handleMarkAsRead(notification.id)}
-                              >
-                                Read
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-
-                        {hiddenUnreadCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowAllUnreadNotifications(true)}
-                            className="flex w-full items-center justify-center gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950"
-                          >
-                            Show {hiddenUnreadCount} more unread
-                            <ChevronDown className="h-4 w-4" />
-                          </button>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                  <div className="border-t border-slate-100 px-4 py-3">
-                    <NavLink
-                      to="/notifications"
-                      onClick={() => setOpenMenu(null)}
-                      className="text-sm font-semibold text-slate-700 hover:text-slate-950"
-                    >
-                      View all notifications
-                    </NavLink>
-                  </div>
-                </div>
-              ) : null}
+              {renderNotificationsMenu()}
             </div>
 
             <div className="relative" data-header-menu-root="true">
               <button
                 type="button"
-                onClick={() => handleToggleMenu('profile')}
+                onClick={() => handleToggleMenu("profile")}
                 className="inline-flex h-11 items-center gap-3 rounded-full border border-white/35 bg-white px-1.5 text-left shadow-sm transition-colors hover:bg-white/95 lg:w-[200px]"
               >
                 <div className="grid h-9 w-9 place-items-center rounded-full bg-slate-950 text-sm font-bold text-white">
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div className="hidden min-w-0 flex-1 pr-1 lg:block">
-                  <p className="truncate text-sm font-semibold text-slate-900">{user.name}</p>
-                  <p className="truncate text-xs text-slate-500">{currentSection}</p>
+                  <p className="truncate text-sm font-semibold text-slate-900">
+                    {user.name}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {currentSection}
+                  </p>
                 </div>
                 <ChevronDown
                   className={`hidden h-4 w-4 shrink-0 text-slate-500 transition-transform lg:block ${
-                    openMenu === 'profile' ? 'rotate-180' : ''
+                    openMenu === "profile" ? "rotate-180" : ""
                   }`}
                 />
               </button>
 
-              {openMenu === 'profile' ? (
-                <div className="absolute right-0 top-14 z-50 w-72 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
-                  <div className="border-b border-slate-100 px-4 py-4">
-                    <p className="text-base font-semibold text-slate-900">{user.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{user.email}</p>
-                  </div>
-                  <div className="p-2">
-                    <NavLink
-                      to={navigation.primaryLinks[0]?.to || '/'}
-                      onClick={() => setOpenMenu(null)}
-                      className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950"
-                    >
-                      <GraduationCap className="h-4 w-4" />
-                      Go to workspace
-                    </NavLink>
-                    <button
-                      type="button"
-                      onClick={logout}
-                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm text-rose-600 transition-colors hover:bg-rose-50"
-                    >
-                      <LogOut className="h-4 w-4" />
-                      Logout
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+              {renderProfileMenu()}
             </div>
           </div>
         </div>
@@ -479,7 +657,9 @@ export function Header() {
               key={link.to}
               link={link}
               pathname={pathname}
-              suppressActive={typeof openMenu === 'string' && openMenu.startsWith('group:')}
+              suppressActive={
+                typeof openMenu === "string" && openMenu.startsWith("group:")
+              }
             />
           ))}
 
@@ -496,82 +676,7 @@ export function Header() {
           ))}
         </div>
 
-        {openMenu === 'mobile' ? (
-          <div className="border-t border-white/25 py-3 lg:hidden" data-header-menu-root="true">
-            <div className="space-y-2">
-              {navigation.primaryLinks.map((link) => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  end={link.matchMode === 'exact'}
-                  onClick={() => setOpenMenu(null)}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors ${
-                      isActive || isLinkActive(pathname, link)
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                    }`
-                  }
-                >
-                  <link.icon className="h-4 w-4" />
-                  {link.label}
-                </NavLink>
-              ))}
-
-              {navigation.groups.map((group) => (
-                <div key={group.label} className="rounded-3xl border border-slate-200 bg-white p-2">
-                  <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    {group.label}
-                  </div>
-                  {group.links.map((link) => (
-                    <React.Fragment key={`${link.to}-${link.label}`}>
-                      {link.children?.length ? (
-                        <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                          {link.label}
-                        </div>
-                      ) : (
-                        <NavLink
-                          to={link.to || '#'}
-                          end={link.matchMode === 'exact'}
-                          onClick={() => setOpenMenu(null)}
-                          className={({ isActive }) =>
-                            `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                              isActive || isLinkActive(pathname, link)
-                                ? 'bg-slate-900 text-white'
-                                : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                            }`
-                          }
-                        >
-                          <link.icon className="h-4 w-4" />
-                          {link.label}
-                        </NavLink>
-                      )}
-
-                      {link.children?.map((child) => (
-                        <NavLink
-                          key={child.to}
-                          to={child.to || '#'}
-                          end={child.matchMode === 'exact'}
-                          onClick={() => setOpenMenu(null)}
-                          className={({ isActive }) =>
-                            `ml-3 flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                              isActive || isLinkActive(pathname, child)
-                                ? 'bg-slate-900 text-white'
-                                : 'text-slate-700 hover:bg-slate-100 hover:text-slate-950'
-                            }`
-                          }
-                        >
-                          <child.icon className="h-4 w-4" />
-                          {child.label}
-                        </NavLink>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        {renderMobileMenu()}
       </div>
     </header>
   );
