@@ -62,7 +62,9 @@ const mapHierarchyEmployee = (row: Record<string, unknown>) => {
     name: normalizeHierarchyName(row, employeeNumber),
     designation:
       String(row.designation || row.designationName || "").trim() || "Employee",
-    orgName: String(row.orgName || row.empSection || row.empDivision || "").trim(),
+    orgName: String(
+      row.orgName || row.empSection || row.empDivision || "",
+    ).trim(),
   };
 };
 
@@ -175,8 +177,8 @@ export function EmployeeHierarchyPanel({
         );
         const rows = Array.isArray(response.data)
           ? response.data
-            .map((row) => mapHierarchyEmployee(row))
-            .filter((row) => row.employeeNumber.length > 0)
+              .map((row) => mapHierarchyEmployee(row))
+              .filter((row) => row.employeeNumber.length > 0)
           : [];
 
         setHierarchyChildrenByEmployee((prev) => ({
@@ -229,16 +231,17 @@ export function EmployeeHierarchyPanel({
           : {};
       const childRows = Array.isArray(childrenResponse.data)
         ? childrenResponse.data
-          .map((row) => mapHierarchyEmployee(row))
-          .filter((row) => row.employeeNumber.length > 0)
+            .map((row) => mapHierarchyEmployee(row))
+            .filter((row) => row.employeeNumber.length > 0)
         : [];
 
       setHierarchyRoot({
         employeeNumber: ROOT_EMPLOYEE_NO,
         name: normalizeHierarchyName(detailRow, ROOT_EMPLOYEE_NO),
         designation:
-          String(detailRow.designation || detailRow.designationName || "").trim() ||
-          "Chief Executive Officer",
+          String(
+            detailRow.designation || detailRow.designationName || "",
+          ).trim() || "Chief Executive Officer",
         orgName: String(detailRow.orgName || "").trim(),
       });
       setHierarchyChildrenByEmployee({
@@ -281,6 +284,63 @@ export function EmployeeHierarchyPanel({
     },
     [expandedEmployees, hierarchyChildrenByEmployee, loadHierarchyChildren],
   );
+
+  const renderHierarchyNodeChildren = (
+    employeeNumber: string,
+    depth: number,
+    nodeState: HierarchyChildrenState | undefined,
+  ) => {
+    if (nodeState?.loading) {
+      return (
+        <div className="relative space-y-2 pl-[25px]">
+          <span
+            className="absolute left-[12px] top-0 bottom-0 w-px bg-slate-300"
+            aria-hidden="true"
+          />
+          {Array.from({ length: 3 }, (_, index) => (
+            <div
+              key={`${employeeNumber}-skeleton-${index}`}
+              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3"
+            >
+              <Skeleton className="h-11 w-11 rounded-2xl" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (nodeState?.error) {
+      return (
+        <div className="ml-[25px] rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {nodeState.error}
+        </div>
+      );
+    }
+
+    if (nodeState?.loaded && nodeState.rows.length === 0) {
+      return (
+        <div className="ml-[25px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-500">
+          No subordinates found.
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative space-y-2">
+        <span
+          className="absolute left-[12px] top-0 bottom-0 w-px bg-slate-300"
+          aria-hidden="true"
+        />
+        {nodeState?.rows.map((child) =>
+          renderHierarchyNode(child, depth + 1),
+        ) ?? null}
+      </div>
+    );
+  };
 
   const renderHierarchyNode = (
     employee: HierarchyEmployee,
@@ -353,7 +413,9 @@ export function EmployeeHierarchyPanel({
               {employee.designation}
             </p>
             {employee.orgName ? (
-              <p className="truncate text-xs leading-4 text-slate-400">{employee.orgName}</p>
+              <p className="truncate text-xs leading-4 text-slate-400">
+                {employee.orgName}
+              </p>
             ) : null}
           </button>
 
@@ -392,12 +454,8 @@ export function EmployeeHierarchyPanel({
             disabled={!canExpand && !nodeState?.loading}
             aria-label={`${isExpanded ? "Collapse" : "Expand"} ${employee.name}`}
           >
-            {hasChildren ? (
-              isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )
+            {hasChildren && isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
             ) : (
               <ChevronRight className="h-4 w-4" />
             )}
@@ -406,43 +464,10 @@ export function EmployeeHierarchyPanel({
 
         {isExpanded ? (
           <div className="space-y-2">
-            {nodeState?.loading ? (
-              <div className="relative space-y-2 pl-[25px]">
-                <span
-                  className="absolute left-[12px] top-0 bottom-0 w-px bg-slate-300"
-                  aria-hidden="true"
-                />
-                {Array.from({ length: 3 }, (_, index) => (
-                  <div
-                    key={`${employee.employeeNumber}-skeleton-${index}`}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-3"
-                  >
-                    <Skeleton className="h-11 w-11 rounded-2xl" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-40" />
-                      <Skeleton className="h-4 w-28" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : nodeState?.error ? (
-              <div className="ml-[25px] rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {nodeState.error}
-              </div>
-            ) : nodeState?.loaded && nodeState.rows.length === 0 ? (
-              <div className="ml-[25px] rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2 text-sm text-slate-500">
-                No subordinates found.
-              </div>
-            ) : (
-              <div className="relative space-y-2">
-                <span
-                  className="absolute left-[12px] top-0 bottom-0 w-px bg-slate-300"
-                  aria-hidden="true"
-                />
-                {nodeState?.rows.map((child) =>
-                  renderHierarchyNode(child, depth + 1),
-                ) ?? null}
-              </div>
+            {renderHierarchyNodeChildren(
+              employee.employeeNumber,
+              depth,
+              nodeState,
             )}
           </div>
         ) : null}
