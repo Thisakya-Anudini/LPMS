@@ -183,6 +183,75 @@ function DesktopDropdown({
   );
 }
 
+function MobileNavLink({
+  link,
+  pathname,
+  onClose,
+  isNested = false,
+}: {
+  link: NavigationLink;
+  pathname: string;
+  onClose: () => void;
+  isNested?: boolean;
+}) {
+  return (
+    <NavLink
+      to={link.to || "#"}
+      end={link.matchMode === "exact"}
+      onClick={onClose}
+      className={({ isActive }) =>
+        `${isNested ? "ml-3 " : ""}flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
+          isActive || isLinkActive(pathname, link)
+            ? "bg-slate-900 text-white"
+            : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
+        }`
+      }
+    >
+      <link.icon className="h-4 w-4" />
+      {link.label}
+    </NavLink>
+  );
+}
+
+function MobileMenuGroup({
+  group,
+  pathname,
+  onClose,
+}: {
+  group: NavigationGroup;
+  pathname: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-2">
+      <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+        {group.label}
+      </div>
+      {group.links.map((link) => (
+        <React.Fragment key={`${link.to}-${link.label}`}>
+          {link.children?.length ? (
+            <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+              {link.label}
+            </div>
+          ) : (
+            <MobileNavLink link={link} pathname={pathname} onClose={onClose} />
+          )}
+
+          {link.children?.map((child) => (
+            <MobileNavLink
+              key={child.label}
+              link={child}
+              pathname={pathname}
+              onClose={onClose}
+              isNested
+            />
+          ))}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
 export function Header() {
   const { pathname } = useLocation();
   const { user, logout, getAccessToken } = useAuth();
@@ -515,58 +584,12 @@ export function Header() {
           ))}
 
           {navigation.groups.map((group) => (
-            <div
+            <MobileMenuGroup
               key={group.label}
-              className="rounded-3xl border border-slate-200 bg-white p-2"
-            >
-              <div className="px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                {group.label}
-              </div>
-              {group.links.map((link) => (
-                <React.Fragment key={`${link.to}-${link.label}`}>
-                  {link.children?.length ? (
-                    <div className="px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      {link.label}
-                    </div>
-                  ) : (
-                    <NavLink
-                      to={link.to || "#"}
-                      end={link.matchMode === "exact"}
-                      onClick={() => setOpenMenu(null)}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                          isActive || isLinkActive(pathname, link)
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-                        }`
-                      }
-                    >
-                      <link.icon className="h-4 w-4" />
-                      {link.label}
-                    </NavLink>
-                  )}
-
-                  {link.children?.map((child) => (
-                    <NavLink
-                      key={child.label}
-                      to={child.to || "#"}
-                      end={child.matchMode === "exact"}
-                      onClick={() => setOpenMenu(null)}
-                      className={({ isActive }) =>
-                        `ml-3 flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition-colors ${
-                          isActive || isLinkActive(pathname, child)
-                            ? "bg-slate-900 text-white"
-                            : "text-slate-700 hover:bg-slate-100 hover:text-slate-950"
-                        }`
-                      }
-                    >
-                      <child.icon className="h-4 w-4" />
-                      {child.label}
-                    </NavLink>
-                  ))}
-                </React.Fragment>
-              ))}
-            </div>
+              group={group}
+              pathname={pathname}
+              onClose={() => setOpenMenu(null)}
+            />
           ))}
         </div>
       </div>
