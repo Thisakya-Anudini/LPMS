@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { ToastContext, ToastVariant } from './ToastContextStore';
+import React, { useCallback, useMemo, useState } from "react";
+import { ToastContext, ToastVariant } from "./ToastContextStore";
 
 type ToastItem = {
   id: number;
@@ -8,10 +8,12 @@ type ToastItem = {
 };
 
 const variantStyles: Record<ToastVariant, string> = {
-  success: 'border-green-200 bg-green-50 text-green-800',
-  error: 'border-red-200 bg-red-50 text-red-800',
-  info: 'border-blue-200 bg-blue-50 text-blue-800'
+  success: "border-green-200 bg-green-50 text-green-800",
+  error: "border-red-200 bg-red-50 text-red-800",
+  info: "border-blue-200 bg-blue-50 text-blue-800",
 };
+
+let nextToastId = 1;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -21,14 +23,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    (message: string, variant: ToastVariant = 'info', durationMs = 3500) => {
-      const id = Date.now() + Math.floor(Math.random() * 1000);
+    (message: string, variant: ToastVariant = "info", durationMs = 3500) => {
+      const id = nextToastId++;
       setToasts((prev) => [...prev, { id, message, variant }]);
       window.setTimeout(() => {
         removeToast(id);
       }, durationMs);
     },
-    [removeToast]
+    [removeToast],
   );
 
   const value = useMemo(() => ({ showToast }), [showToast]);
