@@ -100,7 +100,7 @@ type StageForm = {
 const EMPLOYEE_NO_LENGTH = 6;
 
 const createStageForm = (index: number): StageForm => ({
-  stageId: `stage-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+  stageId: `stage-${Date.now()}-${index}-${crypto.randomUUID().slice(0, 8)}`,
   title: `Stage ${index + 1}`,
   selectedCourseIds: [],
 });
