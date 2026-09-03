@@ -105,34 +105,8 @@ const createStageForm = (index: number): StageForm => ({
   selectedCourseIds: [],
 });
 
-const normalizeSearchText = (value: string | null | undefined) =>
-  String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
 const getCourseRenderKey = (course: CourseItem, index: number, scope: string) =>
   `${scope}-${course.id || "no-id"}-${course.code || "no-code"}-${course.title || "no-title"}-${index}`;
-
-const filterCoursesByQuery = (courses: CourseItem[], query: string) => {
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) {
-    return courses;
-  }
-
-  const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
-  return courses.filter((course) => {
-    const searchHaystack = [
-      normalizeSearchText(course.title),
-      normalizeSearchText(course.code),
-      normalizeSearchText(course.description),
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    return queryTokens.every((token) => searchHaystack.includes(token));
-  });
-};
 
 const normalizeTitleInputSpacing = (value: string) =>
   value.replace(/\s{2,}/g, " ");
@@ -256,6 +230,22 @@ export function LearningPathManagement({
   const [enrolledEmployeeNumbers, setEnrolledEmployeeNumbers] = useState<
     Set<string>
   >(new Set());
+  const [coursesCache, setCoursesCache] = useState<Record<string, CourseItem>>(
+    {},
+  );
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [debouncedCreateCourseSearch, setDebouncedCreateCourseSearch] =
+    useState("");
+  const [debouncedEditCourseSearch, setDebouncedEditCourseSearch] = useState("");
+  const [editCoursePage, setEditCoursePage] = useState(1);
+  const [editCourses, setEditCourses] = useState<CourseItem[]>([]);
+  const [editCoursePagination, setEditCoursePagination] = useState<{
+    totalRecords: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  } | null>(null);
+  const [editCoursesLoading, setEditCoursesLoading] = useState(false);
   const [coursePageSize] = useState(10);
   const [currentCoursePage, setCurrentCoursePage] = useState(1);
   const [coursePagination, setCoursePagination] = useState<{
@@ -290,6 +280,22 @@ export function LearningPathManagement({
     hasInvalidAssignNameSearch;
   const assignEmployeeNoPlaceholder = `e.g. ${user?.employeeNo?.trim() || "employee number"}`;
   const assignNamePlaceholder = `e.g. ${user?.name?.trim() || "name"}`;
+
+  useEffect(() => {
+    const handler = window.setTimeout(() => {
+      setDebouncedCreateCourseSearch(createCourseSearch);
+      setCurrentCoursePage(1);
+    }, 300);
+    return () => window.clearTimeout(handler);
+  }, [createCourseSearch]);
+
+  useEffect(() => {
+    const handler = window.setTimeout(() => {
+      setDebouncedEditCourseSearch(editCourseSearch);
+      setEditCoursePage(1);
+    }, 300);
+    return () => window.clearTimeout(handler);
+  }, [editCourseSearch]);
 
   const clearAssignFilters = () => {
     setAssignDesignationFilter("");
@@ -398,17 +404,8 @@ export function LearningPathManagement({
         return;
       }
 
-      const [pathsResponse, coursesResponse] = await Promise.all([
-        learningApi.getLearningPaths(token),
-        courseApi.getAllCourses(token, currentCoursePage, coursePageSize),
-      ]);
-
+      const pathsResponse = await learningApi.getLearningPaths(token);
       setPaths(pathsResponse.learningPaths as LearningPathRow[]);
-      setCourses(coursesResponse.courses);
-
-      if (coursesResponse.pagination) {
-        setCoursePagination(coursesResponse.pagination);
-      }
 
       if (section === "assign") {
         const optionsResponse =
@@ -432,11 +429,93 @@ export function LearningPathManagement({
       setLoading(false);
       setAssignOptionsLoading(false);
     }
-  }, [getAccessToken, section, showToast, currentCoursePage, coursePageSize]);
+  }, [getAccessToken, section, showToast]);
+
+  const loadCreateCourses = useCallback(async () => {
+    setCoursesLoading(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const coursesResponse = await courseApi.getAllCourses(
+        token,
+        currentCoursePage,
+        coursePageSize,
+        debouncedCreateCourseSearch,
+      );
+      setCourses(coursesResponse.courses);
+      if (coursesResponse.pagination) {
+        setCoursePagination(coursesResponse.pagination);
+      }
+      setCoursesCache((prev) => {
+        const next = { ...prev };
+        coursesResponse.courses.forEach((c) => {
+          if (c.id) next[c.id] = c;
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to load courses:", err);
+    } finally {
+      setCoursesLoading(false);
+    }
+  }, [
+    getAccessToken,
+    currentCoursePage,
+    coursePageSize,
+    debouncedCreateCourseSearch,
+  ]);
+
+  const loadEditCourses = useCallback(async () => {
+    if (!editPathId) return;
+    setEditCoursesLoading(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+
+      const coursesResponse = await courseApi.getAllCourses(
+        token,
+        editCoursePage,
+        coursePageSize,
+        debouncedEditCourseSearch,
+      );
+      setEditCourses(coursesResponse.courses);
+      if (coursesResponse.pagination) {
+        setEditCoursePagination(coursesResponse.pagination);
+      }
+      setCoursesCache((prev) => {
+        const next = { ...prev };
+        coursesResponse.courses.forEach((c) => {
+          if (c.id) next[c.id] = c;
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to load edit courses:", err);
+    } finally {
+      setEditCoursesLoading(false);
+    }
+  }, [
+    getAccessToken,
+    editPathId,
+    editCoursePage,
+    coursePageSize,
+    debouncedEditCourseSearch,
+  ]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    loadCreateCourses();
+  }, [loadCreateCourses]);
+
+  useEffect(() => {
+    if (editPathId) {
+      loadEditCourses();
+    }
+  }, [loadEditCourses, editPathId]);
 
   useEffect(() => {
     setCurrentPathPage(1);
@@ -634,6 +713,35 @@ export function LearningPathManagement({
       );
       const stagesFromApi = detailResponse.learningPath.stages || [];
 
+      setCoursesCache((prev) => {
+        const next = { ...prev };
+        stagesFromApi.forEach((stage) => {
+          (stage.courses || []).forEach((c) => {
+            const id =
+              (c as { course_id?: string; id?: string }).course_id ||
+              (c as { course_id?: string; id?: string }).id ||
+              c.title;
+            if (id && !next[id]) {
+              next[id] = {
+                id,
+                code: (c as { code?: string }).code || id,
+                title: c.title || id,
+                description: null,
+                durationHours: null,
+                deliveryMode:
+                  ((c as { delivery_mode?: string }).delivery_mode as
+                    | "ONLINE"
+                    | "PHYSICAL"
+                    | null) || null,
+                venue: null,
+                videoUrl: null,
+              };
+            }
+          });
+        });
+        return next;
+      });
+
       const mappedStages: StageForm[] = stagesFromApi
         .sort((a, b) => a.stage_order - b.stage_order)
         .map((stage, stageIndex) => ({
@@ -643,15 +751,19 @@ export function LearningPathManagement({
             .sort((a, b) => a.course_order - b.course_order)
             .map(
               (course) =>
+                (course as { course_id?: string; id?: string }).course_id ||
+                (course as { course_id?: string; id?: string }).id ||
                 courses.find(
                   (catalogCourse) => catalogCourse.title === course.title,
-                )?.id,
+                )?.id ||
+                course.title,
             )
             .filter((value): value is string => Boolean(value)),
         }));
 
       setEditPathId(path.id);
       setEditCourseSearch("");
+      setEditCoursePage(1);
 
       const initialForm = {
         title: path.title,
@@ -946,10 +1058,13 @@ export function LearningPathManagement({
     stages: StageForm[],
     mode: "create" | "edit",
   ) => {
-    const visibleCourses =
-      mode === "edit"
-        ? filterCoursesByQuery(courses, editCourseSearch)
-        : courses;
+    const selectorCourses = mode === "edit" ? editCourses : courses;
+    const selectorPagination =
+      mode === "edit" ? editCoursePagination : coursePagination;
+    const selectorPage = mode === "edit" ? editCoursePage : currentCoursePage;
+    const selectorLoading =
+      mode === "edit" ? editCoursesLoading : coursesLoading;
+    const searchVal = mode === "edit" ? editCourseSearch : createCourseSearch;
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -998,30 +1113,30 @@ export function LearningPathManagement({
                 </div>
                 <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-xs text-slate-500">
-                    {mode === "edit" ? (
-                      <>
-                        Showing {visibleCourses.length} of {courses.length}{" "}
-                        courses
-                      </>
-                    ) : coursePagination ? (
-                      <>
-                        Total Courses: {coursePagination.totalRecords} | Page{" "}
-                        {currentCoursePage} of {coursePagination.totalPages}
-                      </>
-                    ) : (
-                      <>Showing {courses.length} courses</>
-                    )}
+                    {searchVal.trim()
+                      ? `Filtered: ${selectorPagination?.totalRecords ?? selectorCourses.length} courses | Page ${selectorPage} of ${selectorPagination?.totalPages ?? 1}`
+                      : selectorPagination
+                        ? `Total Courses: ${selectorPagination.totalRecords} | Page ${selectorPage} of ${selectorPagination.totalPages}`
+                        : `Showing ${selectorCourses.length} courses`}
                   </p>
-                  {mode === "create" && coursePagination && (
+                  {selectorPagination && selectorPagination.totalPages > 1 && (
                     <div className="flex gap-2">
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() =>
-                          setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                        onClick={() => {
+                          if (mode === "edit") {
+                            setEditCoursePage((prev) => Math.max(1, prev - 1));
+                          } else {
+                            setCurrentCoursePage((prev) =>
+                              Math.max(1, prev - 1),
+                            );
+                          }
+                        }}
+                        disabled={
+                          !selectorPagination.hasPrevPage || selectorLoading
                         }
-                        disabled={!coursePagination.hasPrevPage || loading}
                       >
                         Previous
                       </Button>
@@ -1029,8 +1144,16 @@ export function LearningPathManagement({
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() => setCurrentCoursePage((prev) => prev + 1)}
-                        disabled={!coursePagination.hasNextPage || loading}
+                        onClick={() => {
+                          if (mode === "edit") {
+                            setEditCoursePage((prev) => prev + 1);
+                          } else {
+                            setCurrentCoursePage((prev) => prev + 1);
+                          }
+                        }}
+                        disabled={
+                          !selectorPagination.hasNextPage || selectorLoading
+                        }
                       >
                         Next
                       </Button>
@@ -1038,19 +1161,26 @@ export function LearningPathManagement({
                   )}
                 </div>
                 <div className="max-h-64 overflow-auto border border-slate-200 rounded-md p-2 space-y-2">
-                  {visibleCourses.length === 0 ? (
+                  {selectorLoading ? (
+                    <div className="space-y-2 p-2">
+                      <Skeleton className="h-10 w-full rounded-md" />
+                      <Skeleton className="h-10 w-full rounded-md" />
+                    </div>
+                  ) : selectorCourses.length === 0 ? (
                     <p className="p-3 text-sm text-slate-500">
-                      No courses match "{editCourseSearch.trim()}".
+                      {searchVal.trim()
+                        ? `No courses match "${searchVal.trim()}".`
+                        : "No courses available."}
                     </p>
                   ) : (
-                    visibleCourses.map((course, courseIndex) => (
+                    selectorCourses.map((course, courseIndex) => (
                       <label
                         key={getCourseRenderKey(
                           course,
                           courseIndex,
                           `${mode}-${stage.stageId}`,
                         )}
-                        className="flex items-start gap-3 p-2 rounded hover:bg-slate-50"
+                        className="flex items-start gap-3 p-2 rounded hover:bg-slate-50 cursor-pointer"
                       >
                         <input
                           type="checkbox"
@@ -1097,9 +1227,9 @@ export function LearningPathManagement({
                     </p>
                   ) : (
                     stage.selectedCourseIds.map((courseId, courseIndex) => {
-                      const course = courses.find(
-                        (item) => item.id === courseId,
-                      );
+                      const course =
+                        coursesCache[courseId] ||
+                        selectorCourses.find((item) => item.id === courseId);
                       return (
                         <div
                           key={`${courseId}-${mode}-${stage.stageId}-order`}
@@ -1166,166 +1296,159 @@ export function LearningPathManagement({
 
   const renderCreateStageBuilder = () => (
     <div className="space-y-4 pt-2">
-      {(() => {
-        const liveFilteredCourses = filterCoursesByQuery(
-          courses,
-          createCourseSearch,
-        );
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-100">
+        <div className="flex items-end gap-3 border-b border-slate-100 pb-5">
+          <div className="flex-1">
+            <Input
+              label="Draft Stage Name"
+              value={pathForm.draftStage.title}
+              onChange={(event) =>
+                updateStageTitle(
+                  "create",
+                  pathForm.stages.length,
+                  event.target.value,
+                )
+              }
+              placeholder="e.g. Stage 1 - Foundations"
+              required
+            />
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => addStage("create")}
+            className="h-[42px] bg-slate-800 text-white hover:bg-slate-900 shadow-sm"
+          >
+            <Plus className="mr-1 h-4 w-4" />
+            Add Stage
+          </Button>
+        </div>
 
-        return (
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm ring-1 ring-slate-100">
-            <div className="flex items-end gap-3 border-b border-slate-100 pb-5">
-              <div className="flex-1">
-                <Input
-                  label="Draft Stage Name"
-                  value={pathForm.draftStage.title}
-                  onChange={(event) =>
-                    updateStageTitle(
-                      "create",
-                      pathForm.stages.length,
-                      event.target.value,
-                    )
-                  }
-                  placeholder="e.g. Stage 1 - Foundations"
-                  required
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => addStage("create")}
-                className="h-[42px] bg-slate-800 text-white hover:bg-slate-900 shadow-sm"
-              >
-                <Plus className="mr-1 h-4 w-4" />
-                Add Stage
-              </Button>
+        <div className="pt-4">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-bold text-slate-800">
+                Select Courses
+              </p>
+              <p className="text-xs text-slate-500 mt-1">
+                {createCourseSearch.trim()
+                  ? `Filtered: ${coursePagination?.totalRecords ?? courses.length} courses | Page ${currentCoursePage} of ${coursePagination?.totalPages ?? 1}`
+                  : coursePagination
+                    ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
+                    : `Showing ${courses.length} courses`}
+              </p>
             </div>
-
-            <div className="pt-4">
-              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-sm font-bold text-slate-800">
-                    Select Courses
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {createCourseSearch
-                      ? `Filtered: ${liveFilteredCourses.length} of ${courses.length} courses`
-                      : coursePagination
-                        ? `Total Courses: ${coursePagination.totalRecords} | Page ${currentCoursePage} of ${coursePagination.totalPages}`
-                        : `Showing ${courses.length} courses`}
-                  </p>
-                </div>
-                <div className="w-full md:w-72">
-                  <Input
-                    id="create-course-search"
-                    key="create-course-search"
-                    placeholder="Search by course name or ID"
-                    value={createCourseSearch}
-                    onChange={(event) =>
-                      setCreateCourseSearch(event.target.value)
-                    }
-                  />
-                </div>
-              </div>
-
-              {!createCourseSearch && coursePagination && (
-                <div className="mb-3 flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      setCurrentCoursePage((prev) => Math.max(1, prev - 1))
-                    }
-                    disabled={!coursePagination.hasPrevPage || loading}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setCurrentCoursePage((prev) => prev + 1)}
-                    disabled={!coursePagination.hasNextPage || loading}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
-
-              <div className="max-h-[22rem] overflow-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-1">
-                {loading ? (
-                  <div className="space-y-2 p-2">
-                    <Skeleton className="h-14 w-full rounded-md" />
-                    <Skeleton className="h-14 w-full rounded-md" />
-                    <Skeleton className="h-14 w-full rounded-md" />
-                  </div>
-                ) : liveFilteredCourses.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center p-8 text-center">
-                    <BookOpen className="h-8 w-8 text-slate-300 mb-2" />
-                    <p className="text-sm font-semibold text-slate-500">
-                      No courses match "{createCourseSearch.trim()}"
-                    </p>
-                  </div>
-                ) : (
-                  liveFilteredCourses.map((course, courseIndex) => (
-                    <label
-                      key={getCourseRenderKey(
-                        course,
-                        courseIndex,
-                        `create-${pathForm.draftStage.stageId}`,
-                      )}
-                      className={`flex cursor-pointer items-start gap-3 p-3 transition-colors border-l-4 ${
-                        pathForm.draftStage.selectedCourseIds.includes(
-                          course.id,
-                        )
-                          ? "border-l-primary-500 bg-primary-50/50"
-                          : "border-l-transparent bg-white hover:bg-slate-100 hover:border-l-primary-300 shadow-sm"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-600"
-                        checked={pathForm.draftStage.selectedCourseIds.includes(
-                          course.id,
-                        )}
-                        onChange={() =>
-                          toggleCourse(
-                            pathForm.stages.length,
-                            course.id,
-                            "create",
-                          )
-                        }
-                      />
-
-                      <span className="text-sm">
-                        <span className="block font-medium text-slate-900">
-                          {course.title}
-                        </span>
-                        <span className="block text-xs text-slate-500">
-                          {course.code}
-                        </span>
-                        {course.description ? (
-                          <span className="block text-xs text-slate-500">
-                            {course.description}
-                          </span>
-                        ) : null}
-                        {course.deliveryMode ? (
-                          <span className="block text-xs text-slate-600">
-                            {course.deliveryMode === "ONLINE"
-                              ? `Online${course.videoUrl ? " | Video available" : ""}`
-                              : `Physical${course.venue ? ` | ${course.venue}` : ""}`}
-                          </span>
-                        ) : null}
-                      </span>
-                    </label>
-                  ))
-                )}
-              </div>
+            <div className="w-full md:w-72">
+              <Input
+                id="create-course-search"
+                key="create-course-search"
+                placeholder="Search by course name or ID"
+                value={createCourseSearch}
+                onChange={(event) =>
+                  setCreateCourseSearch(event.target.value)
+                }
+              />
             </div>
           </div>
-        );
-      })()}
+
+          {coursePagination && coursePagination.totalPages > 1 && (
+            <div className="mb-3 flex justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setCurrentCoursePage((prev) => Math.max(1, prev - 1))
+                }
+                disabled={!coursePagination.hasPrevPage || coursesLoading}
+              >
+                Previous
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setCurrentCoursePage((prev) => prev + 1)}
+                disabled={!coursePagination.hasNextPage || coursesLoading}
+              >
+                Next
+              </Button>
+            </div>
+          )}
+
+          <div className="max-h-[22rem] overflow-auto rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-1">
+            {coursesLoading ? (
+              <div className="space-y-2 p-2">
+                <Skeleton className="h-14 w-full rounded-md" />
+                <Skeleton className="h-14 w-full rounded-md" />
+                <Skeleton className="h-14 w-full rounded-md" />
+              </div>
+            ) : courses.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center">
+                <BookOpen className="h-8 w-8 text-slate-300 mb-2" />
+                <p className="text-sm font-semibold text-slate-500">
+                  {createCourseSearch.trim()
+                    ? `No courses match "${createCourseSearch.trim()}"`
+                    : "No courses available"}
+                </p>
+              </div>
+            ) : (
+              courses.map((course, courseIndex) => (
+                <label
+                  key={getCourseRenderKey(
+                    course,
+                    courseIndex,
+                    `create-${pathForm.draftStage.stageId}`,
+                  )}
+                  className={`flex cursor-pointer items-start gap-3 p-3 transition-colors border-l-4 ${
+                    pathForm.draftStage.selectedCourseIds.includes(
+                      course.id,
+                    )
+                      ? "border-l-primary-500 bg-primary-50/50"
+                      : "border-l-transparent bg-white hover:bg-slate-100 hover:border-l-primary-300 shadow-sm"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-600"
+                    checked={pathForm.draftStage.selectedCourseIds.includes(
+                      course.id,
+                    )}
+                    onChange={() =>
+                      toggleCourse(
+                        pathForm.stages.length,
+                        course.id,
+                        "create",
+                      )
+                    }
+                  />
+
+                  <span className="text-sm">
+                    <span className="block font-medium text-slate-900">
+                      {course.title}
+                    </span>
+                    <span className="block text-xs text-slate-500">
+                      {course.code}
+                    </span>
+                    {course.description ? (
+                      <span className="block text-xs text-slate-500">
+                        {course.description}
+                      </span>
+                    ) : null}
+                    {course.deliveryMode ? (
+                      <span className="block text-xs text-slate-600">
+                        {course.deliveryMode === "ONLINE"
+                          ? `Online${course.videoUrl ? " | Video available" : ""}`
+                          : `Physical${course.venue ? ` | ${course.venue}` : ""}`}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -1838,9 +1961,11 @@ export function LearningPathManagement({
                               ) : (
                                 stage.selectedCourseIds.map(
                                   (courseId, courseIndex) => {
-                                    const course = courses.find(
-                                      (item) => item.id === courseId,
-                                    );
+                                    const course =
+                                      coursesCache[courseId] ||
+                                      courses.find(
+                                        (item) => item.id === courseId,
+                                      );
                                     return (
                                       <div
                                         key={`preview-${stage.stageId}-${courseId}`}
