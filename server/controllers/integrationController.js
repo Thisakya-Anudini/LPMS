@@ -1,18 +1,20 @@
+import crypto from "crypto";
 import {
   fetchEmployeeDetailsForServiceNo,
-  fetchEmployeeSubordinates
-} from '../utils/erpClient.js';
-import { sendError } from '../utils/http.js';
-import { logAudit } from '../utils/audit.js';
-import { query } from '../db.js';
-import bcrypt from 'bcryptjs';
+  fetchEmployeeSubordinates,
+} from "../utils/erpClient.js";
+import { sendError } from "../utils/http.js";
+import { logAudit } from "../utils/audit.js";
+import { query } from "../db.js";
+import bcrypt from "bcryptjs";
 
-const getErrorStatus = (error) => (typeof error.status === 'number' ? error.status : 502);
+const getErrorStatus = (error) =>
+  typeof error.status === "number" ? error.status : 502;
 
 export const getErpLearnerDetails = async (req, res) => {
   const { employeeNo } = req.body;
-  if (!employeeNo || typeof employeeNo !== 'string') {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
+  if (!employeeNo || typeof employeeNo !== "string") {
+    return sendError(res, 400, "VALIDATION_ERROR", "employeeNo is required.");
   }
 
   try {
@@ -20,9 +22,9 @@ export const getErpLearnerDetails = async (req, res) => {
 
     await logAudit({
       actorPrincipalId: req.user.id,
-      action: 'FETCH_ERP_LEARNER_DETAILS',
-      resourceType: 'ERP',
-      metadata: { employeeNo }
+      action: "FETCH_ERP_LEARNER_DETAILS",
+      resourceType: "ERP",
+      metadata: { employeeNo },
     });
 
     return res.status(200).json(data);
@@ -30,17 +32,17 @@ export const getErpLearnerDetails = async (req, res) => {
     return sendError(
       res,
       getErrorStatus(error),
-      'ERP_REQUEST_FAILED',
-      'Failed to fetch learner details from ERP.',
-      error.details || error.message
+      "ERP_REQUEST_FAILED",
+      "Failed to fetch learner details from ERP.",
+      error.details || error.message,
     );
   }
 };
 
 export const getErpSubordinates = async (req, res) => {
   const { employeeNo } = req.body;
-  if (!employeeNo || typeof employeeNo !== 'string') {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeeNo is required.');
+  if (!employeeNo || typeof employeeNo !== "string") {
+    return sendError(res, 400, "VALIDATION_ERROR", "employeeNo is required.");
   }
 
   try {
@@ -51,30 +53,39 @@ export const getErpSubordinates = async (req, res) => {
         response.data.map(async (subordinate) => {
           if (!subordinate.employeeNumber) return subordinate;
           try {
-            const detailRes = await fetchEmployeeDetailsForServiceNo(subordinate.employeeNumber);
-            if (detailRes && Array.isArray(detailRes.data) && detailRes.data.length > 0) {
+            const detailRes = await fetchEmployeeDetailsForServiceNo(
+              subordinate.employeeNumber,
+            );
+            if (
+              detailRes &&
+              Array.isArray(detailRes.data) &&
+              detailRes.data.length > 0
+            ) {
               const details = detailRes.data[0];
               return {
                 ...subordinate,
                 orgName: details.orgName || null,
                 empSection: details.empSection || null,
-                empDivision: details.empDivision || null
+                empDivision: details.empDivision || null,
               };
             }
           } catch (err) {
-            console.error(`Failed to fetch details for subordinate ${subordinate.employeeNumber}`, err);
+            console.error(
+              `Failed to fetch details for subordinate ${subordinate.employeeNumber}`,
+              err,
+            );
           }
           return subordinate;
-        })
+        }),
       );
       response.data = enrichedData;
     }
 
     await logAudit({
       actorPrincipalId: req.user.id,
-      action: 'FETCH_ERP_SUBORDINATES',
-      resourceType: 'ERP',
-      metadata: { employeeNo }
+      action: "FETCH_ERP_SUBORDINATES",
+      resourceType: "ERP",
+      metadata: { employeeNo },
     });
 
     return res.status(200).json(response);
@@ -82,9 +93,9 @@ export const getErpSubordinates = async (req, res) => {
     return sendError(
       res,
       getErrorStatus(error),
-      'ERP_REQUEST_FAILED',
-      'Failed to fetch subordinate details from ERP.',
-      error.details || error.message
+      "ERP_REQUEST_FAILED",
+      "Failed to fetch subordinate details from ERP.",
+      error.details || error.message,
     );
   }
 };
@@ -94,63 +105,88 @@ const normalizeName = (employee) => {
     return String(employee.employeeName).trim();
   }
 
-  const initials = employee.employeeInitials ? String(employee.employeeInitials).trim() : '';
-  const surname = employee.employeeSurname ? String(employee.employeeSurname).trim() : '';
+  const initials = employee.employeeInitials
+    ? String(employee.employeeInitials).trim()
+    : "";
+  const surname = employee.employeeSurname
+    ? String(employee.employeeSurname).trim()
+    : "";
   const fallback = `${initials} ${surname}`.trim();
   return fallback || `Employee ${employee.employeeNumber}`;
 };
 
 const normalizeEmail = (employee) => {
-  const rawEmail = employee.email ? String(employee.email).trim().toLowerCase() : '';
+  const rawEmail = employee.email
+    ? String(employee.email).trim().toLowerCase()
+    : "";
   if (rawEmail) {
     return rawEmail;
   }
 
-  const domain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || 'erp.local';
+  const domain = process.env.ERP_FALLBACK_EMAIL_DOMAIN || "erp.local";
   return `${String(employee.employeeNumber).trim()}@${domain}`;
 };
 
 export const importErpEmployees = async (req, res) => {
   const { employees, supervisorId } = req.body;
   if (!Array.isArray(employees) || employees.length === 0) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employees must be a non-empty array.');
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "employees must be a non-empty array.",
+    );
   }
 
-  const defaultPassword = process.env.ERP_IMPORTED_DEFAULT_PASSWORD || 'ChangeMe@123';
+  const defaultPassword =
+    process.env.ERP_IMPORTED_DEFAULT_PASSWORD ||
+    crypto.randomBytes(16).toString("hex");
   const passwordHash = await bcrypt.hash(defaultPassword, 10);
 
   const imported = [];
   const skipped = [];
 
   for (const employee of employees) {
-    const employeeNumber = employee?.employeeNumber ? String(employee.employeeNumber).trim() : '';
+    const employeeNumber = employee?.employeeNumber
+      ? String(employee.employeeNumber).trim()
+      : "";
     if (!employeeNumber) {
-      skipped.push({ employeeNumber: null, reason: 'Missing employeeNumber' });
+      skipped.push({ employeeNumber: null, reason: "Missing employeeNumber" });
       continue;
     }
 
     const existingEmployee = await query(
-      'SELECT id FROM employees WHERE employee_number = $1 LIMIT 1',
-      [employeeNumber]
+      "SELECT id FROM employees WHERE employee_number = $1 LIMIT 1",
+      [employeeNumber],
     );
     if (existingEmployee.rowCount > 0) {
-      skipped.push({ employeeNumber, reason: 'Employee number already exists' });
+      skipped.push({
+        employeeNumber,
+        reason: "Employee number already exists",
+      });
       continue;
     }
 
     const email = normalizeEmail(employee);
     const existingPrincipal = await query(
-      'SELECT id FROM auth_principals WHERE email = $1 LIMIT 1',
-      [email]
+      "SELECT id FROM auth_principals WHERE email = $1 LIMIT 1",
+      [email],
     );
     if (existingPrincipal.rowCount > 0) {
-      skipped.push({ employeeNumber, reason: 'Email already exists in auth principals' });
+      skipped.push({
+        employeeNumber,
+        reason: "Email already exists in auth principals",
+      });
       continue;
     }
 
     const name = normalizeName(employee);
-    const designation = employee.designation ? String(employee.designation).trim() : 'Employee';
-    const gradeName = employee.gradeName ? String(employee.gradeName).trim() : 'N/A';
+    const designation = employee.designation
+      ? String(employee.designation).trim()
+      : "Employee";
+    const gradeName = employee.gradeName
+      ? String(employee.gradeName).trim()
+      : "N/A";
 
     const principalInsert = await query(
       `
@@ -158,7 +194,7 @@ export const importErpEmployees = async (req, res) => {
         VALUES ($1, $2, 'EMPLOYEE', $3, 'EMPLOYEE', TRUE)
         RETURNING id, email, name
       `,
-      [email, passwordHash, name]
+      [email, passwordHash, name],
     );
     const principal = principalInsert.rows[0];
 
@@ -168,26 +204,32 @@ export const importErpEmployees = async (req, res) => {
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id, employee_number
       `,
-      [principal.id, employeeNumber, designation, gradeName, supervisorId || null]
+      [
+        principal.id,
+        employeeNumber,
+        designation,
+        gradeName,
+        supervisorId || null,
+      ],
     );
 
     imported.push({
       employeeNumber,
       principalId: principal.id,
       employeeId: employeeInsert.rows[0].id,
-      email: principal.email
+      email: principal.email,
     });
   }
 
   await logAudit({
     actorPrincipalId: req.user.id,
-    action: 'IMPORT_ERP_EMPLOYEES',
-    resourceType: 'ERP',
+    action: "IMPORT_ERP_EMPLOYEES",
+    resourceType: "ERP",
     metadata: {
       requested: employees.length,
       imported: imported.length,
-      skipped: skipped.length
-    }
+      skipped: skipped.length,
+    },
   });
 
   return res.status(200).json({
@@ -196,6 +238,7 @@ export const importErpEmployees = async (req, res) => {
     skippedCount: skipped.length,
     imported,
     skipped,
-    defaultPasswordNote: 'Imported users are created with ERP_IMPORTED_DEFAULT_PASSWORD.'
+    defaultPasswordNote:
+      "Imported users are created with ERP_IMPORTED_DEFAULT_PASSWORD.",
   });
 };

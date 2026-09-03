@@ -236,7 +236,8 @@ export function LearningPathManagement({
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [debouncedCreateCourseSearch, setDebouncedCreateCourseSearch] =
     useState("");
-  const [debouncedEditCourseSearch, setDebouncedEditCourseSearch] = useState("");
+  const [debouncedEditCourseSearch, setDebouncedEditCourseSearch] =
+    useState("");
   const [editCoursePage, setEditCoursePage] = useState(1);
   const [editCourses, setEditCourses] = useState<CourseItem[]>([]);
   const [editCoursePagination, setEditCoursePagination] = useState<{
@@ -1327,9 +1328,7 @@ export function LearningPathManagement({
         <div className="pt-4">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm font-bold text-slate-800">
-                Select Courses
-              </p>
+              <p className="text-sm font-bold text-slate-800">Select Courses</p>
               <p className="text-xs text-slate-500 mt-1">
                 {createCourseSearch.trim()
                   ? `Filtered: ${coursePagination?.totalRecords ?? courses.length} courses | Page ${currentCoursePage} of ${coursePagination?.totalPages ?? 1}`
@@ -1344,9 +1343,7 @@ export function LearningPathManagement({
                 key="create-course-search"
                 placeholder="Search by course name or ID"
                 value={createCourseSearch}
-                onChange={(event) =>
-                  setCreateCourseSearch(event.target.value)
-                }
+                onChange={(event) => setCreateCourseSearch(event.target.value)}
               />
             </div>
           </div>
@@ -1401,9 +1398,7 @@ export function LearningPathManagement({
                     `create-${pathForm.draftStage.stageId}`,
                   )}
                   className={`flex cursor-pointer items-start gap-3 p-3 transition-colors border-l-4 ${
-                    pathForm.draftStage.selectedCourseIds.includes(
-                      course.id,
-                    )
+                    pathForm.draftStage.selectedCourseIds.includes(course.id)
                       ? "border-l-primary-500 bg-primary-50/50"
                       : "border-l-transparent bg-white hover:bg-slate-100 hover:border-l-primary-300 shadow-sm"
                   }`}
@@ -1415,11 +1410,7 @@ export function LearningPathManagement({
                       course.id,
                     )}
                     onChange={() =>
-                      toggleCourse(
-                        pathForm.stages.length,
-                        course.id,
-                        "create",
-                      )
+                      toggleCourse(pathForm.stages.length, course.id, "create")
                     }
                   />
 
@@ -2247,7 +2238,7 @@ export function LearningPathManagement({
                         <span>Email</span>
                       </div>
 
-                      {learners.map((learner) => {
+                      {learners.map((learner, index) => {
                         const empNo = String(learner.employeeNumber || "");
                         const already = enrolledEmployeeNumbers.has(empNo);
                         const isSelected =
@@ -2271,9 +2262,7 @@ export function LearningPathManagement({
 
                         return (
                           <label
-                            key={
-                              empNo || Math.random().toString(36).slice(2, 8)
-                            }
+                            key={empNo || `learner-fallback-${index}`}
                             className={rowClassName}
                           >
                             <input
