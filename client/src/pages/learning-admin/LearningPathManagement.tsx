@@ -105,34 +105,8 @@ const createStageForm = (index: number): StageForm => ({
   selectedCourseIds: [],
 });
 
-const normalizeSearchText = (value: string | null | undefined) =>
-  String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
 const getCourseRenderKey = (course: CourseItem, index: number, scope: string) =>
   `${scope}-${course.id || "no-id"}-${course.code || "no-code"}-${course.title || "no-title"}-${index}`;
-
-const filterCoursesByQuery = (courses: CourseItem[], query: string) => {
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) {
-    return courses;
-  }
-
-  const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
-  return courses.filter((course) => {
-    const searchHaystack = [
-      normalizeSearchText(course.title),
-      normalizeSearchText(course.code),
-      normalizeSearchText(course.description),
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    return queryTokens.every((token) => searchHaystack.includes(token));
-  });
-};
 
 const normalizeTitleInputSpacing = (value: string) =>
   value.replace(/\s{2,}/g, " ");
