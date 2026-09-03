@@ -750,6 +750,50 @@ describe("GET COURSES", () => {
     expect(res.body.courses).toHaveLength(3);
   });
 
+  it("should filter courses by search query across title and code", async () => {
+    vi.mocked(fetchAllCourses).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        { courseCode: "COURSE-PY-001", courseName: "Python Basics" },
+        { courseCode: "COURSE-REACT-002", courseName: "React Advanced" },
+        { courseCode: "COURSE-NODE-003", courseName: "Node.js Fundamentals" },
+      ],
+    });
+
+    const req = createMockReq({ query: { search: "react" } });
+    const res = createMockRes();
+    await learnerController.getCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.courses).toHaveLength(1);
+    expect(res.body.courses[0].code).toBe("COURSE-REACT-002");
+    expect(res.body.pagination.totalRecords).toBe(1);
+    expect(res.body.pagination.totalPages).toBe(1);
+  });
+
+  it("should match only the exact code when searching slash-delimited codes like MA/IN/C/005", async () => {
+    vi.mocked(fetchAllCourses).mockResolvedValueOnce({
+      success: true,
+      message: "Success",
+      data: [
+        { courseCode: "MA/IN/C/001", courseName: "Management Introduction Part 1" },
+        { courseCode: "MA/IN/C/005", courseName: "Management Information & Controls" },
+        { courseCode: "IT/IN/C/005", courseName: "Information Systems Course 005" },
+        { courseCode: "CS-100", courseName: "Computer Main Introduction Course" },
+      ],
+    });
+
+    const req = createMockReq({ query: { search: "MA/IN/C/005" } });
+    const res = createMockRes();
+    await learnerController.getCourses(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.courses).toHaveLength(1);
+    expect(res.body.courses[0].code).toBe("MA/IN/C/005");
+    expect(res.body.courses[0].title).toBe("Management Information & Controls");
+  });
+
   it("should handle ERP errors", async () => {
     vi.mocked(fetchAllCourses).mockRejectedValueOnce(new Error("ERP timeout"));
 
