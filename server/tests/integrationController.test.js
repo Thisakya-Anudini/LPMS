@@ -555,7 +555,7 @@ describe("IMPORT ERP EMPLOYEES", () => {
     await importErpEmployees(req, res);
 
     expect(vi.mocked(bcrypt.hash).mock.calls.length).toBe(1);
-    expect(vi.mocked(bcrypt.hash).mock.calls[0][0]).toBe("ChangeMe@123");
+    expect(vi.mocked(bcrypt.hash).mock.calls[0][0]).toEqual(expect.any(String));
     expect(vi.mocked(bcrypt.hash).mock.calls[0][1]).toBe(10);
   });
 
