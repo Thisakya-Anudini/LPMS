@@ -688,10 +688,10 @@ export function AdminEmployeeHierarchyPage() {
                         return (
                           <div
                             key={path.enrollment_id}
-                            className={`group relative overflow-hidden rounded-2xl border bg-white p-4.5 transition-all duration-200 ${
+                            className={`group relative overflow-hidden rounded-2xl border bg-white p-5 transition-all duration-200 ${
                               isExpanded
-                                ? "border-primary-400 shadow-md ring-2 ring-primary-100"
-                                : "border-slate-200/90 shadow-2xs hover:border-primary-300 hover:shadow-md hover:-translate-y-0.5"
+                                ? "border-primary-400 bg-primary-50/10 shadow-md ring-1 ring-primary-400"
+                                : "border-slate-200 shadow-sm hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md"
                             }`}
                           >
                             {/* Card Header & Title */}
@@ -718,9 +718,10 @@ export function AdminEmployeeHierarchyPage() {
                                       </span>
                                     )}
                                   </div>
-                                  <h5 className="mt-1.5 text-sm font-bold text-slate-900 group-hover:text-primary-800 transition-colors">
+                                  <h5 className="mt-1.5 text-base font-extrabold text-slate-900 transition-colors group-hover:text-primary-800">
                                     {path.title}
                                   </h5>
+
                                   {path.description && (
                                     <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
                                       {path.description}
