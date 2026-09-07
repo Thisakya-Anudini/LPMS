@@ -321,21 +321,21 @@ export function LearnerCertificatesPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={() => load(true)}
-              isLoading={refreshing}
-              className="h-8 text-xs border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm shadow-none"
+              disabled={refreshing}
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/20 disabled:opacity-60"
             >
-              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <Link to="/learner/my-progress">
-              <Button size="sm" className="h-8 text-xs bg-white text-slate-900 hover:bg-white/90 font-semibold shadow-sm border-0">
-                <BookOpen className="h-3.5 w-3.5 mr-1 text-slate-800" />
-                My Learning
-              </Button>
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+            <Link
+              to="/learner/my-progress"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-3.5 text-xs font-bold text-slate-900 shadow-sm transition-all hover:bg-slate-100 active:scale-[0.98]"
+            >
+              <BookOpen className="h-3.5 w-3.5 text-slate-900" />
+              <span>My Learning</span>
             </Link>
           </div>
         </div>
