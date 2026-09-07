@@ -302,41 +302,38 @@ export function LearnerCertificatesPage() {
   }, [certificates, scopeFilter, searchQuery, sortBy]);
 
   return (
-    <div className="space-y-8 pb-12 animate-fade-in">
+    <div className="space-y-6 pb-12 animate-fade-in">
       {/* Top Hero Banner & Overview */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-primary-950 to-slate-900 p-6 sm:p-8 text-white shadow-large border border-slate-800/80">
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-primary-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full bg-primary-500/20 border border-primary-400/30 px-3 py-1 text-xs font-medium text-primary-200 backdrop-blur-md">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+      <div className="relative overflow-hidden rounded-2xl bg-[linear-gradient(90deg,#034c96_0%,#0563bb_25%,#3faa45_98%,#3faa45_100%)] p-4 sm:p-5 text-white shadow-md border border-white/20">
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-white/15 border border-white/25 px-2.5 py-0.5 text-[11px] font-medium text-white backdrop-blur-md">
+              <ShieldCheck className="h-3 w-3 text-emerald-300" />
               <span>SLT Official Digital Credentials</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white flex items-center gap-3">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
               My Certificates & Achievements
-              <Sparkles className="h-6 w-6 text-amber-400 hidden sm:inline-block animate-bounce-subtle" />
+              <Sparkles className="h-5 w-5 text-amber-300 hidden sm:inline-block" />
             </h1>
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
               Verifiable credentials awarded upon completing 100% of your learning paths. Download, preview, or share your accredited professional achievements.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
             <Button
               variant="outline"
               size="sm"
               onClick={() => load(true)}
               isLoading={refreshing}
-              className="border-slate-700 bg-slate-800/60 text-slate-200 hover:bg-slate-700 hover:text-white backdrop-blur-sm"
+              className="h-8 text-xs border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm shadow-none"
             >
-              <RefreshCw className={`h-4 w-4 mr-1.5 ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
             <Link to="/learner/my-progress">
-              <Button size="sm" className="bg-primary-600 hover:bg-primary-500 text-white shadow-md">
-                <BookOpen className="h-4 w-4 mr-1.5" />
+              <Button size="sm" className="h-8 text-xs bg-white text-slate-900 hover:bg-white/90 font-semibold shadow-sm border-0">
+                <BookOpen className="h-3.5 w-3.5 mr-1 text-slate-800" />
                 My Learning
               </Button>
             </Link>
@@ -344,52 +341,52 @@ export function LearnerCertificatesPage() {
         </div>
 
         {/* Metric Cards Row */}
-        <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="rounded-xl bg-slate-800/60 backdrop-blur-md border border-slate-700/60 p-4 transition-all hover:bg-slate-800/80 hover:border-slate-600">
+        <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">Total Certificates</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
-                <Trophy className="h-4 w-4" />
+              <span className="text-[11px] font-medium text-white/80">Total Certificates</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-amber-300">
+                <Trophy className="h-3.5 w-3.5" />
               </div>
             </div>
-            <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{loading ? '...' : stats.total}</p>
-            <p className="mt-1 text-xs text-slate-400 flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+            <p className="mt-1 text-xl sm:text-2xl font-extrabold text-white">{loading ? '...' : stats.total}</p>
+            <p className="mt-0.5 text-[10px] text-white/75 flex items-center gap-1">
+              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-300" />
               Accredited credentials
             </p>
           </div>
 
-          <div className="rounded-xl bg-slate-800/60 backdrop-blur-md border border-slate-700/60 p-4 transition-all hover:bg-slate-800/80 hover:border-slate-600">
+          <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">Full Paths Completed</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
-                <GraduationCap className="h-4 w-4" />
+              <span className="text-[11px] font-medium text-white/80">Full Paths Completed</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-emerald-300">
+                <GraduationCap className="h-3.5 w-3.5" />
               </div>
             </div>
-            <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{loading ? '...' : stats.fullPaths}</p>
-            <p className="mt-1 text-xs text-slate-400">Full curriculum masteries</p>
+            <p className="mt-1 text-xl sm:text-2xl font-extrabold text-white">{loading ? '...' : stats.fullPaths}</p>
+            <p className="mt-0.5 text-[10px] text-white/75">Full curriculum masteries</p>
           </div>
 
-          <div className="rounded-xl bg-slate-800/60 backdrop-blur-md border border-slate-700/60 p-4 transition-all hover:bg-slate-800/80 hover:border-slate-600">
+          <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">Stage Milestones</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500/20 text-primary-400">
-                <Medal className="h-4 w-4" />
+              <span className="text-[11px] font-medium text-white/80">Stage Milestones</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-sky-200">
+                <Medal className="h-3.5 w-3.5" />
               </div>
             </div>
-            <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{loading ? '...' : stats.stages}</p>
-            <p className="mt-1 text-xs text-slate-400">Modular milestones earned</p>
+            <p className="mt-1 text-xl sm:text-2xl font-extrabold text-white">{loading ? '...' : stats.stages}</p>
+            <p className="mt-0.5 text-[10px] text-white/75">Modular milestones earned</p>
           </div>
 
-          <div className="rounded-xl bg-slate-800/60 backdrop-blur-md border border-slate-700/60 p-4 transition-all hover:bg-slate-800/80 hover:border-slate-600">
+          <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">Certified Hours</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-400">
-                <Clock className="h-4 w-4" />
+              <span className="text-[11px] font-medium text-white/80">Certified Hours</span>
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-amber-200">
+                <Clock className="h-3.5 w-3.5" />
               </div>
             </div>
-            <p className="mt-2 text-2xl sm:text-3xl font-bold text-white">{loading ? '...' : `${stats.totalHours}h`}</p>
-            <p className="mt-1 text-xs text-slate-400">Dedicated learning time</p>
+            <p className="mt-1 text-xl sm:text-2xl font-extrabold text-white">{loading ? '...' : `${stats.totalHours}h`}</p>
+            <p className="mt-0.5 text-[10px] text-white/75">Dedicated learning time</p>
           </div>
         </div>
       </div>
