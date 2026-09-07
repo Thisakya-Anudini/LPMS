@@ -341,7 +341,7 @@ export function LearnerCertificatesPage() {
         </div>
 
         {/* Metric Cards Row */}
-        <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-medium text-white/80">Total Certificates</span>
@@ -354,28 +354,6 @@ export function LearnerCertificatesPage() {
               <CheckCircle2 className="h-2.5 w-2.5 text-emerald-300" />
               Accredited credentials
             </p>
-          </div>
-
-          <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium text-white/80">Full Paths Completed</span>
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-emerald-300">
-                <GraduationCap className="h-3.5 w-3.5" />
-              </div>
-            </div>
-            <p className="mt-1 text-xl sm:text-2xl font-extrabold text-white">{loading ? '...' : stats.fullPaths}</p>
-            <p className="mt-0.5 text-[10px] text-white/75">Full curriculum masteries</p>
-          </div>
-
-          <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium text-white/80">Stage Milestones</span>
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-sky-200">
-                <Medal className="h-3.5 w-3.5" />
-              </div>
-            </div>
-            <p className="mt-1 text-xl sm:text-2xl font-extrabold text-white">{loading ? '...' : stats.stages}</p>
-            <p className="mt-0.5 text-[10px] text-white/75">Modular milestones earned</p>
           </div>
 
           <div className="rounded-xl bg-white/10 backdrop-blur-md border border-white/20 p-3 transition-all hover:bg-white/15">
