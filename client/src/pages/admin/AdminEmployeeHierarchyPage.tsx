@@ -210,6 +210,252 @@ function PathCoursesList({ enrollmentId }: { enrollmentId: string }) {
   );
 }
 
+function computeMetrics(learningPaths: LearnerPath[]) {
+  const total = learningPaths.length;
+  const completed = learningPaths.filter(
+    (p) => Number(p.progress) >= 100 || p.status.toUpperCase() === "COMPLETED",
+  ).length;
+  const inProgress = learningPaths.filter(
+    (p) =>
+      Number(p.progress) > 0 &&
+      Number(p.progress) < 100 &&
+      p.status.toUpperCase() !== "COMPLETED",
+  ).length;
+  const notStarted = total - completed - inProgress;
+
+  const avgProgress =
+    total > 0
+      ? Math.round(
+          learningPaths.reduce((acc, p) => acc + Number(p.progress || 0), 0) /
+            total,
+        )
+      : 0;
+
+  return { total, completed, inProgress, notStarted, avgProgress };
+}
+
+function filterLearningPaths(
+  learningPaths: LearnerPath[],
+  statusFilter: "ALL" | "IN_PROGRESS" | "COMPLETED" | "NOT_STARTED",
+  pathSearch: string,
+) {
+  const query = pathSearch.trim().toLowerCase();
+
+  return learningPaths.filter((path) => {
+    const pStatus = getPathStatus(path).label;
+    if (statusFilter === "COMPLETED" && pStatus !== "Completed") return false;
+    if (statusFilter === "IN_PROGRESS" && pStatus !== "In progress")
+      return false;
+    if (statusFilter === "NOT_STARTED" && pStatus !== "Not started")
+      return false;
+
+    if (query) {
+      return (
+        path.title.toLowerCase().includes(query) ||
+        Boolean(path.description?.toLowerCase().includes(query)) ||
+        path.category.toLowerCase().includes(query)
+      );
+    }
+    return true;
+  });
+}
+
+function LearnerProfileBanner({
+  learner,
+  selectedEmployee,
+  initials,
+  metrics,
+}: {
+  learner: { name: string; email: string };
+  selectedEmployee: SelectedHierarchyEmployee;
+  initials: string;
+  metrics: {
+    total: number;
+    completed: number;
+    inProgress: number;
+    notStarted: number;
+    avgProgress: number;
+  };
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50/90 via-indigo-50/40 to-white p-5 sm:p-6 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 font-black text-xl text-white shadow-md shadow-sky-500/20 ring-4 ring-white">
+          {initials}
+          <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white">
+            <UserCheck className="h-3 w-3 text-white" />
+          </span>
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-xl font-extrabold text-slate-900">
+              {learner.name}
+            </h3>
+            <span className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-xs font-bold text-slate-700 shadow-2xs">
+              #{selectedEmployee.employeeNumber}
+            </span>
+          </div>
+
+          <p className="mt-0.5 text-sm font-semibold text-primary-700">
+            {selectedEmployee.designation}
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
+            {selectedEmployee.orgName && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-white/80 border border-slate-200/80 px-2 py-1 font-medium shadow-2xs">
+                <Tag className="h-3 w-3 text-slate-400" />
+                {selectedEmployee.orgName}
+              </span>
+            )}
+            {learner.email ? (
+              <a
+                href={`mailto:${learner.email}`}
+                className="inline-flex items-center gap-1 text-slate-600 hover:text-primary-700 hover:underline"
+              >
+                <Mail className="h-3.5 w-3.5 text-slate-400" />
+                <span>{learner.email}</span>
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 border-t border-sky-100/80">
+        <div className="rounded-2xl border border-white bg-white/80 p-3 shadow-2xs">
+          <p className="text-[11px] font-semibold text-slate-500">
+            Total Paths
+          </p>
+          <p className="text-lg font-black text-slate-900">{metrics.total}</p>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-emerald-700">
+              Completed
+            </p>
+            <Trophy className="h-3.5 w-3.5 text-emerald-600" />
+          </div>
+          <p className="text-lg font-black text-emerald-800">
+            {metrics.completed}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-amber-700">
+              In Progress
+            </p>
+            <CircleDot className="h-3.5 w-3.5 text-amber-600" />
+          </div>
+          <p className="text-lg font-black text-amber-800">
+            {metrics.inProgress}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-sky-700">
+              Avg Progress
+            </p>
+            <BookCheck className="h-3.5 w-3.5 text-sky-600" />
+          </div>
+          <p className="text-lg font-black text-sky-800">
+            {metrics.avgProgress}%
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LearnerPathCard({
+  path,
+  isExpanded,
+  onToggle,
+}: {
+  path: LearnerPath;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const pathStatus = getPathStatus(path);
+  const categoryInfo = getCategoryBadge(path.category);
+
+  return (
+    <div
+      className={`group relative overflow-hidden rounded-2xl border bg-white p-5 transition-all duration-200 ${
+        isExpanded
+          ? "border-primary-400 bg-primary-50/10 shadow-md ring-1 ring-primary-400"
+          : "border-slate-200 shadow-sm hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md"
+      }`}
+    >
+      <div className="cursor-pointer" onClick={onToggle}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${categoryInfo.className}`}
+              >
+                {categoryInfo.label}
+              </span>
+              {path.total_duration && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
+                  <Clock className="h-3 w-3 text-slate-400" />
+                  {path.total_duration}
+                </span>
+              )}
+            </div>
+            <h5 className="mt-1.5 text-base font-extrabold text-slate-900 transition-colors group-hover:text-primary-800">
+              {path.title}
+            </h5>
+
+            {path.description && (
+              <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
+                {path.description}
+              </p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${pathStatus.className}`}
+            >
+              {pathStatus.label === "Completed" ? (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              ) : (
+                <CircleDot className="h-3.5 w-3.5" />
+              )}
+              {pathStatus.label}
+            </span>
+            <button
+              type="button"
+              className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title="Toggle details"
+            >
+              <ChevronDown
+                className={`h-4 w-4 transition-transform duration-200 ${
+                  isExpanded ? "rotate-180 text-primary-600" : ""
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3.5">
+          <ProgressBar
+            progress={Number(path.progress || 0)}
+            showLabel
+            size="sm"
+            variant={pathStatus.variant}
+          />
+        </div>
+      </div>
+
+      {isExpanded && <PathCoursesList enrollmentId={path.enrollment_id} />}
+    </div>
+  );
+}
+
 export function AdminEmployeeHierarchyPage() {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
@@ -290,52 +536,13 @@ export function AdminEmployeeHierarchyPage() {
   };
 
   // Metrics calculation
-  const metrics = useMemo(() => {
-    const total = learningPaths.length;
-    const completed = learningPaths.filter(
-      (p) =>
-        Number(p.progress) >= 100 || p.status.toUpperCase() === "COMPLETED",
-    ).length;
-    const inProgress = learningPaths.filter(
-      (p) =>
-        Number(p.progress) > 0 &&
-        Number(p.progress) < 100 &&
-        p.status.toUpperCase() !== "COMPLETED",
-    ).length;
-    const notStarted = total - completed - inProgress;
-
-    const avgProgress =
-      total > 0
-        ? Math.round(
-            learningPaths.reduce((acc, p) => acc + Number(p.progress || 0), 0) /
-              total,
-          )
-        : 0;
-
-    return { total, completed, inProgress, notStarted, avgProgress };
-  }, [learningPaths]);
+  const metrics = useMemo(() => computeMetrics(learningPaths), [learningPaths]);
 
   // Filtered paths
-  const filteredPaths = useMemo(() => {
-    return learningPaths.filter((path) => {
-      const pStatus = getPathStatus(path).label;
-      if (statusFilter === "COMPLETED" && pStatus !== "Completed") return false;
-      if (statusFilter === "IN_PROGRESS" && pStatus !== "In progress")
-        return false;
-      if (statusFilter === "NOT_STARTED" && pStatus !== "Not started")
-        return false;
-
-      if (pathSearch.trim()) {
-        const q = pathSearch.toLowerCase();
-        return (
-          path.title.toLowerCase().includes(q) ||
-          path.description?.toLowerCase().includes(q) ||
-          path.category.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [learningPaths, statusFilter, pathSearch]);
+  const filteredPaths = useMemo(
+    () => filterLearningPaths(learningPaths, statusFilter, pathSearch),
+    [learningPaths, statusFilter, pathSearch],
+  );
 
   const initials = learner ? getInitials(learner.name) : "EP";
 
@@ -503,99 +710,12 @@ export function AdminEmployeeHierarchyPage() {
                 /* Populated Learner Profile */
                 <div className="space-y-6">
                   {/* Learner Profile Banner Card */}
-                  <div className="relative overflow-hidden rounded-3xl border border-sky-100 bg-gradient-to-br from-sky-50/90 via-indigo-50/40 to-white p-5 sm:p-6 shadow-sm">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                      {/* Avatar Initials */}
-                      <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 font-black text-xl text-white shadow-md shadow-sky-500/20 ring-4 ring-white">
-                        {initials}
-                        <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white">
-                          <UserCheck className="h-3 w-3 text-white" />
-                        </span>
-                      </div>
-
-                      {/* Info & Badges */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-xl font-extrabold text-slate-900">
-                            {learner.name}
-                          </h3>
-                          <span className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-xs font-bold text-slate-700 shadow-2xs">
-                            #{selectedEmployee.employeeNumber}
-                          </span>
-                        </div>
-
-                        <p className="mt-0.5 text-sm font-semibold text-primary-700">
-                          {selectedEmployee.designation}
-                        </p>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                          {selectedEmployee.orgName && (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-white/80 border border-slate-200/80 px-2 py-1 font-medium shadow-2xs">
-                              <Tag className="h-3 w-3 text-slate-400" />
-                              {selectedEmployee.orgName}
-                            </span>
-                          )}
-                          {learner.email ? (
-                            <a
-                              href={`mailto:${learner.email}`}
-                              className="inline-flex items-center gap-1 text-slate-600 hover:text-primary-700 hover:underline"
-                            >
-                              <Mail className="h-3.5 w-3.5 text-slate-400" />
-                              <span>{learner.email}</span>
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Progress Metrics Strip */}
-                    <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 border-t border-sky-100/80">
-                      <div className="rounded-2xl border border-white bg-white/80 p-3 shadow-2xs">
-                        <p className="text-[11px] font-semibold text-slate-500">
-                          Total Paths
-                        </p>
-                        <p className="text-lg font-black text-slate-900">
-                          {metrics.total}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] font-semibold text-emerald-700">
-                            Completed
-                          </p>
-                          <Trophy className="h-3.5 w-3.5 text-emerald-600" />
-                        </div>
-                        <p className="text-lg font-black text-emerald-800">
-                          {metrics.completed}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-3 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] font-semibold text-amber-700">
-                            In Progress
-                          </p>
-                          <CircleDot className="h-3.5 w-3.5 text-amber-600" />
-                        </div>
-                        <p className="text-lg font-black text-amber-800">
-                          {metrics.inProgress}
-                        </p>
-                      </div>
-
-                      <div className="rounded-2xl border border-sky-100 bg-sky-50/60 p-3 shadow-2xs">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] font-semibold text-sky-700">
-                            Avg Progress
-                          </p>
-                          <BookCheck className="h-3.5 w-3.5 text-sky-600" />
-                        </div>
-                        <p className="text-lg font-black text-sky-800">
-                          {metrics.avgProgress}%
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <LearnerProfileBanner
+                    learner={learner}
+                    selectedEmployee={selectedEmployee}
+                    initials={initials}
+                    metrics={metrics}
+                  />
 
                   {/* Learning Paths Section Header & Controls */}
                   <div className="mb-4 flex flex-col gap-3 pb-2">
@@ -679,103 +799,20 @@ export function AdminEmployeeHierarchyPage() {
                     </div>
                   ) : (
                     <div className="space-y-3.5">
-                      {filteredPaths.map((path) => {
-                        const pathStatus = getPathStatus(path);
-                        const categoryInfo = getCategoryBadge(path.category);
-                        const isExpanded =
-                          expandedPathId === path.enrollment_id;
-
-                        return (
-                          <div
-                            key={path.enrollment_id}
-                            className={`group relative overflow-hidden rounded-2xl border bg-white p-5 transition-all duration-200 ${
-                              isExpanded
-                                ? "border-primary-400 bg-primary-50/10 shadow-md ring-1 ring-primary-400"
-                                : "border-slate-200 shadow-sm hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md"
-                            }`}
-                          >
-                            {/* Card Header & Title */}
-                            <div
-                              className="cursor-pointer"
-                              onClick={() =>
-                                setExpandedPathId(
-                                  isExpanded ? null : path.enrollment_id,
-                                )
-                              }
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span
-                                      className={`rounded-md border px-2 py-0.5 text-[10px] font-bold ${categoryInfo.className}`}
-                                    >
-                                      {categoryInfo.label}
-                                    </span>
-                                    {path.total_duration && (
-                                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
-                                        <Clock className="h-3 w-3 text-slate-400" />
-                                        {path.total_duration}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <h5 className="mt-1.5 text-base font-extrabold text-slate-900 transition-colors group-hover:text-primary-800">
-                                    {path.title}
-                                  </h5>
-
-                                  {path.description && (
-                                    <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">
-                                      {path.description}
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="flex shrink-0 items-center gap-2">
-                                  <span
-                                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${pathStatus.className}`}
-                                  >
-                                    {pathStatus.label === "Completed" ? (
-                                      <CheckCircle2 className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <CircleDot className="h-3.5 w-3.5" />
-                                    )}
-                                    {pathStatus.label}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                                    title="Toggle details"
-                                  >
-                                    <ChevronDown
-                                      className={`h-4 w-4 transition-transform duration-200 ${
-                                        isExpanded
-                                          ? "rotate-180 text-primary-600"
-                                          : ""
-                                      }`}
-                                    />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Progress Bar & Details */}
-                              <div className="mt-3.5">
-                                <ProgressBar
-                                  progress={Number(path.progress || 0)}
-                                  showLabel
-                                  size="sm"
-                                  variant={pathStatus.variant}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Expandable Course Modules */}
-                            {isExpanded && (
-                              <PathCoursesList
-                                enrollmentId={path.enrollment_id}
-                              />
-                            )}
-                          </div>
-                        );
-                      })}
+                      {filteredPaths.map((path) => (
+                        <LearnerPathCard
+                          key={path.enrollment_id}
+                          path={path}
+                          isExpanded={expandedPathId === path.enrollment_id}
+                          onToggle={() =>
+                            setExpandedPathId(
+                              expandedPathId === path.enrollment_id
+                                ? null
+                                : path.enrollment_id,
+                            )
+                          }
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
