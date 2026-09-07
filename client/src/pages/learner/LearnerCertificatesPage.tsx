@@ -49,7 +49,6 @@ type CertificateRow = {
 };
 
 type ViewMode = 'grid' | 'list';
-type ScopeFilter = 'ALL' | 'FULL' | 'STAGE';
 type SortOption = 'newest' | 'oldest' | 'title' | 'duration';
 
 const downloadBlob = (blob: Blob, filename: string) => {
@@ -86,9 +85,8 @@ export function LearnerCertificatesPage() {
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [certificates, setCertificates] = useState<CertificateRow[]>([]);
   
-  // Filtering, Searching & Sorting State
+  // Searching, Sorting & View Mode State
   const [searchQuery, setSearchQuery] = useState('');
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('ALL');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
@@ -268,10 +266,6 @@ export function LearnerCertificatesPage() {
   const filteredCertificates = useMemo(() => {
     return certificates
       .filter((cert) => {
-        // Scope filter
-        if (scopeFilter === 'FULL' && cert.scope !== 'FULL') return false;
-        if (scopeFilter === 'STAGE' && cert.scope !== 'STAGE') return false;
-
         // Search filter
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
@@ -299,7 +293,7 @@ export function LearnerCertificatesPage() {
         }
         return 0;
       });
-  }, [certificates, scopeFilter, searchQuery, sortBy]);
+  }, [certificates, searchQuery, sortBy]);
 
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
@@ -392,41 +386,6 @@ export function LearnerCertificatesPage() {
           ) : null}
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-thin">
-          <button
-            onClick={() => setScopeFilter('ALL')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all ${
-              scopeFilter === 'ALL'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            All ({certificates.length})
-          </button>
-          <button
-            onClick={() => setScopeFilter('FULL')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              scopeFilter === 'FULL'
-                ? 'bg-emerald-700 text-white shadow-sm'
-                : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200/60'
-            }`}
-          >
-            <GraduationCap className="h-3.5 w-3.5" />
-            Full Path ({stats.fullPaths})
-          </button>
-          <button
-            onClick={() => setScopeFilter('STAGE')}
-            className={`px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap transition-all flex items-center gap-1.5 ${
-              scopeFilter === 'STAGE'
-                ? 'bg-primary-700 text-white shadow-sm'
-                : 'bg-primary-50 text-primary-800 hover:bg-primary-100 border border-primary-200/60'
-            }`}
-          >
-            <Medal className="h-3.5 w-3.5" />
-            Stage Milestone ({stats.stages})
-          </button>
-        </div>
 
         {/* Sorting & View Mode Switcher */}
         <div className="flex items-center gap-3 self-end lg:self-auto">
@@ -541,18 +500,15 @@ export function LearnerCertificatesPage() {
           </div>
           <h3 className="mt-3 text-base font-semibold text-slate-900">No Certificates Found</h3>
           <p className="mt-1 text-xs text-slate-500">
-            No credentials match your search "{searchQuery}" or selected scope filters.
+            No credentials match your search "{searchQuery}".
           </p>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              setSearchQuery('');
-              setScopeFilter('ALL');
-            }}
+            onClick={() => setSearchQuery('')}
             className="mt-4"
           >
-            Clear All Filters
+            Clear Search
           </Button>
         </div>
       ) : viewMode === 'grid' ? (
