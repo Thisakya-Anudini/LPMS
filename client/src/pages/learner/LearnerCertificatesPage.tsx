@@ -22,14 +22,10 @@ import {
   Printer,
   BookOpen,
   ArrowRight,
-  Filter,
-  X,
-  Medal,
-  GraduationCap
+  X
 } from 'lucide-react';
 import { learnerApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
-import { Card } from '../../components/ui/Card';
 import { ModalOverlay } from '../../components/ui/ModalOverlay';
 import { Skeleton } from '../../components/ui/Skeleton';
 import { useAuth } from '../../contexts/useAuth';
@@ -77,7 +73,7 @@ const parseHours = (durationStr?: string): number => {
 };
 
 export function LearnerCertificatesPage() {
-  const { getAccessToken, user } = useAuth();
+  const { getAccessToken } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
