@@ -236,7 +236,7 @@ export function LearnerCertificatesPage() {
 
   // Copy LinkedIn / Share text
   const handleCopyShareText = (cert: CertificateRow) => {
-    const text = `🎓 I'm proud to share that I have earned the "${cert.learning_path_title}" certificate from the SLT Learning Portal!\n\nCredential ID: ${cert.id}\nIssued: ${new Date(cert.issued_at).toLocaleDateString()}\nScope: ${cert.scope === 'FULL' ? 'Full Learning Path' : 'Stage Milestone'}`;
+    const text = `🎓 I'm proud to share that I have earned the "${cert.learning_path_title}" certificate from the Learning Path Management System!\n\nCredential ID: ${cert.id}\nIssued: ${new Date(cert.issued_at).toLocaleDateString()}\nScope: ${cert.scope === 'FULL' ? 'Full Learning Path' : 'Stage Milestone'}`;
     navigator.clipboard.writeText(text);
     setCopiedShareText(true);
     showToast('Achievement summary copied to clipboard! Ready to paste into LinkedIn or resume.', 'success');
@@ -554,7 +554,7 @@ export function LearnerCertificatesPage() {
                       <span className="text-[10px] font-semibold tracking-wider uppercase text-emerald-200">
                         {isFull ? 'Mastery Credential' : 'Milestone Credential'}
                       </span>
-                      <p className="text-xs font-bold text-white leading-none">SLT Learning Portal</p>
+                      <p className="text-xs font-bold text-white leading-none">Learning Path Management System</p>
                     </div>
                   </div>
 
@@ -952,7 +952,7 @@ export function LearnerCertificatesPage() {
                   Formatted Post / Resume Text
                 </label>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600 space-y-1 font-sans">
-                  <p>🎓 I'm proud to share that I have completed the <strong>"{shareModalCert.learning_path_title}"</strong> program on the SLT Learning Portal.</p>
+                  <p>🎓 I'm proud to share that I have completed the <strong>"{shareModalCert.learning_path_title}"</strong> program on the Learning Path Management System.</p>
                   <p className="text-[11px] text-slate-500 pt-1 font-mono">Credential ID: {shareModalCert.id}</p>
                 </div>
                 <Button
