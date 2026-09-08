@@ -1479,54 +1479,81 @@ export function AssignEnrollmentToClassesPage() {
                 <Skeleton className="h-28 w-full" />
                 <Skeleton className="h-28 w-full" />
               </div>
-            ) : !selectedCourseCode ? (
-              <p className="text-sm text-secondary-500">
-                Select a course to view available classes.
-              </p>
-            ) : classes.length === 0 ? (
-              <p className="text-sm text-secondary-500">
-                No ERP classes found for this course.
-              </p>
             ) : (
-              <div className="grid max-h-[34rem] grid-cols-1 gap-3 overflow-auto pr-1">
-                {classes.map((classItem) => {
-                  const active = selectedClassId === classItem.id;
-                  return (
-                    <button
-                      key={`${classItem.id}-${classItem.code}`}
-                      type="button"
-                      onClick={() => {
-                        setSelectedClassId(classItem.id);
-                        setSelectedEnrollmentIds([]);
-                      }}
-                      className={`rounded-lg border p-4 text-left transition ${
-                        active
-                          ? "border-primary-500 bg-primary-50 shadow-sm"
-                          : "border-secondary-200 bg-white hover:border-primary-300 hover:bg-secondary-50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-secondary-900">
-                            {classItem.title}
-                          </p>
-                          <p className="mt-1 text-xs text-secondary-500">
-                            {classItem.code}
-                          </p>
-                        </div>
-                        <School
-                          className={`h-5 w-5 ${active ? "text-primary-700" : "text-secondary-400"}`}
-                        />
-                      </div>
-                      <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-secondary-600 sm:grid-cols-2">
-                        <span>Start Date: {classItem.startDate || "-"}</span>
-                        <span>End Date: {classItem.endDate || "-"}</span>
-                        <span>Mode: {classItem.venue || "-"}</span>
-                        <span>Capacity: {classItem.capacity || "-"}</span>
-                      </div>
-                    </button>
-                  );
-                })}
+              <div className="grid max-h-[34rem] grid-cols-1 gap-4 overflow-auto pr-1 sm:grid-cols-2">
+                {[
+                  {
+                    label: "Course",
+                    classes: classes.filter(
+                      (classItem) =>
+                        !/advanced|topic/i.test(`${classItem.title} ${classItem.code}`),
+                    ),
+                    accent: "border-sky-200 bg-sky-50/70 text-sky-800",
+                  },
+                  {
+                    label: "Advanced Topic",
+                    classes: classes.filter((classItem) =>
+                      /advanced|topic/i.test(`${classItem.title} ${classItem.code}`),
+                    ),
+                    accent: "border-emerald-200 bg-emerald-50/70 text-emerald-800",
+                  },
+                ].map((column) => (
+                  <div key={column.label} className="min-w-0">
+                    <div className={`mb-2 rounded-md border px-3 py-2 text-xs font-semibold uppercase tracking-wide ${column.accent}`}>
+                      {column.label}
+                    </div>
+                    <div className="space-y-3">
+                      {!selectedCourseCode ? (
+                        <p className="rounded-lg border border-dashed border-secondary-200 px-3 py-4 text-xs text-secondary-500">
+                          Select a course to view available classes.
+                        </p>
+                      ) : column.classes.length === 0 ? (
+                        <p className="rounded-lg border border-dashed border-secondary-200 px-3 py-4 text-xs text-secondary-400">
+                          {classes.length === 0
+                            ? "No ERP classes found for this course."
+                            : "No classes available"}
+                        </p>
+                      ) : (
+                        column.classes.map((classItem) => {
+                          const active = selectedClassId === classItem.id;
+                          return (
+                            <button
+                              key={`${classItem.id}-${classItem.code}`}
+                              type="button"
+                              onClick={() => {
+                                setSelectedClassId(classItem.id);
+                                setSelectedEnrollmentIds([]);
+                              }}
+                              className={`w-full rounded-lg border p-3 text-left transition ${
+                                active
+                                  ? "border-primary-500 bg-primary-50 shadow-sm"
+                                  : "border-secondary-200 bg-white hover:border-primary-300 hover:bg-secondary-50"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-secondary-900">
+                                    {classItem.title}
+                                  </p>
+                                  <p className="mt-1 text-xs text-secondary-500">
+                                    {classItem.code}
+                                  </p>
+                                </div>
+                                <School
+                                  className={`h-5 w-5 shrink-0 ${active ? "text-primary-700" : "text-secondary-400"}`}
+                                />
+                              </div>
+                              <div className="mt-3 grid grid-cols-1 gap-1 text-xs text-secondary-600">
+                                <span>Start: {classItem.startDate || "-"}</span>
+                                <span>End: {classItem.endDate || "-"}</span>
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </Card>
