@@ -1325,56 +1325,63 @@ export function AssignEnrollmentToClassesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-xl bg-gradient-to-r from-[#0b66b2] via-[#0fb2ff] to-[#25a33a] p-5 text-white shadow-lg ring-1 ring-white/20 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-secondary-900">
-            Assign Enrollment [Classes]
-          </h1>
-          <p className="mt-2 text-secondary-600">
-            Allocate learners already enrolled in a learning path into ERP
-            classes for each course.
+          <h1 className="text-2xl font-bold sm:text-3xl">Assign Enrollment to Classes</h1>
+          <p className="mt-1 text-sm text-white/90 sm:text-base">
+            Allocate enrolled learners to ERP classes for each course.
           </p>
         </div>
         <Button
           variant="outline"
           onClick={loadPathOptions}
           disabled={!selectedPathId || optionsLoading}
+          className="border-white/40 bg-white/10 text-white hover:bg-white/20"
         >
           <RefreshCcw className="h-4 w-4" />
           Refresh
         </Button>
       </div>
 
-      <div className="rounded-xl border border-secondary-200 bg-white px-4 py-3 shadow-soft">
-        <div className="grid grid-cols-1 divide-y divide-secondary-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          <div className="flex items-center gap-3 py-2 sm:pr-5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-50 text-primary-700">
-              <BookOpen className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                Courses
-              </p>
-              <p className="text-2xl font-bold text-secondary-900">
-                {courses.length}
-              </p>
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {[
+          {
+            label: "Courses",
+            value: courses.length,
+            icon: BookOpen,
+            card: "from-[#e8f7ff] to-[#cfe9ff]",
+            iconColor: "text-[#1e90ff]",
+            valueColor: "text-[#0b66b2]",
+          },
+          {
+            label: "Enrolled Learners",
+            value: learners.length,
+            icon: Users,
+            card: "from-[#f6fffd] to-[#e6fbfd]",
+            iconColor: "text-[#2dd6c9]",
+            valueColor: "text-[#0b66b2]",
+          },
+          {
+            label: "Selected Learners",
+            value: selectedEnrollmentIds.length,
+            icon: Check,
+            card: "from-[#f7fff7] to-[#d4ffb8]",
+            iconColor: "text-[#72d600]",
+            valueColor: "text-[#0b7a00]",
+          },
+        ].map(({ label, value, icon: Icon, card, iconColor, valueColor }) => (
+          <Card
+            key={label}
+            className={`relative overflow-hidden rounded-2xl bg-gradient-to-r ${card} p-5 shadow-sm transition-transform duration-200 hover:scale-[1.01]`}
+          >
+            <div className="absolute right-5 top-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/70 shadow-sm ring-1 ring-white/60">
+              <Icon className={`h-6 w-6 ${iconColor}`} />
             </div>
-          </div>
-          <div className="flex items-center gap-3 py-2 sm:pl-5">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-50 text-success-700">
-              <Users className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-secondary-500">
-                Enrolled Learners
-              </p>
-              <p className="text-2xl font-bold text-secondary-900">
-                {learners.length}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+            <p className="text-sm text-slate-500">{label}</p>
+            <p className={`mt-4 text-3xl font-extrabold ${valueColor}`}>{value}</p>
+          </Card>
+        ))}
+      </section>
 
       <Card
         title="Class Assignment Setup"
