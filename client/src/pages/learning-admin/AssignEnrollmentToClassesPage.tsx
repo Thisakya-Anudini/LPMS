@@ -1354,16 +1354,15 @@ export function AssignEnrollmentToClassesPage() {
     [learningPaths],
   );
 
-  const courseOptions = [
-    {
-      value: "",
-      label: optionsLoading ? "Loading courses..." : "Select course",
-    },
-    ...courses.map((course) => ({
-      value: course.courseCode,
-      label: `${course.courseCode} - ${course.title}`,
-    })),
-  ];
+  const courseOptions = useMemo(
+    () =>
+      courses.map((course) => ({
+        value: course.courseCode,
+        label: `${course.courseCode} - ${course.title}`,
+        description: course.stageTitle ? `Stage: ${course.stageTitle}` : undefined,
+      })),
+    [courses],
+  );
 
   const handleResetFilters = () => {
     setLearnerSearch("");
@@ -1473,7 +1472,7 @@ export function AssignEnrollmentToClassesPage() {
               }}
             />
 
-            <Select
+            <SearchableSelect
               id="course-selector-input"
               label="Course in Learning Path"
               value={selectedCourseCode}
@@ -1481,8 +1480,17 @@ export function AssignEnrollmentToClassesPage() {
               disabled={
                 !selectedPathId || optionsLoading || courses.length === 0
               }
-              onChange={(event) => {
-                const courseCode = event.target.value;
+              placeholder={
+                !selectedPathId
+                  ? "Select learning path first"
+                  : courses.length === 0 && !optionsLoading
+                    ? "No courses available"
+                    : "Search or select course..."
+              }
+              isLoading={optionsLoading}
+              loadingLabel="Loading courses..."
+              emptyMessage="No matching courses found"
+              onChange={(courseCode) => {
                 setSelectedCourseCode(courseCode);
                 setSelectedClassId("");
                 setSelectedEnrollmentIds([]);

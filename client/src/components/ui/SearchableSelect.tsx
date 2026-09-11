@@ -347,7 +347,7 @@ export function SearchableSelect({
             {options.length > 5 && (
               <div className="mt-1.5 border-t border-slate-100 pt-1.5 px-2 flex items-center justify-between text-[11px] text-slate-400">
                 <span>
-                  {filteredOptions.length} of {options.length} learning paths
+                  {filteredOptions.length} of {options.length} options
                 </span>
                 {searchTerm && (
                   <button
