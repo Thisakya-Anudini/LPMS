@@ -28,6 +28,7 @@ import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { ModalOverlay } from "../../components/ui/ModalOverlay";
 import { Select } from "../../components/ui/Select";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useAuth } from "../../contexts/useAuth";
 import { useToast } from "../../contexts/useToast";
@@ -1831,21 +1832,23 @@ export function LearningPathManagement({
                   Select Learning Path to Assign
                 </span>
               </div>
-              <Select
+              <SearchableSelect
                 value={assignForm.learningPathId}
-                onChange={(event) =>
+                onChange={(pathId) =>
                   setAssignForm((prev) => ({
                     ...prev,
-                    learningPathId: event.target.value,
+                    learningPathId: pathId,
                   }))
                 }
-                options={[
-                  { value: "", label: "Choose a learning path..." },
-                  ...paths.map((path) => ({
-                    value: path.id,
-                    label: `${path.title} (${path.status})`,
-                  })),
-                ]}
+                options={paths.map((path) => ({
+                  value: path.id,
+                  label: `${path.title} (${path.status})`,
+                  title: path.title,
+                  status: path.status,
+                }))}
+                placeholder="Choose a learning path..."
+                searchPlaceholder="Search learning paths..."
+                emptyMessage="No learning paths found."
                 required
               />
             </div>
