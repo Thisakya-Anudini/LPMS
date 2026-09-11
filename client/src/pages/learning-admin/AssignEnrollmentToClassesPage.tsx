@@ -25,6 +25,7 @@ import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { ModalOverlay } from "../../components/ui/ModalOverlay";
 import { Select } from "../../components/ui/Select";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useAuth } from "../../contexts/useAuth";
 import { useToast } from "../../contexts/useToast";
@@ -1343,20 +1344,25 @@ export function AssignEnrollmentToClassesPage() {
     }
   };
 
-  const pathOptions = [
-    { value: "", label: "Select learning path" },
-    ...learningPaths.map((path) => ({ value: path.id, label: path.title })),
-  ];
-  const courseOptions = [
-    {
-      value: "",
-      label: optionsLoading ? "Loading courses..." : "Select course",
-    },
-    ...courses.map((course) => ({
-      value: course.courseCode,
-      label: `${course.courseCode} - ${course.title}`,
-    })),
-  ];
+  const pathOptions = useMemo(
+    () =>
+      learningPaths.map((path) => ({
+        value: path.id,
+        label: path.title,
+        description: path.description || undefined,
+      })),
+    [learningPaths],
+  );
+
+  const courseOptions = useMemo(
+    () =>
+      courses.map((course) => ({
+        value: course.courseCode,
+        label: `${course.courseCode} - ${course.title}`,
+        description: course.stageTitle ? `Stage: ${course.stageTitle}` : undefined,
+      })),
+    [courses],
+  );
 
   const handleResetFilters = () => {
     setLearnerSearch("");
@@ -1424,6 +1430,8 @@ export function AssignEnrollmentToClassesPage() {
       <Card
         title="Class Assignment Setup"
         description="Choose the learning path, course, and ERP class before selecting learners."
+        className="overflow-visible"
+        bodyClassName="overflow-visible"
         action={
           <Button
             type="button"
@@ -1447,13 +1455,15 @@ export function AssignEnrollmentToClassesPage() {
             </h3>
           </div>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <Select
+            <SearchableSelect
               label="Learning Path"
               value={selectedPathId}
               options={pathOptions}
+              placeholder="Search or select learning path..."
               isLoading={pathsLoading}
-              onChange={(event) => {
-                setSelectedPathId(event.target.value);
+              loadingLabel="Loading learning paths..."
+              onChange={(value) => {
+                setSelectedPathId(value);
                 setSelectedCourseCode("");
                 setSelectedClassId("");
                 setSelectedEnrollmentIds([]);
@@ -1461,7 +1471,8 @@ export function AssignEnrollmentToClassesPage() {
                 setSetupCourseStatusSearch("");
               }}
             />
-            <Select
+
+            <SearchableSelect
               id="course-selector-input"
               label="Course in Learning Path"
               value={selectedCourseCode}
@@ -1469,8 +1480,17 @@ export function AssignEnrollmentToClassesPage() {
               disabled={
                 !selectedPathId || optionsLoading || courses.length === 0
               }
-              onChange={(event) => {
-                const courseCode = event.target.value;
+              placeholder={
+                !selectedPathId
+                  ? "Select learning path first"
+                  : courses.length === 0 && !optionsLoading
+                    ? "No courses available"
+                    : "Search or select course..."
+              }
+              isLoading={optionsLoading}
+              loadingLabel="Loading courses..."
+              emptyMessage="No matching courses found"
+              onChange={(courseCode) => {
                 setSelectedCourseCode(courseCode);
                 setSelectedClassId("");
                 setSelectedEnrollmentIds([]);
