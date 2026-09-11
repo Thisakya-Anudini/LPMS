@@ -27,9 +27,11 @@ export function Card({
     outlined: 'bg-white border-2 border-secondary-200',
   };
 
+  const hasOverflowClass = className.includes('overflow-');
+
   return (
     <div
-      className={`rounded-xl overflow-hidden ${variants[variant]} ${className}`}
+      className={`rounded-xl ${hasOverflowClass ? '' : 'overflow-hidden'} ${variants[variant]} ${className}`}
     >
       {(title || action) && (
         <div className="px-6 py-5 border-b border-secondary-100 flex justify-between items-start bg-secondary-50/50">
