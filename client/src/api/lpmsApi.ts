@@ -849,7 +849,12 @@ export const integrationApi = {
 };
 
 export const courseApi = {
-  getAllCourses(token: string, page: number = 1, pageSize: number = 10) {
+  getAllCourses(
+    token: string,
+    page: number = 1,
+    pageSize: number = 10,
+    search?: string,
+  ) {
     return request<{
       courses: Array<{
         id: string;
@@ -871,7 +876,11 @@ export const courseApi = {
       };
     }>("/courses", {
       token,
-      query: { page, pageSize },
+      query: {
+        page,
+        pageSize,
+        ...(search ? { search: search.trim() } : {}),
+      },
     });
   },
 };

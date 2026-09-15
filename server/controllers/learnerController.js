@@ -1715,29 +1715,104 @@ export const getCourses = async (req, res) => {
       1,
       Math.min(100, parseInt(req.query?.pageSize, 10) || 10),
     );
+    const search = String(req.query?.search || req.query?.query || "")
+      .trim()
+      .toLowerCase();
 
     const response = await fetchAllCourses();
     const rows = Array.isArray(response?.data) ? response.data : [];
 
-    const allCourses = rows
+    let allCourses = rows
       .map((row, index) => normalizeErpCourse(row, index))
       .filter((course) => Boolean(course.code) && Boolean(course.title));
 
+    if (search) {
+      const compactSearch = search.replace(/[^a-z0-9]/g, "");
+      const searchWords = search.split(/\s+/).filter(Boolean);
+
+      allCourses = allCourses.filter((course) => {
+        const rawCode = String(course.code || "").toLowerCase();
+        const rawTitle = String(course.title || "").toLowerCase();
+        const rawId = String(course.id || "").toLowerCase();
+        const rawDesc = String(course.description || "").toLowerCase();
+
+        // 1. Exact or substring match in code, title, id, or description
+        if (
+          rawCode.includes(search) ||
+          rawTitle.includes(search) ||
+          rawId.includes(search) ||
+          rawDesc.includes(search)
+        ) {
+          return true;
+        }
+
+        // 2. Compact match (ignoring separators like /, -, _, space)
+        if (compactSearch.length >= 2) {
+          const compactCode = rawCode.replace(/[^a-z0-9]/g, "");
+          const compactTitle = rawTitle.replace(/[^a-z0-9]/g, "");
+          if (
+            compactCode.includes(compactSearch) ||
+            compactTitle.includes(compactSearch)
+          ) {
+            return true;
+          }
+        }
+
+        // 3. Multi-word space-separated matching (e.g. "React Advanced")
+        if (searchWords.length > 1) {
+          const searchHaystack = `${rawTitle} ${rawCode} ${rawDesc}`;
+          const allWordsMatch = searchWords.every((word) => {
+            if (word.length <= 2) {
+              const tokens = searchHaystack.split(/[^a-z0-9]+/);
+              return tokens.some((t) => t === word || t.startsWith(word));
+            }
+            return searchHaystack.includes(word);
+          });
+          if (allWordsMatch) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+
+      // Sort by relevance (exact code match > code prefix > title match)
+      allCourses.sort((a, b) => {
+        const aCode = String(a.code || "").toLowerCase();
+        const bCode = String(b.code || "").toLowerCase();
+        const aTitle = String(a.title || "").toLowerCase();
+        const bTitle = String(b.title || "").toLowerCase();
+
+        const score = (code, title) => {
+          if (code === search) return 100;
+          if (code.replace(/[^a-z0-9]/g, "") === compactSearch) return 90;
+          if (code.startsWith(search)) return 80;
+          if (code.includes(search)) return 70;
+          if (title.startsWith(search)) return 60;
+          if (title.includes(search)) return 50;
+          return 10;
+        };
+
+        return score(bCode, bTitle) - score(aCode, aTitle);
+      });
+    }
+
     const totalRecords = allCourses.length;
-    const totalPages = Math.ceil(totalRecords / pageSize);
-    const startIndex = (page - 1) * pageSize;
+    const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+    const validPage = Math.min(page, totalPages);
+    const startIndex = (validPage - 1) * pageSize;
     const endIndex = startIndex + pageSize;
     const paginatedCourses = allCourses.slice(startIndex, endIndex);
 
     return res.status(200).json({
       courses: paginatedCourses,
       pagination: {
-        currentPage: page,
+        currentPage: validPage,
         pageSize,
         totalRecords,
         totalPages,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1,
+        hasNextPage: validPage < totalPages,
+        hasPrevPage: validPage > 1,
       },
     });
   } catch (error) {

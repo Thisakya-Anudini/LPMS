@@ -42,6 +42,8 @@ export function CertificateCustomizationPage() {
     error: string | null;
   } | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const [savedRowId, setSavedRowId] = useState<string | null>(null);
+  const savedHighlightTimeoutRef = useRef<number | null>(null);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
@@ -80,6 +82,15 @@ export function CertificateCustomizationPage() {
   }, []);
 
   useEffect(() => () => revokePreviewUrl(), [revokePreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (savedHighlightTimeoutRef.current) {
+        window.clearTimeout(savedHighlightTimeoutRef.current as unknown as number);
+        savedHighlightTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const startEdit = (row: CertificateSettingRow) => {
     setEditingId(row.id);
@@ -175,8 +186,18 @@ export function CertificateCustomizationPage() {
         signaturePngDataUrl: form.signaturePngDataUrl || null
       });
       showToast('Certificate signature updated.', 'success');
+      const justSavedId = editingId;
       closeEdit();
       await loadRows();
+      setSavedRowId(justSavedId);
+      if (savedHighlightTimeoutRef.current) {
+        window.clearTimeout(savedHighlightTimeoutRef.current as unknown as number);
+      }
+      // keep the saved row highlighted for 19 minutes (19 * 60 * 1000 ms)
+      savedHighlightTimeoutRef.current = window.setTimeout(() => {
+        setSavedRowId(null);
+        savedHighlightTimeoutRef.current = null;
+      }, 19 * 60 * 1000) as unknown as number;
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to update signature.', 'error');
     } finally {
@@ -187,57 +208,73 @@ export function CertificateCustomizationPage() {
   return (
     <div className="max-h-[calc(100vh-8rem)] overflow-y-auto pr-2">
       <div className="space-y-6 pb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Certificate Customization</h1>
-          <p className="text-slate-500">Set signature name and designation per learning path.</p>
+        <div className="rounded-lg overflow-hidden bg-gradient-to-r from-[#1E90FF] to-[#7CFC00] p-5 text-white">
+          <h1 className="text-2xl font-bold">Certificate Customization</h1>
+          <p className="text-sm opacity-90 mt-1">Set signature name and designation per learning path.</p>
         </div>
 
-      <Card>
+      <Card className="pt-4">
+        <div className="px-4 pb-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-slate-500">Manage certificate signatures for learning paths.</p>
+          </div>
+          <div className="text-sm text-slate-500">Total: {rows.length}</div>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left border-b border-slate-200 bg-slate-50">
-                <th className="py-2 px-3 font-semibold">Learning Path</th>
-                <th className="py-2 px-3 font-semibold">Signature Name</th>
-                <th className="py-2 px-3 font-semibold">Signature Title</th>
-                <th className="py-2 px-3 font-semibold">PNG Signature</th>
-                <th className="py-2 px-3 font-semibold">Updated</th>
-                <th className="py-2 px-3 font-semibold">Action</th>
+          <table className="w-full text-sm rounded-lg overflow-hidden">
+            <thead className="sticky top-0 bg-white/80 backdrop-blur-sm">
+              <tr className="text-left border-b border-slate-200">
+                <th className="py-3 px-4 font-semibold text-slate-700">Learning Path</th>
+                <th className="py-3 px-4 font-semibold text-slate-700">Signature Name</th>
+                <th className="py-3 px-4 font-semibold text-slate-700">Signature Title</th>
+                <th className="py-3 px-4 font-semibold text-slate-700">PNG Signature</th>
+                <th className="py-3 px-4 font-semibold text-slate-700">Updated</th>
+                <th className="py-3 px-4 font-semibold text-slate-700">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td className="py-3 px-3 text-slate-500" colSpan={6}>Loading...</td>
+                  <td className="py-6 px-4 text-slate-500" colSpan={6}>Loading...</td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td className="py-3 px-3 text-slate-500" colSpan={6}>No learning paths found.</td>
+                  <td className="py-6 px-4 text-slate-500" colSpan={6}>No learning paths found.</td>
                 </tr>
               ) : (
-                paginatedRows.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100">
-                    <td className="py-2 px-3 font-medium text-slate-900">{row.title}</td>
-                    <td className="py-2 px-3">{row.certificate_signer_name || '-'}</td>
-                    <td className="py-2 px-3">{row.certificate_signer_title || '-'}</td>
-                    <td className="py-2 px-3">{row.certificate_signature_png ? 'Uploaded' : '-'}</td>
-                    <td className="py-2 px-3 text-slate-500">
-                      {new Date(row.updated_at).toLocaleDateString()}
-                    </td>
-                    <td className="py-2 px-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openPreview(row.id, row.title)}
-                        >
-                          Preview
-                        </Button>
-                        <Button size="sm" onClick={() => startEdit(row)}>Edit</Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                paginatedRows.map((row) => {
+                  const isSaved = savedRowId === row.id;
+                  return (
+                    <tr key={row.id} className={`border-b border-slate-100 hover:bg-slate-50 ${isSaved ? 'bg-[#7CFC00]/20 ring-1 ring-[#7CFC00]/40' : ''}`}>
+                      <td className="py-3 px-4 font-medium text-slate-900">{row.title}</td>
+                      <td className="py-3 px-4 text-slate-700">{row.certificate_signer_name || '-'}</td>
+                      <td className="py-3 px-4 text-slate-700">{row.certificate_signer_title || '-'}</td>
+                      <td className="py-3 px-4 text-slate-700">
+                        {row.certificate_signature_png ? (
+                          <img src={row.certificate_signature_png} alt="signature" className="h-8 w-auto object-contain rounded" />
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-slate-500">
+                        {new Date(row.updated_at).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openPreview(row.id, row.title)}
+                          >
+                            Preview
+                          </Button>
+                          <Button size="sm" onClick={() => startEdit(row)}>Edit</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

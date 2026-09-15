@@ -216,23 +216,20 @@ export function SearchableSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={`${selectId}-listbox`}
-        className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-4 py-2.5 text-left text-sm transition-all duration-150 cursor-pointer ${
-          error
-            ? 'border-red-500 focus:ring-2 focus:ring-red-500'
-            : 'border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent'
-        } ${disabled ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''} ${className}`}
+        className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-4 py-2.5 text-left text-sm transition-all duration-150 cursor-pointer ${error
+          ? 'border-red-500 focus:ring-2 focus:ring-red-500'
+          : 'border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent'
+          } ${disabled ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''} ${className}`}
       >
         <span
-          className={`truncate ${
-            selectedOption ? 'text-slate-900 font-medium' : 'text-slate-500'
-          }`}
+          className={`truncate ${selectedOption ? 'text-slate-900 font-medium' : 'text-slate-500'
+            }`}
         >
           {selectedOption ? selectedOption.label : placeholder}
         </span>
         <ChevronDown
-          className={`ml-2 h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${
-            isOpen ? 'rotate-180 text-primary-600' : ''
-          }`}
+          className={`ml-2 h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : ''
+            }`}
         />
       </button>
 
@@ -294,19 +291,17 @@ export function SearchableSelect({
                     aria-selected={isSelected}
                     onClick={() => handleSelectOption(option.value)}
                     onMouseEnter={() => setHighlightedIndex(index)}
-                    className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary-50/80 text-primary-900 font-medium'
-                        : isHighlighted
+                    className={`w-full px-3.5 py-2.5 text-left text-sm flex items-center justify-between gap-2.5 transition-colors cursor-pointer ${isSelected
+                      ? 'bg-primary-50/80 text-primary-900 font-medium'
+                      : isHighlighted
                         ? 'bg-slate-100 text-slate-900'
                         : 'text-slate-700 hover:bg-slate-50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <BookOpen
-                        className={`h-4 w-4 shrink-0 ${
-                          isSelected ? 'text-primary-600' : 'text-slate-400'
-                        }`}
+                        className={`h-4 w-4 shrink-0 ${isSelected ? 'text-primary-600' : 'text-slate-400'
+                          }`}
                       />
                       <span className="truncate">
                         {option.title || option.label}
@@ -316,13 +311,12 @@ export function SearchableSelect({
                     <div className="flex items-center gap-2 shrink-0">
                       {option.status && (
                         <span
-                          className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${
-                            option.status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                              : option.status === 'DRAFT'
+                          className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${option.status === 'ACTIVE'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : option.status === 'DRAFT'
                               ? 'bg-amber-50 text-amber-700 border-amber-200'
                               : 'bg-slate-100 text-slate-600 border-slate-200'
-                          }`}
+                            }`}
                         >
                           {option.status}
                         </span>
