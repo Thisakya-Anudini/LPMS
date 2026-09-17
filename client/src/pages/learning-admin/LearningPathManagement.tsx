@@ -2772,7 +2772,7 @@ export function LearningPathManagement({
 
       {section === "manage" && manageLearnersPath ? (
         <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="w-full max-w-4xl max-h-[85vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-full max-w-4xl lg:max-w-5xl max-h-[85vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/60 px-6 py-4">
               <div>
@@ -2868,15 +2868,21 @@ export function LearningPathManagement({
                   </p>
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-xl border border-slate-200 shadow-sm">
-                  <table className="w-full text-left text-xs text-slate-600">
+                <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
+                  <table className="w-full min-w-[640px] text-left text-xs text-slate-600">
                     <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                       <tr>
                         <th className="px-4 py-3">Learner</th>
-                        <th className="px-4 py-3">Employee No</th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          Employee No
+                        </th>
                         <th className="px-4 py-3">Designation</th>
-                        <th className="px-4 py-3">Progress</th>
-                        <th className="px-4 py-3 text-right">Action</th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          Progress
+                        </th>
+                        <th className="px-4 py-3 text-right whitespace-nowrap">
+                          Action
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -2892,30 +2898,36 @@ export function LearningPathManagement({
                                   ? learner.name.charAt(0).toUpperCase()
                                   : "U"}
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 max-w-[240px]">
                                 <p className="font-semibold text-slate-900 truncate">
                                   {learner.name}
                                 </p>
-                                <p className="text-[11px] text-slate-400 truncate">
+                                <p
+                                  className="text-[11px] text-slate-400 truncate"
+                                  title={learner.email || undefined}
+                                >
                                   {learner.email || "No email"}
                                 </p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-medium text-slate-700">
                               {learner.employee_number}
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <p className="truncate max-w-[160px] text-slate-700 font-medium">
+                            <p
+                              className="truncate max-w-[200px] text-slate-700 font-medium"
+                              title={learner.designation || undefined}
+                            >
                               {learner.designation || "Learner"}
                             </p>
                             <p className="text-[11px] text-slate-400">
                               {learner.grade_name || "N/A"}
                             </p>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               <span
                                 className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
@@ -2933,11 +2945,11 @@ export function LearningPathManagement({
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => setLearnerPendingDelete(learner)}
-                              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700"
+                              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 shrink-0"
                               title="Remove learner from learning path"
                             >
                               <UserMinus className="h-3.5 w-3.5" />
