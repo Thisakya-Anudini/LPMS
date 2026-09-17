@@ -20,6 +20,8 @@ import {
   CheckCircle,
   UserPlus,
   Users,
+  UserMinus,
+  X,
 } from "lucide-react";
 import { ApiRequestError, courseApi, learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
@@ -57,6 +59,20 @@ type AssignableLearner = {
   costCenterName: string;
   employeeInitials: string;
   employeeSupervisorNumber: string;
+};
+
+type EnrolledPathLearner = {
+  enrollment_id: string;
+  status: string;
+  progress: number;
+  enrolled_at: string;
+  completed_at?: string | null;
+  principal_id: string;
+  name: string;
+  email: string;
+  employee_number: string;
+  designation: string;
+  grade_name: string;
 };
 
 type CourseItem = {
@@ -258,6 +274,17 @@ export function LearningPathManagement({
   } | null>(null);
   const [pathPageSize] = useState(10);
   const [currentPathPage, setCurrentPathPage] = useState(1);
+  const [manageLearnersPath, setManageLearnersPath] =
+    useState<LearningPathRow | null>(null);
+  const [enrolledLearners, setEnrolledLearners] = useState<
+    EnrolledPathLearner[]
+  >([]);
+  const [enrolledLearnersLoading, setEnrolledLearnersLoading] = useState(false);
+  const [learnerSearchQuery, setLearnerSearchQuery] = useState("");
+  const [learnerPendingDelete, setLearnerPendingDelete] =
+    useState<EnrolledPathLearner | null>(null);
+  const [learnerRemoving, setLearnerRemoving] = useState(false);
+
   const assignEmployeeNoValidationRequestId = useRef(0);
   const assignNameValidationRequestId = useRef(0);
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
@@ -868,6 +895,59 @@ export function LearningPathManagement({
       );
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  const handleOpenManageLearners = async (path: LearningPathRow) => {
+    setManageLearnersPath(path);
+    setLearnerSearchQuery("");
+    setLearnerPendingDelete(null);
+    setEnrolledLearnersLoading(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const response = await learningApi.getLearningPathEnrollments(
+        token,
+        path.id,
+      );
+      setEnrolledLearners(response.enrollments || []);
+    } catch (err) {
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Failed to load assigned learners.",
+        "error",
+      );
+    } finally {
+      setEnrolledLearnersLoading(false);
+    }
+  };
+
+  const handleConfirmRemoveLearner = async () => {
+    if (!manageLearnersPath || !learnerPendingDelete) return;
+    setLearnerRemoving(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await learningApi.removeLearningPathEnrollment(
+        token,
+        manageLearnersPath.id,
+        learnerPendingDelete.enrollment_id,
+      );
+      showToast("Learner removed from learning path successfully.", "success");
+      setEnrolledLearners((prev) =>
+        prev.filter(
+          (item) => item.enrollment_id !== learnerPendingDelete.enrollment_id,
+        ),
+      );
+      setLearnerPendingDelete(null);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to remove learner.",
+        "error",
+      );
+    } finally {
+      setLearnerRemoving(false);
     }
   };
 
@@ -2450,6 +2530,15 @@ export function LearningPathManagement({
                       </td>
                       <td className="px-6 py-4 w-[1%]">
                         <div className="flex gap-2">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-100"
+                            onClick={() => handleOpenManageLearners(path)}
+                            title="View and manage assigned learners"
+                          >
+                            <Users className="h-3.5 w-3.5" />
+                            Learners
+                          </button>
                           <button
                             type="button"
                             className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
