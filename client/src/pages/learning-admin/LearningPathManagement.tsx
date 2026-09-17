@@ -20,6 +20,8 @@ import {
   CheckCircle,
   UserPlus,
   Users,
+  UserMinus,
+  X,
 } from "lucide-react";
 import { ApiRequestError, courseApi, learningApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
@@ -57,6 +59,20 @@ type AssignableLearner = {
   costCenterName: string;
   employeeInitials: string;
   employeeSupervisorNumber: string;
+};
+
+type EnrolledPathLearner = {
+  enrollment_id: string;
+  status: string;
+  progress: number;
+  enrolled_at: string;
+  completed_at?: string | null;
+  principal_id: string;
+  name: string;
+  email: string;
+  employee_number: string;
+  designation: string;
+  grade_name: string;
 };
 
 type CourseItem = {
@@ -258,6 +274,18 @@ export function LearningPathManagement({
   } | null>(null);
   const [pathPageSize] = useState(10);
   const [currentPathPage, setCurrentPathPage] = useState(1);
+  const [manageLearnersPath, setManageLearnersPath] =
+    useState<LearningPathRow | null>(null);
+  const [enrolledLearners, setEnrolledLearners] = useState<
+    EnrolledPathLearner[]
+  >([]);
+  const [enrolledLearnersLoading, setEnrolledLearnersLoading] = useState(false);
+  const [learnerSearchQuery, setLearnerSearchQuery] = useState("");
+  const [learnerDesignationFilter, setLearnerDesignationFilter] = useState("");
+  const [learnerPendingDelete, setLearnerPendingDelete] =
+    useState<EnrolledPathLearner | null>(null);
+  const [learnerRemoving, setLearnerRemoving] = useState(false);
+
   const assignEmployeeNoValidationRequestId = useRef(0);
   const assignNameValidationRequestId = useRef(0);
   const hasAssignEmployeeNoSearch = assignEmployeeNoSearch.trim().length > 0;
@@ -560,6 +588,35 @@ export function LearningPathManagement({
       hasPrevPage: currentPathPage > 1,
     };
   }, [filteredPaths, currentPathPage, pathPageSize]);
+
+  const enrolledDesignationOptions = useMemo(() => {
+    const unique = Array.from(
+      new Set(
+        enrolledLearners
+          .map((l) => l.designation?.trim())
+          .filter((d): d is string => Boolean(d)),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+    return unique;
+  }, [enrolledLearners]);
+
+  const filteredEnrolledLearners = useMemo(() => {
+    const q = learnerSearchQuery.toLowerCase().trim();
+    return enrolledLearners.filter((item) => {
+      const matchesSearch =
+        !q ||
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.employee_number &&
+          item.employee_number.toLowerCase().includes(q));
+
+      const matchesDesignation =
+        !learnerDesignationFilter ||
+        item.designation?.trim().toLowerCase() ===
+          learnerDesignationFilter.trim().toLowerCase();
+
+      return matchesSearch && matchesDesignation;
+    });
+  }, [enrolledLearners, learnerSearchQuery, learnerDesignationFilter]);
 
   const toStages = (stages: StageForm[]) =>
     stages
@@ -868,6 +925,60 @@ export function LearningPathManagement({
       );
     } finally {
       setEditLoading(false);
+    }
+  };
+
+  const handleOpenManageLearners = async (path: LearningPathRow) => {
+    setManageLearnersPath(path);
+    setLearnerSearchQuery("");
+    setLearnerDesignationFilter("");
+    setLearnerPendingDelete(null);
+    setEnrolledLearnersLoading(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      const response = await learningApi.getLearningPathEnrollments(
+        token,
+        path.id,
+      );
+      setEnrolledLearners(response.enrollments || []);
+    } catch (err) {
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Failed to load assigned learners.",
+        "error",
+      );
+    } finally {
+      setEnrolledLearnersLoading(false);
+    }
+  };
+
+  const handleConfirmRemoveLearner = async () => {
+    if (!manageLearnersPath || !learnerPendingDelete) return;
+    setLearnerRemoving(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) return;
+      await learningApi.removeLearningPathEnrollment(
+        token,
+        manageLearnersPath.id,
+        learnerPendingDelete.enrollment_id,
+      );
+      showToast("Learner removed from learning path successfully.", "success");
+      setEnrolledLearners((prev) =>
+        prev.filter(
+          (item) => item.enrollment_id !== learnerPendingDelete.enrollment_id,
+        ),
+      );
+      setLearnerPendingDelete(null);
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : "Failed to remove learner.",
+        "error",
+      );
+    } finally {
+      setLearnerRemoving(false);
     }
   };
 
@@ -2452,6 +2563,15 @@ export function LearningPathManagement({
                         <div className="flex gap-2">
                           <button
                             type="button"
+                            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-100"
+                            onClick={() => handleOpenManageLearners(path)}
+                            title="View and manage assigned learners"
+                          >
+                            <Users className="h-3.5 w-3.5" />
+                            Learners
+                          </button>
+                          <button
+                            type="button"
                             className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
                             onClick={() => startEdit(path)}
                           >
@@ -2645,6 +2765,269 @@ export function LearningPathManagement({
                   </Button>
                 </div>
               </form>
+            </div>
+          </div>
+        </ModalOverlay>
+      ) : null}
+
+      {section === "manage" && manageLearnersPath ? (
+        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-4xl lg:max-w-5xl max-h-[85vh] flex flex-col rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/60 px-6 py-4">
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Assigned Learners
+                  </h2>
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                    {enrolledLearners.length} Enrolled
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Manage learners enrolled in{" "}
+                  <span className="font-semibold text-slate-700">
+                    {manageLearnersPath.title}
+                  </span>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManageLearnersPath(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="border-b border-slate-200 bg-white px-6 py-3">
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                {/* Search: Name and Employee Number ONLY */}
+                <div className="relative flex-1 w-full">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by employee number or name..."
+                    value={learnerSearchQuery}
+                    onChange={(e) => setLearnerSearchQuery(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-xs font-medium text-slate-800 placeholder-slate-400 shadow-inner transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-400"
+                  />
+                </div>
+
+                {/* Designation Dropdown Filter */}
+                <div className="w-full sm:w-64">
+                  <select
+                    value={learnerDesignationFilter}
+                    onChange={(e) =>
+                      setLearnerDesignationFilter(e.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 px-3 text-xs font-medium text-slate-800 shadow-inner transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-400"
+                  >
+                    <option value="">
+                      All Designations ({enrolledLearners.length})
+                    </option>
+                    {enrolledDesignationOptions.map((desig) => (
+                      <option key={desig} value={desig}>
+                        {desig}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body - Learners Table */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {enrolledLearnersLoading ? (
+                <div className="space-y-3 py-6">
+                  <Skeleton className="h-12 w-full rounded-lg" />
+                  <Skeleton className="h-12 w-full rounded-lg" />
+                  <Skeleton className="h-12 w-full rounded-lg" />
+                </div>
+              ) : enrolledLearners.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <div className="rounded-full bg-slate-100 p-4 text-slate-400">
+                    <Users className="h-8 w-8" />
+                  </div>
+                  <h4 className="mt-3 text-sm font-semibold text-slate-800">
+                    No learners assigned yet
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-500 max-w-sm">
+                    This learning path has no learners assigned. You can assign
+                    learners from the "Assign Enrollments" tab.
+                  </p>
+                </div>
+              ) : filteredEnrolledLearners.length === 0 ? (
+                <div className="py-12 text-center">
+                  <p className="text-sm font-medium text-slate-600">
+                    No matching learners found
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Try adjusting your search filter.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
+                  <table className="w-full min-w-[640px] text-left text-xs text-slate-600">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">Learner</th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          Employee No
+                        </th>
+                        <th className="px-4 py-3">Designation</th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          Progress
+                        </th>
+                        <th className="px-4 py-3 text-right whitespace-nowrap">
+                          Action
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {filteredEnrolledLearners.map((learner) => (
+                        <tr
+                          key={learner.enrollment_id}
+                          className="hover:bg-slate-50/75 transition-colors"
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-slate-200 to-slate-100 font-semibold text-slate-700 text-xs shadow-xs">
+                                {learner.name
+                                  ? learner.name.charAt(0).toUpperCase()
+                                  : "U"}
+                              </div>
+                              <div className="min-w-0 max-w-[240px]">
+                                <p className="font-semibold text-slate-900 truncate">
+                                  {learner.name}
+                                </p>
+                                <p
+                                  className="text-[11px] text-slate-400 truncate"
+                                  title={learner.email || undefined}
+                                >
+                                  {learner.email || "No email"}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-medium text-slate-700">
+                              {learner.employee_number}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p
+                              className="truncate max-w-[200px] text-slate-700 font-medium"
+                              title={learner.designation || undefined}
+                            >
+                              {learner.designation || "Learner"}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {learner.grade_name || "N/A"}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                  learner.status === "COMPLETED"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : learner.status === "IN_PROGRESS"
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-slate-100 text-slate-700"
+                                }`}
+                              >
+                                {learner.status.replace("_", " ")}
+                              </span>
+                              <span className="text-[11px] font-medium text-slate-500">
+                                {learner.progress}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => setLearnerPendingDelete(learner)}
+                              className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 hover:text-red-700 shrink-0"
+                              title="Remove learner from learning path"
+                            >
+                              <UserMinus className="h-3.5 w-3.5" />
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setManageLearnersPath(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </ModalOverlay>
+      ) : null}
+
+      {/* Confirmation Dialog for Removing Learner */}
+      {manageLearnersPath && learnerPendingDelete ? (
+        <ModalOverlay className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                Remove Assigned Learner
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                This will unassign the learner and remove their enrollment
+                progress and class assignments for this learning path.
+              </p>
+            </div>
+            <div className="bg-slate-50/50 px-6 py-4">
+              <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
+                <p>
+                  <span className="font-semibold text-slate-900">
+                    Learner:{" "}
+                  </span>
+                  {learnerPendingDelete.name} (
+                  {learnerPendingDelete.employee_number})
+                </p>
+                <p className="mt-1">
+                  <span className="font-semibold text-slate-900">
+                    Learning Path:{" "}
+                  </span>
+                  {manageLearnersPath.title}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-white px-6 py-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={learnerRemoving}
+                onClick={() => setLearnerPendingDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                isLoading={learnerRemoving}
+                onClick={handleConfirmRemoveLearner}
+              >
+                Confirm Remove
+              </Button>
             </div>
           </div>
         </ModalOverlay>

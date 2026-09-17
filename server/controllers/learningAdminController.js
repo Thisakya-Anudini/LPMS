@@ -1340,6 +1340,153 @@ export const updateLearningPath = async (req, res) => {
   return res.status(200).json({ learningPath: result.rows[0] });
 };
 
+export const getLearningPathEnrollments = async (req, res) => {
+  const { id } = req.params;
+
+  const pathResult = await query(
+    `
+      SELECT id, title, description, category, total_duration, status
+      FROM learning_paths
+      WHERE id = $1 AND is_deleted = FALSE
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  if (pathResult.rowCount === 0) {
+    return sendError(res, 404, "NOT_FOUND", "Learning path not found.");
+  }
+
+  const enrollmentsResult = await query(
+    `
+      SELECT
+        en.id AS enrollment_id,
+        en.status,
+        en.progress,
+        en.enrolled_at,
+        en.completed_at,
+        ap.id AS principal_id,
+        COALESCE(ap.name, en.learner_name) AS name,
+        COALESCE(ap.email, en.learner_email) AS email,
+        COALESCE(e.employee_number, en.employee_number) AS employee_number,
+        COALESCE(e.designation, en.learner_designation) AS designation,
+        COALESCE(e.grade_name, en.learner_grade_name) AS grade_name
+      FROM enrollments en
+      JOIN auth_principals ap ON ap.id = en.principal_id
+      LEFT JOIN employees e ON e.principal_id = ap.id
+      WHERE en.learning_path_id = $1
+      ORDER BY en.enrolled_at DESC, ap.name ASC
+    `,
+    [id],
+  );
+
+  const enrichedEnrollments = await Promise.all(
+    enrollmentsResult.rows.map(async (enrollment) => {
+      try {
+        if (enrollment.employee_number) {
+          const erpResponse = await fetchEmployeeDetailsForServiceNo(
+            enrollment.employee_number,
+          );
+          const erpData = erpResponse?.data?.[0];
+
+          if (erpData && erpData.email && String(erpData.email).trim()) {
+            enrollment.email = String(erpData.email).trim().toLowerCase();
+          }
+        }
+      } catch (err) {
+        // Fallback to local email if ERP request fails
+      }
+      return enrollment;
+    }),
+  );
+
+  return res.status(200).json({
+    learningPath: pathResult.rows[0],
+    enrollments: enrichedEnrollments,
+  });
+};
+
+export const removeEnrollmentFromLearningPath = async (req, res) => {
+  const { id, enrollmentId } = req.params;
+  const actorPrincipalId = await resolveActorPrincipalId(req.user);
+
+  const pathResult = await query(
+    `
+      SELECT id, title
+      FROM learning_paths
+      WHERE id = $1 AND is_deleted = FALSE
+      LIMIT 1
+    `,
+    [id],
+  );
+
+  if (pathResult.rowCount === 0) {
+    return sendError(res, 404, "NOT_FOUND", "Learning path not found.");
+  }
+
+  const enrollmentResult = await query(
+    `
+      SELECT id, principal_id, employee_number, learner_name
+      FROM enrollments
+      WHERE id = $1 AND learning_path_id = $2
+      LIMIT 1
+    `,
+    [enrollmentId, id],
+  );
+
+  if (enrollmentResult.rowCount === 0) {
+    return sendError(
+      res,
+      404,
+      "NOT_FOUND",
+      "Enrollment not found for this learning path.",
+    );
+  }
+
+  const enrollment = enrollmentResult.rows[0];
+
+  await query(
+    `
+      DELETE FROM enrollments
+      WHERE id = $1 AND learning_path_id = $2
+    `,
+    [enrollmentId, id],
+  );
+
+  if (enrollment.principal_id) {
+    await query(
+      `
+        INSERT INTO notifications (principal_id, title, message, type, is_read)
+        VALUES ($1, 'Enrollment Removed', $2, 'INFO', FALSE)
+      `,
+      [
+        enrollment.principal_id,
+        `Your enrollment for "${pathResult.rows[0].title}" has been removed by Learning Admin.`,
+      ],
+    );
+  }
+
+  if (actorPrincipalId) {
+    await logAudit({
+      actorPrincipalId,
+      action: "REMOVE_LEARNER_ENROLLMENT",
+      resourceType: "enrollments",
+      resourceId: enrollmentId,
+      metadata: {
+        learningPathId: id,
+        learningPathTitle: pathResult.rows[0].title,
+        employeeNumber: enrollment.employee_number,
+        learnerName: enrollment.learner_name,
+      },
+    });
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: "Learner removed from learning path successfully.",
+  });
+};
+
 export const getCertificateCustomizationPaths = async (_req, res) => {
   const includeSignatureColumn = await hasCertificateSignatureColumn();
   const result = await query(
@@ -2130,32 +2277,41 @@ export const getClassAssignmentOptions = async (req, res) => {
     `,
     [id],
   );
-  const progressHasCourseId = await hasColumn('enrollment_progress', 'course_id');
-  const progressHasCourseCode = await hasColumn('enrollment_progress', 'course_code');
+  const progressHasCourseId = await hasColumn(
+    "enrollment_progress",
+    "course_id",
+  );
+  const progressHasCourseCode = await hasColumn(
+    "enrollment_progress",
+    "course_code",
+  );
   let courseProgressByEnrollment = new Map();
-  if ((progressHasCourseId || progressHasCourseCode) && learnerResult.rows.length > 0) {
+  if (
+    (progressHasCourseId || progressHasCourseCode) &&
+    learnerResult.rows.length > 0
+  ) {
     const progressResult = await query(
       `
         SELECT
           enrollment_id,
-          ${progressHasCourseId ? 'course_id' : 'NULL::uuid AS course_id'},
-          ${progressHasCourseCode ? 'course_code' : 'NULL::text AS course_code'},
+          ${progressHasCourseId ? "course_id" : "NULL::uuid AS course_id"},
+          ${progressHasCourseCode ? "course_code" : "NULL::text AS course_code"},
           progress
         FROM enrollment_progress
         WHERE enrollment_id = ANY($1::uuid[])
       `,
-      [learnerResult.rows.map((row) => row.enrollment_id)]
+      [learnerResult.rows.map((row) => row.enrollment_id)],
     );
 
     courseProgressByEnrollment = progressResult.rows.reduce((map, row) => {
-      const enrollmentId = String(row.enrollment_id || '').trim();
+      const enrollmentId = String(row.enrollment_id || "").trim();
       if (!map.has(enrollmentId)) {
         map.set(enrollmentId, []);
       }
       map.get(enrollmentId).push({
-        courseId: row.course_id ? String(row.course_id).trim() : '',
-        courseCode: row.course_code ? String(row.course_code).trim() : '',
-        progress: Number(row.progress || 0)
+        courseId: row.course_id ? String(row.course_id).trim() : "",
+        courseCode: row.course_code ? String(row.course_code).trim() : "",
+        progress: Number(row.progress || 0),
       });
       return map;
     }, new Map());
@@ -2188,9 +2344,12 @@ export const getClassAssignmentOptions = async (req, res) => {
       status: row.status,
       progress: Number(row.progress || 0),
       enrolledAt: row.enrolled_at,
-      courseProgress: courseProgressByEnrollment.get(String(row.enrollment_id || '').trim()) || [],
-      classAssignments: row.class_assignments || []
-    }))
+      courseProgress:
+        courseProgressByEnrollment.get(
+          String(row.enrollment_id || "").trim(),
+        ) || [],
+      classAssignments: row.class_assignments || [],
+    })),
   });
 };
 

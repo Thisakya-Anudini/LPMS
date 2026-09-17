@@ -1,4 +1,4 @@
-import express from 'express';
+import express from "express";
 import {
   assignClassEnrollments,
   createEnrollments,
@@ -13,88 +13,152 @@ import {
   getLearningSummaryReport,
   getLearningPathById,
   getLearningPaths,
+  getLearningPathEnrollments,
   previewLearningPathCertificate,
+  removeEnrollmentFromLearningPath,
   searchAssignableEmployees,
   updateAssignmentReportStatus,
   upsertClassDetailReport,
   updateLearningPathCertificateSignature,
-  updateLearningPath
-} from '../controllers/learningAdminController.js';
-import { protect, requireRole } from '../middlewares/authMiddleware.js';
-import { requireFields } from '../middlewares/validationMiddleware.js';
-import { ROLES } from '../constants/roles.js';
+  updateLearningPath,
+} from "../controllers/learningAdminController.js";
+import { protect, requireRole } from "../middlewares/authMiddleware.js";
+import { requireFields } from "../middlewares/validationMiddleware.js";
+import { ROLES } from "../constants/roles.js";
 
 const router = express.Router();
 
 router.post(
-  '/learning-paths',
+  "/learning-paths",
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['title', 'description', 'category']),
-  createLearningPath
+  requireFields(["title", "description", "category"]),
+  createLearningPath,
 );
-router.get('/learning-paths', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPaths);
 router.get(
-  '/learning-paths/:id/class-assignment-options',
+  "/learning-paths",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]),
+  getLearningPaths,
+);
+router.get(
+  "/learning-paths/:id/class-assignment-options",
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  getClassAssignmentOptions
+  getClassAssignmentOptions,
 );
-router.get('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]), getLearningPathById);
-router.put('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), updateLearningPath);
-router.delete('/learning-paths/:id', protect, requireRole([ROLES.LEARNING_ADMIN]), deleteLearningPath);
-router.get('/courses/:courseCode/classes', protect, requireRole([ROLES.LEARNING_ADMIN]), getClassesByCourseCode);
-router.get('/class-detail-reports', protect, requireRole([ROLES.LEARNING_ADMIN]), getClassDetailReport);
-router.put('/class-detail-reports', protect, requireRole([ROLES.LEARNING_ADMIN]), upsertClassDetailReport);
+router.get(
+  "/learning-paths/:id",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]),
+  getLearningPathById,
+);
+router.put(
+  "/learning-paths/:id",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  updateLearningPath,
+);
+router.delete(
+  "/learning-paths/:id",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  deleteLearningPath,
+);
+router.get(
+  "/learning-paths/:id/enrollments",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]),
+  getLearningPathEnrollments,
+);
+router.delete(
+  "/learning-paths/:id/enrollments/:enrollmentId",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]),
+  removeEnrollmentFromLearningPath,
+);
+router.get(
+  "/courses/:courseCode/classes",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  getClassesByCourseCode,
+);
+router.get(
+  "/class-detail-reports",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  getClassDetailReport,
+);
+router.put(
+  "/class-detail-reports",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  upsertClassDetailReport,
+);
 
 router.post(
-  '/enrollments',
+  "/enrollments",
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['learningPathId', 'selectedLearners']),
-  createEnrollments
+  requireFields(["learningPathId", "selectedLearners"]),
+  createEnrollments,
 );
 router.post(
-  '/class-enrollments',
+  "/class-enrollments",
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['learningPathId', 'courseCode', 'class', 'enrollmentIds']),
-  assignClassEnrollments
-);
-router.get('/assignment-reports', protect, requireRole([ROLES.LEARNING_ADMIN]), getAssignmentReports);
-router.patch(
-  '/assignment-reports/:id/status',
-  protect,
-  requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['status']),
-  updateAssignmentReportStatus
+  requireFields(["learningPathId", "courseCode", "class", "enrollmentIds"]),
+  assignClassEnrollments,
 );
 router.get(
-  '/employee-search-options',
+  "/assignment-reports",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  getAssignmentReports,
+);
+router.patch(
+  "/assignment-reports/:id/status",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  requireFields(["status"]),
+  updateAssignmentReportStatus,
+);
+router.get(
+  "/employee-search-options",
   protect,
   requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]),
-  getAssignableEmployeeSearchOptions
+  getAssignableEmployeeSearchOptions,
 );
 router.post(
-  '/employee-search',
+  "/employee-search",
   protect,
   requireRole([ROLES.LEARNING_ADMIN, ROLES.SUPER_ADMIN]),
-  searchAssignableEmployees
+  searchAssignableEmployees,
 );
-router.get('/reports/summary', protect, requireRole([ROLES.LEARNING_ADMIN]), getLearningSummaryReport);
-router.get('/certificate-settings', protect, requireRole([ROLES.LEARNING_ADMIN]), getCertificateCustomizationPaths);
+router.get(
+  "/reports/summary",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  getLearningSummaryReport,
+);
+router.get(
+  "/certificate-settings",
+  protect,
+  requireRole([ROLES.LEARNING_ADMIN]),
+  getCertificateCustomizationPaths,
+);
 router.put(
-  '/learning-paths/:id/certificate-signature',
+  "/learning-paths/:id/certificate-signature",
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  requireFields(['signerName', 'signerTitle']),
-  updateLearningPathCertificateSignature
+  requireFields(["signerName", "signerTitle"]),
+  updateLearningPathCertificateSignature,
 );
 router.post(
-  '/learning-paths/:id/certificate-preview',
+  "/learning-paths/:id/certificate-preview",
   protect,
   requireRole([ROLES.LEARNING_ADMIN]),
-  previewLearningPathCertificate
+  previewLearningPathCertificate,
 );
 
 export default router;

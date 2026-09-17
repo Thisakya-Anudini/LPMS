@@ -643,6 +643,44 @@ export const learningApi = {
       },
     );
   },
+  getLearningPathEnrollments(token: string, learningPathId: string) {
+    return request<{
+      learningPath: {
+        id: string;
+        title: string;
+        description: string;
+        category: string;
+        total_duration: string;
+        status: string;
+      };
+      enrollments: Array<{
+        enrollment_id: string;
+        status: string;
+        progress: number;
+        enrolled_at: string;
+        completed_at?: string | null;
+        principal_id: string;
+        name: string;
+        email: string;
+        employee_number: string;
+        designation: string;
+        grade_name: string;
+      }>;
+    }>(`/learning-paths/${learningPathId}/enrollments`, { token });
+  },
+  removeLearningPathEnrollment(
+    token: string,
+    learningPathId: string,
+    enrollmentId: string,
+  ) {
+    return request<{ success: boolean; message: string }>(
+      `/learning-paths/${learningPathId}/enrollments/${enrollmentId}`,
+      {
+        method: "DELETE",
+        token,
+      },
+    );
+  },
 };
 
 export const supervisorApi = {
