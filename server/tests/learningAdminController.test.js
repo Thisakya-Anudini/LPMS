@@ -406,6 +406,8 @@ describe("LEARNING ADMIN CONTROLLER EXPORTS", () => {
     "updateLearningPathCertificateSignature",
     "previewLearningPathCertificate",
     "deleteLearningPath",
+    "getLearningPathEnrollments",
+    "removeEnrollmentFromLearningPath",
     "createEnrollments",
     "getAssignmentReports",
     "updateAssignmentReportStatus",
@@ -2814,6 +2816,122 @@ describe("normalizeErpCourseCatalog (private helper)", () => {
     ];
     const catalog = normalizeErpCourseCatalog(rows);
     expect(catalog.get("C-001")).toBeDefined();
+  });
+});
+
+// GET & REMOVE LEARNING PATH ENROLLMENTS TESTING
+
+describe("GET LEARNING PATH ENROLLMENTS (ADMIN)", () => {
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({ params: { id: "missing-lp" } });
+    const res = createMockRes();
+    await learningAdminController.getLearningPathEnrollments(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("should return enrollments for the specified learning path", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "lp-1", title: "Web Basics", status: "ACTIVE" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            enrollment_id: "en-1",
+            status: "IN_PROGRESS",
+            progress: 50,
+            principal_id: "p-1",
+            name: "John Doe",
+            email: "john@example.com",
+            employee_number: "EMP001",
+            designation: "Developer",
+            grade_name: "G1",
+          },
+        ],
+        rowCount: 1,
+      });
+
+    const req = createMockReq({ params: { id: "lp-1" } });
+    const res = createMockRes();
+    await learningAdminController.getLearningPathEnrollments(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.learningPath.title).toBe("Web Basics");
+    expect(res.body.enrollments).toHaveLength(1);
+    expect(res.body.enrollments[0].employee_number).toBe("EMP001");
+  });
+});
+
+describe("REMOVE ENROLLMENT FROM LEARNING PATH (ADMIN)", () => {
+  it("should return 404 when learning path is not found", async () => {
+    vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({
+      params: { id: "missing-lp", enrollmentId: "en-1" },
+    });
+    const res = createMockRes();
+    await learningAdminController.removeEnrollmentFromLearningPath(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("should return 404 when enrollment is not found for the path", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "lp-1", title: "Web Basics" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    const req = createMockReq({
+      params: { id: "lp-1", enrollmentId: "missing-en" },
+    });
+    const res = createMockRes();
+    await learningAdminController.removeEnrollmentFromLearningPath(req, res);
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("should delete enrollment, notify learner, and record audit log", async () => {
+    vi.mocked(query)
+      .mockResolvedValueOnce({
+        rows: [{ id: "lp-1", title: "Web Basics" }],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "en-1",
+            principal_id: "p-1",
+            employee_number: "EMP001",
+            learner_name: "John Doe",
+          },
+        ],
+        rowCount: 1,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+    const req = createMockReq({
+      params: { id: "lp-1", enrollmentId: "en-1" },
+      user: {
+        id: "11111111-1111-4111-8111-111111111111",
+        role: "LEARNING_ADMIN",
+      },
+    });
+    const res = createMockRes();
+    await learningAdminController.removeEnrollmentFromLearningPath(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toContain("successfully");
   });
 });
 
