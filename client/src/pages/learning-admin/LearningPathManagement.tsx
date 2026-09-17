@@ -281,6 +281,7 @@ export function LearningPathManagement({
   >([]);
   const [enrolledLearnersLoading, setEnrolledLearnersLoading] = useState(false);
   const [learnerSearchQuery, setLearnerSearchQuery] = useState("");
+  const [learnerDesignationFilter, setLearnerDesignationFilter] = useState("");
   const [learnerPendingDelete, setLearnerPendingDelete] =
     useState<EnrolledPathLearner | null>(null);
   const [learnerRemoving, setLearnerRemoving] = useState(false);
@@ -588,17 +589,34 @@ export function LearningPathManagement({
     };
   }, [filteredPaths, currentPathPage, pathPageSize]);
 
+  const enrolledDesignationOptions = useMemo(() => {
+    const unique = Array.from(
+      new Set(
+        enrolledLearners
+          .map((l) => l.designation?.trim())
+          .filter((d): d is string => Boolean(d)),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+    return unique;
+  }, [enrolledLearners]);
+
   const filteredEnrolledLearners = useMemo(() => {
-    if (!learnerSearchQuery.trim()) return enrolledLearners;
     const q = learnerSearchQuery.toLowerCase().trim();
-    return enrolledLearners.filter(
-      (item) =>
-        item.name.toLowerCase().includes(q) ||
-        item.employee_number.toLowerCase().includes(q) ||
-        (item.designation && item.designation.toLowerCase().includes(q)) ||
-        (item.email && item.email.toLowerCase().includes(q)),
-    );
-  }, [enrolledLearners, learnerSearchQuery]);
+    return enrolledLearners.filter((item) => {
+      const matchesSearch =
+        !q ||
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.employee_number &&
+          item.employee_number.toLowerCase().includes(q));
+
+      const matchesDesignation =
+        !learnerDesignationFilter ||
+        item.designation?.trim().toLowerCase() ===
+          learnerDesignationFilter.trim().toLowerCase();
+
+      return matchesSearch && matchesDesignation;
+    });
+  }, [enrolledLearners, learnerSearchQuery, learnerDesignationFilter]);
 
   const toStages = (stages: StageForm[]) =>
     stages
@@ -913,6 +931,7 @@ export function LearningPathManagement({
   const handleOpenManageLearners = async (path: LearningPathRow) => {
     setManageLearnersPath(path);
     setLearnerSearchQuery("");
+    setLearnerDesignationFilter("");
     setLearnerPendingDelete(null);
     setEnrolledLearnersLoading(true);
     try {
@@ -2781,17 +2800,40 @@ export function LearningPathManagement({
               </button>
             </div>
 
-            {/* Filter Search Bar */}
+            {/* Filter & Search Bar */}
             <div className="border-b border-slate-200 bg-white px-6 py-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Filter by employee number, name, designation, or email..."
-                  value={learnerSearchQuery}
-                  onChange={(e) => setLearnerSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-xs text-slate-800 placeholder-slate-400 shadow-inner transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-400"
-                />
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                {/* Search: Name and Employee Number ONLY */}
+                <div className="relative flex-1 w-full">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search by employee number or name..."
+                    value={learnerSearchQuery}
+                    onChange={(e) => setLearnerSearchQuery(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-xs font-medium text-slate-800 placeholder-slate-400 shadow-inner transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-400"
+                  />
+                </div>
+
+                {/* Designation Dropdown Filter */}
+                <div className="w-full sm:w-64">
+                  <select
+                    value={learnerDesignationFilter}
+                    onChange={(e) =>
+                      setLearnerDesignationFilter(e.target.value)
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 px-3 text-xs font-medium text-slate-800 shadow-inner transition focus:border-primary-400 focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary-400"
+                  >
+                    <option value="">
+                      All Designations ({enrolledLearners.length})
+                    </option>
+                    {enrolledDesignationOptions.map((desig) => (
+                      <option key={desig} value={desig}>
+                        {desig}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 

@@ -1366,8 +1366,8 @@ export const getLearningPathEnrollments = async (req, res) => {
         en.enrolled_at,
         en.completed_at,
         ap.id AS principal_id,
-        COALESCE(e.name, ap.name, en.learner_name) AS name,
-        COALESCE(e.email, ap.email, en.learner_email) AS email,
+        COALESCE(ap.name, en.learner_name) AS name,
+        COALESCE(ap.email, en.learner_email) AS email,
         COALESCE(e.employee_number, en.employee_number) AS employee_number,
         COALESCE(e.designation, en.learner_designation) AS designation,
         COALESCE(e.grade_name, en.learner_grade_name) AS grade_name
