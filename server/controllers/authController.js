@@ -1,23 +1,27 @@
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
-import { query } from '../db.js';
-import { ROLES } from '../constants/roles.js';
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import { query } from "../db.js";
+import { ROLES } from "../constants/roles.js";
 import {
   addDays,
   getRefreshTokenTtlDays,
   hashToken,
   signAccessToken,
   signRefreshToken,
-  verifyToken
-} from '../utils/auth.js';
-import { sendError } from '../utils/http.js';
-import { fetchEmployeeDetailsForServiceNo, fetchEmployeeSubordinates } from '../utils/erpClient.js';
+  verifyToken,
+} from "../utils/auth.js";
+import { sendError } from "../utils/http.js";
+import {
+  fetchEmployeeDetailsForServiceNo,
+  fetchEmployeeSubordinates,
+  getErpEmployeeDirectoryMap,
+} from "../utils/erpClient.js";
 import {
   buildTemporaryErpLearner,
   ERP_LEARNER_AUTH_SOURCE,
   isTemporaryErpLearnerAuth,
-  isValidTemporaryErpLearnerPassword
-} from '../users/learner.js';
+  isValidTemporaryErpLearnerPassword,
+} from "../users/learner.js";
 
 const mapPrincipal = (row) => ({
   id: row.id,
@@ -25,7 +29,7 @@ const mapPrincipal = (row) => ({
   role: row.role === ROLES.SUPERVISOR ? ROLES.EMPLOYEE : row.role,
   name: row.name,
   principalType: row.principal_type,
-  mustChangePassword: row.must_change_password
+  mustChangePassword: row.must_change_password,
 });
 
 const getPrincipalByEmail = async (email) => {
@@ -36,7 +40,7 @@ const getPrincipalByEmail = async (email) => {
       WHERE email = $1 AND is_active = TRUE
       LIMIT 1
     `,
-    [email]
+    [email],
   );
 
   return result.rows[0] || null;
@@ -52,7 +56,7 @@ const createRefreshSession = async (principal) => {
       INSERT INTO refresh_tokens (id, principal_id, token_hash, expires_at)
       VALUES ($1, $2, $3, $4)
     `,
-    [tokenId, principal.id, hashToken(refreshToken), expiresAt]
+    [tokenId, principal.id, hashToken(refreshToken), expiresAt],
   );
 
   return refreshToken;
@@ -65,10 +69,16 @@ const sanitizePrincipal = (principal) => ({
   name: principal.name,
   principalType: principal.principalType,
   mustChangePassword: principal.mustChangePassword,
-  authSource: principal.authSource || 'SYSTEM',
+  authSource: principal.authSource || "SYSTEM",
   employeeNo: principal.employeeNo || null,
-  isSupervisor: typeof principal.isSupervisor === 'boolean' ? principal.isSupervisor : false,
-  isLearningAdmin: typeof principal.isLearningAdmin === 'boolean' ? principal.isLearningAdmin : false
+  isSupervisor:
+    typeof principal.isSupervisor === "boolean"
+      ? principal.isSupervisor
+      : false,
+  isLearningAdmin:
+    typeof principal.isLearningAdmin === "boolean"
+      ? principal.isLearningAdmin
+      : false,
 });
 
 const mapLearnerName = (detailsResponse, fallbackName) => {
@@ -81,8 +91,10 @@ const mapLearnerName = (detailsResponse, fallbackName) => {
     return String(row.employeeName).trim();
   }
 
-  const initials = row.employeeInitials ? String(row.employeeInitials).trim() : '';
-  const surname = row.employeeSurname ? String(row.employeeSurname).trim() : '';
+  const initials = row.employeeInitials
+    ? String(row.employeeInitials).trim()
+    : "";
+  const surname = row.employeeSurname ? String(row.employeeSurname).trim() : "";
   const merged = `${initials} ${surname}`.trim();
   return merged || fallbackName;
 };
@@ -99,7 +111,7 @@ const hasLearningAdminAssignment = async (employeeNo) => {
       WHERE employee_number = $1
       LIMIT 1
     `,
-    [employeeNo]
+    [employeeNo],
   );
 
   return assignment.rowCount > 0;
@@ -114,17 +126,20 @@ const resolveEmployeeContextByNumber = async (employeeNo) => {
   let isSupervisor = false;
   try {
     const subordinates = await fetchEmployeeSubordinates(normalizedEmployeeNo);
-    isSupervisor = Boolean(Array.isArray(subordinates?.data) && subordinates.data.length > 0);
+    isSupervisor = Boolean(
+      Array.isArray(subordinates?.data) && subordinates.data.length > 0,
+    );
   } catch {
     isSupervisor = false;
   }
 
-  const isLearningAdmin = await hasLearningAdminAssignment(normalizedEmployeeNo);
+  const isLearningAdmin =
+    await hasLearningAdminAssignment(normalizedEmployeeNo);
 
   return {
     employeeNo: normalizedEmployeeNo,
     isSupervisor,
-    isLearningAdmin
+    isLearningAdmin,
   };
 };
 
@@ -136,7 +151,7 @@ const resolveEmployeeContext = async (principalId) => {
       WHERE principal_id = $1
       LIMIT 1
     `,
-    [principalId]
+    [principalId],
   );
 
   const employeeNo = employeeResult.rows[0]?.employee_number
@@ -147,58 +162,76 @@ const resolveEmployeeContext = async (principalId) => {
 
 export const login = async (req, res) => {
   const { email, username, password } = req.body;
-  const identifier = String(username || email || '').trim();
+  const identifier = String(username || email || "").trim();
 
   const principal = await getPrincipalByEmail(identifier.toLowerCase());
   if (!principal) {
     const temporaryLearner = buildTemporaryErpLearner(identifier);
-    if (!temporaryLearner || !isValidTemporaryErpLearnerPassword(identifier, password)) {
-      return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
+    if (
+      !temporaryLearner ||
+      !isValidTemporaryErpLearnerPassword(identifier, password)
+    ) {
+      return sendError(res, 401, "INVALID_CREDENTIALS", "Invalid credentials.");
     }
 
     let detailsResponse = null;
     try {
-      detailsResponse = await fetchEmployeeDetailsForServiceNo(temporaryLearner.employeeNo);
+      detailsResponse = await fetchEmployeeDetailsForServiceNo(
+        temporaryLearner.employeeNo,
+      );
     } catch {
       // Keep temporary learner login available until external auth is integrated.
     }
-    const temporaryEmployeeContext = await resolveEmployeeContextByNumber(temporaryLearner.employeeNo);
+    const temporaryEmployeeContext = await resolveEmployeeContextByNumber(
+      temporaryLearner.employeeNo,
+    );
+    const directoryMap = await getErpEmployeeDirectoryMap();
     const resolvedEmail =
-      detailsResponse?.data?.[0]?.email && String(detailsResponse.data[0].email).trim()
+      directoryMap.get(temporaryLearner.employeeNo) ||
+      (detailsResponse?.data?.[0]?.email &&
+      String(detailsResponse.data[0].email).trim()
         ? String(detailsResponse.data[0].email).trim().toLowerCase()
-        : temporaryLearner.email;
+        : temporaryLearner.email);
 
     const normalizedPrincipal = {
       id: temporaryLearner.id,
       email: resolvedEmail,
       role: ROLES.EMPLOYEE,
       name: mapLearnerName(detailsResponse, temporaryLearner.employeeNo),
-      principalType: 'EMPLOYEE',
+      principalType: "EMPLOYEE",
       mustChangePassword: false,
       authSource: ERP_LEARNER_AUTH_SOURCE,
       employeeNo: temporaryEmployeeContext.employeeNo,
       isSupervisor: temporaryEmployeeContext.isSupervisor,
-      isLearningAdmin: temporaryEmployeeContext.isLearningAdmin
+      isLearningAdmin: temporaryEmployeeContext.isLearningAdmin,
     };
 
     const accessToken = signAccessToken(normalizedPrincipal);
-    const refreshToken = signRefreshToken(normalizedPrincipal, crypto.randomUUID());
+    const refreshToken = signRefreshToken(
+      normalizedPrincipal,
+      crypto.randomUUID(),
+    );
 
     return res.status(200).json({
       accessToken,
       refreshToken,
-      user: sanitizePrincipal(normalizedPrincipal)
+      user: sanitizePrincipal(normalizedPrincipal),
     });
   }
 
-  const isValidPassword = await bcrypt.compare(password, principal.password_hash);
+  const isValidPassword = await bcrypt.compare(
+    password,
+    principal.password_hash,
+  );
   if (!isValidPassword) {
-    return sendError(res, 401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
+    return sendError(res, 401, "INVALID_CREDENTIALS", "Invalid credentials.");
   }
 
   const normalizedPrincipal = mapPrincipal(principal);
   if (normalizedPrincipal.role === ROLES.EMPLOYEE) {
-    const employeeContext = await resolveEmployeeContext(normalizedPrincipal.id);
+    const employeeContext = await resolveEmployeeContext(
+      normalizedPrincipal.id,
+    );
     normalizedPrincipal.employeeNo = employeeContext.employeeNo;
     normalizedPrincipal.isSupervisor = employeeContext.isSupervisor;
     normalizedPrincipal.isLearningAdmin = employeeContext.isLearningAdmin;
@@ -209,21 +242,26 @@ export const login = async (req, res) => {
   return res.status(200).json({
     accessToken,
     refreshToken,
-    user: sanitizePrincipal(normalizedPrincipal)
+    user: sanitizePrincipal(normalizedPrincipal),
   });
 };
 
 export const refresh = async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'refreshToken is required.');
+    return sendError(res, 400, "VALIDATION_ERROR", "refreshToken is required.");
   }
 
   let decoded;
   try {
     decoded = verifyToken(refreshToken);
   } catch {
-    return sendError(res, 401, 'INVALID_REFRESH_TOKEN', 'Refresh token is invalid or expired.');
+    return sendError(
+      res,
+      401,
+      "INVALID_REFRESH_TOKEN",
+      "Refresh token is invalid or expired.",
+    );
   }
 
   if (isTemporaryErpLearnerAuth(decoded.authSource)) {
@@ -237,7 +275,7 @@ export const refresh = async (req, res) => {
       authSource: decoded.authSource,
       employeeNo: decoded.employeeNo,
       isSupervisor: Boolean(decoded.isSupervisor),
-      isLearningAdmin: Boolean(decoded.isLearningAdmin)
+      isLearningAdmin: Boolean(decoded.isLearningAdmin),
     };
 
     const accessToken = signAccessToken(principal);
@@ -252,16 +290,26 @@ export const refresh = async (req, res) => {
       WHERE rt.id = $1 AND rt.token_hash = $2
       LIMIT 1
     `,
-    [decoded.tokenId, hashToken(refreshToken)]
+    [decoded.tokenId, hashToken(refreshToken)],
   );
 
   const tokenRow = stored.rows[0];
   if (!tokenRow) {
-    return sendError(res, 401, 'INVALID_REFRESH_TOKEN', 'Refresh token is invalid.');
+    return sendError(
+      res,
+      401,
+      "INVALID_REFRESH_TOKEN",
+      "Refresh token is invalid.",
+    );
   }
 
   if (tokenRow.revoked_at || new Date(tokenRow.expires_at) < new Date()) {
-    return sendError(res, 401, 'INVALID_REFRESH_TOKEN', 'Refresh token has expired or was revoked.');
+    return sendError(
+      res,
+      401,
+      "INVALID_REFRESH_TOKEN",
+      "Refresh token has expired or was revoked.",
+    );
   }
 
   const principal = {
@@ -270,7 +318,7 @@ export const refresh = async (req, res) => {
     name: tokenRow.name,
     role: tokenRow.role,
     principalType: tokenRow.principal_type,
-    mustChangePassword: tokenRow.must_change_password
+    mustChangePassword: tokenRow.must_change_password,
   };
   if (principal.role === ROLES.EMPLOYEE) {
     const employeeContext = await resolveEmployeeContext(principal.id);
@@ -286,14 +334,14 @@ export const refresh = async (req, res) => {
 export const logout = async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'refreshToken is required.');
+    return sendError(res, 400, "VALIDATION_ERROR", "refreshToken is required.");
   }
 
   let decoded;
   try {
     decoded = verifyToken(refreshToken);
   } catch {
-    return sendError(res, 200, 'OK', 'Already logged out.');
+    return sendError(res, 200, "OK", "Already logged out.");
   }
 
   if (isTemporaryErpLearnerAuth(decoded.authSource)) {
@@ -306,7 +354,7 @@ export const logout = async (req, res) => {
       SET revoked_at = NOW()
       WHERE id = $1 AND token_hash = $2
     `,
-    [decoded.tokenId, hashToken(refreshToken)]
+    [decoded.tokenId, hashToken(refreshToken)],
   );
 
   return res.status(200).json({ success: true });
@@ -325,8 +373,8 @@ export const me = async (req, res) => {
         authSource: req.user.authSource,
         employeeNo: req.user.employeeNo || null,
         isSupervisor: Boolean(req.user.isSupervisor),
-        isLearningAdmin: Boolean(req.user.isLearningAdmin)
-      }
+        isLearningAdmin: Boolean(req.user.isLearningAdmin),
+      },
     });
   }
 
@@ -337,12 +385,12 @@ export const me = async (req, res) => {
       WHERE id = $1 AND is_active = TRUE
       LIMIT 1
     `,
-    [req.user.id]
+    [req.user.id],
   );
 
   const principal = result.rows[0];
   if (!principal) {
-    return sendError(res, 404, 'NOT_FOUND', 'User not found.');
+    return sendError(res, 404, "NOT_FOUND", "User not found.");
   }
 
   const mappedPrincipal = mapPrincipal(principal);
@@ -356,8 +404,8 @@ export const me = async (req, res) => {
   return res.status(200).json({
     user: {
       ...sanitizePrincipal(mappedPrincipal),
-      mustChangePassword: principal.must_change_password
-    }
+      mustChangePassword: principal.must_change_password,
+    },
   });
 };
 
@@ -366,14 +414,19 @@ export const changePassword = async (req, res) => {
     return sendError(
       res,
       400,
-      'NOT_SUPPORTED',
-      'Password change is not enabled for temporary ERP learner authentication.'
+      "NOT_SUPPORTED",
+      "Password change is not enabled for temporary ERP learner authentication.",
     );
   }
 
   const { oldPassword, newPassword } = req.body;
-  if (typeof newPassword !== 'string' || newPassword.length < 8) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'newPassword must be at least 8 characters.');
+  if (typeof newPassword !== "string" || newPassword.length < 8) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "newPassword must be at least 8 characters.",
+    );
   }
 
   const principalResult = await query(
@@ -383,16 +436,24 @@ export const changePassword = async (req, res) => {
       WHERE id = $1 AND is_active = TRUE
       LIMIT 1
     `,
-    [req.user.id]
+    [req.user.id],
   );
   const principal = principalResult.rows[0];
   if (!principal) {
-    return sendError(res, 404, 'NOT_FOUND', 'User not found.');
+    return sendError(res, 404, "NOT_FOUND", "User not found.");
   }
 
-  const isOldPasswordValid = await bcrypt.compare(oldPassword, principal.password_hash);
+  const isOldPasswordValid = await bcrypt.compare(
+    oldPassword,
+    principal.password_hash,
+  );
   if (!isOldPasswordValid) {
-    return sendError(res, 401, 'INVALID_CREDENTIALS', 'Current password is incorrect.');
+    return sendError(
+      res,
+      401,
+      "INVALID_CREDENTIALS",
+      "Current password is incorrect.",
+    );
   }
 
   const newPasswordHash = await bcrypt.hash(newPassword, 10);
@@ -402,7 +463,7 @@ export const changePassword = async (req, res) => {
       SET password_hash = $2, must_change_password = FALSE, updated_at = NOW()
       WHERE id = $1
     `,
-    [principal.id, newPasswordHash]
+    [principal.id, newPasswordHash],
   );
 
   await query(
@@ -411,7 +472,7 @@ export const changePassword = async (req, res) => {
       SET revoked_at = NOW()
       WHERE principal_id = $1 AND revoked_at IS NULL
     `,
-    [principal.id]
+    [principal.id],
   );
 
   return res.status(200).json({
@@ -421,7 +482,7 @@ export const changePassword = async (req, res) => {
       name: principal.name,
       role: principal.role,
       principalType: principal.principal_type,
-      mustChangePassword: false
-    }
+      mustChangePassword: false,
+    },
   });
 };
