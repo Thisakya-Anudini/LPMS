@@ -30,6 +30,7 @@ vi.mock("../utils/erpClient.js", () => ({
   fetchEmployeeDetailsForServiceNo: vi
     .fn()
     .mockRejectedValue(new Error("No ERP mock")),
+  getErpEmployeeDirectoryMap: vi.fn().mockResolvedValue(new Map()),
 }));
 
 vi.mock("../constants/roles.js", () => {
@@ -54,7 +55,10 @@ import { query } from "../db.js";
 import { sendError } from "../utils/http.js";
 import { logAudit } from "../utils/audit.js";
 import bcrypt from "bcryptjs";
-import { fetchEmployeeDetailsForServiceNo } from "../utils/erpClient.js";
+import {
+  fetchEmployeeDetailsForServiceNo,
+  getErpEmployeeDirectoryMap,
+} from "../utils/erpClient.js";
 import * as superAdminController from "../controllers/superAdminController.js";
 
 // Test helpers
@@ -642,15 +646,14 @@ describe("GET ASSIGNED LEARNING ADMINS", () => {
       rowCount: 1,
     });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      data: [{ email: "john.real@slt.com.lk" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-001", "john.real@slt.com.lk"]]),
+    );
 
     const req = createMockReq();
     const res = createMockRes();
     await superAdminController.getAssignedLearningAdmins(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
     expect(res.body.learningAdmins[0].email).toBe("john.real@slt.com.lk");
   });
 
@@ -673,9 +676,7 @@ describe("GET ASSIGNED LEARNING ADMINS", () => {
       rowCount: 1,
     });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
-      new Error("ERP Network Error"),
-    );
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(new Map());
 
     const req = createMockReq();
     const res = createMockRes();
@@ -1057,15 +1058,14 @@ describe("ASSIGN LEARNING ADMIN", () => {
       })
       .mockResolvedValueOnce({ rowCount: 1 });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      data: [{ email: "john.real@slt.com.lk" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-001", "john.real@slt.com.lk"]]),
+    );
 
     const req = createMockReq({ body: { employeeNumber: "EMP-001" } });
     const res = createMockRes();
     await superAdminController.assignLearningAdmin(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
     expect(res.body.assignment.email).toBe("john.real@slt.com.lk");
   });
 });
@@ -1470,15 +1470,14 @@ describe("GET ALL LEARNERS", () => {
         rowCount: 1,
       });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      data: [{ email: "john.real@slt.com.lk" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-001", "john.real@slt.com.lk"]]),
+    );
 
     const req = createMockReq({ query: {} });
     const res = createMockRes();
     await superAdminController.getAllLearners(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
     expect(res.body.learners[0].email).toBe("john.real@slt.com.lk");
   });
 
@@ -1508,15 +1507,12 @@ describe("GET ALL LEARNERS", () => {
         rowCount: 1,
       });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValueOnce(
-      new Error("ERP Network Error"),
-    );
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(new Map());
 
     const req = createMockReq({ query: {} });
     const res = createMockRes();
     await superAdminController.getAllLearners(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
     expect(res.body.learners[0].email).toBe("old@fallback.local");
   });
 });
@@ -1582,15 +1578,14 @@ describe("GET LEARNER LEARNING PATHS", () => {
         rowCount: 1,
       });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      data: [{ email: "john.real@slt.com.lk" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-123", "john.real@slt.com.lk"]]),
+    );
 
     const req = createMockReq({ params: { principalId: "employee-1" } });
     const res = createMockRes();
     await superAdminController.getLearnerLearningPaths(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-123");
     expect(res.statusCode).toBe(200);
     expect(res.body.learner.id).toBe("employee-1");
 
@@ -1786,15 +1781,14 @@ describe("GET LEARNING PATH ENROLLMENTS", () => {
         rowCount: 1,
       });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      data: [{ email: "john.real@slt.com.lk" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-001", "john.real@slt.com.lk"]]),
+    );
 
     const req = createMockReq({ params: { learningPathId: "lp-1" } });
     const res = createMockRes();
     await superAdminController.getLearningPathEnrollments(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
     expect(res.body.enrollments).toHaveLength(1);
 
     const enrollment = res.body.enrollments[0];

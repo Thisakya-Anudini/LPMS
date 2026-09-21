@@ -41,6 +41,7 @@ vi.mock("../utils/erpClient.js", () => ({
     .fn()
     .mockRejectedValue(new Error("No ERP mock")),
   fetchOrganizationList: vi.fn().mockRejectedValue(new Error("No ERP mock")),
+  getErpEmployeeDirectoryMap: vi.fn().mockResolvedValue(new Map()),
 }));
 
 vi.mock("../utils/certificatePdf.js", () => ({
@@ -79,6 +80,7 @@ import {
   fetchEmployeeDetailsForServiceNo,
   fetchEmployeesByPartialName,
   fetchOrganizationList,
+  getErpEmployeeDirectoryMap,
 } from "../utils/erpClient.js";
 import { renderCertificatePdf } from "../utils/certificatePdf.js";
 import {
@@ -1816,7 +1818,7 @@ describe("SEARCH ASSIGNABLE EMPLOYEES", () => {
     expect(res.body.error.code).toBe("ERP_REQUEST_FAILED");
   });
 
-  it("should enrich batch search results with real emails from fetchEmployeeDetailsForServiceNo", async () => {
+  it("should enrich batch search results with real emails from getErpEmployeeDirectoryMap", async () => {
     vi.mocked(query).mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     vi.mocked(fetchEmployeesByFilters).mockResolvedValueOnce({
@@ -1829,15 +1831,15 @@ describe("SEARCH ASSIGNABLE EMPLOYEES", () => {
       ],
     });
 
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      data: [{ email: "john.real@slt.com.lk" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-001", "john.real@slt.com.lk"]]),
+    );
 
     const req = createMockReq({ body: { designation: "Developer" } });
     const res = createMockRes();
     await learningAdminController.searchAssignableEmployees(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
+    expect(res.statusCode).toBe(200);
     expect(res.body.employees[0].email).toBe("john.real@slt.com.lk");
   });
 });
@@ -1926,11 +1928,9 @@ describe("GET CLASS ASSIGNMENT OPTIONS", () => {
   });
 
   it("should prefer ERP email in class assignment learner options", async () => {
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      success: true,
-      message: "Success",
-      data: [{ employeeNumber: "EMP-001", email: "erp.learner@example.com" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-001", "erp.learner@example.com"]]),
+    );
 
     vi.mocked(query).mockImplementation(async (sql) => {
       if (
@@ -1999,7 +1999,6 @@ describe("GET CLASS ASSIGNMENT OPTIONS", () => {
     const res = createMockRes();
     await learningAdminController.getClassAssignmentOptions(req, res);
 
-    expect(fetchEmployeeDetailsForServiceNo).toHaveBeenCalledWith("EMP-001");
     expect(res.statusCode).toBe(200);
     expect(res.body.learners[0].email).toBe("erp.learner@example.com");
   });
@@ -2184,11 +2183,9 @@ describe("ASSIGN CLASS ENROLLMENTS", () => {
   });
 
   it("should create class enrollment assignment (returns 201)", async () => {
-    vi.mocked(fetchEmployeeDetailsForServiceNo).mockResolvedValueOnce({
-      success: true,
-      message: "Success",
-      data: [{ employeeNumber: "EMP-001", email: "erp.class@example.com" }],
-    });
+    vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValueOnce(
+      new Map([["EMP-001", "erp.class@example.com"]]),
+    );
 
     vi.mocked(query).mockImplementation(async (sql) => {
       if (sql && sql.includes("information_schema")) {
