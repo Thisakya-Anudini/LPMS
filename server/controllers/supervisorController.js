@@ -1,10 +1,11 @@
-import { query } from '../db.js';
-import { logAudit } from '../utils/audit.js';
-import { sendError } from '../utils/http.js';
+import { query } from "../db.js";
+import { logAudit } from "../utils/audit.js";
+import { sendError } from "../utils/http.js";
 import {
   ASSIGNMENT_REPORT_SOURCE,
-  createAssignmentReport
-} from '../utils/assignmentReports.js';
+  createAssignmentReport,
+} from "../utils/assignmentReports.js";
+import { getErpEmployeeDirectoryMap } from "../utils/erpClient.js";
 
 export const getTeam = async (req, res) => {
   const result = await query(
@@ -15,10 +16,16 @@ export const getTeam = async (req, res) => {
       WHERE e.supervisor_id = $1
       ORDER BY ap.name ASC
     `,
-    [req.user.id]
+    [req.user.id],
   );
 
-  return res.status(200).json({ team: result.rows });
+  const directoryMap = await getErpEmployeeDirectoryMap();
+  const team = result.rows.map((member) => ({
+    ...member,
+    email: directoryMap.get(member.employee_number) || member.email,
+  }));
+
+  return res.status(200).json({ team });
 };
 
 export const getTeamProgress = async (req, res) => {
@@ -35,7 +42,7 @@ export const getTeamProgress = async (req, res) => {
       GROUP BY ap.id, ap.name, ap.email
       ORDER BY ap.name ASC
     `,
-    [req.user.id]
+    [req.user.id],
   );
 
   return res.status(200).json({ progress: result.rows });
@@ -62,7 +69,7 @@ export const getPendingApprovals = async (req, res) => {
       WHERE e.supervisor_id = $1
       ORDER BY en.enrolled_at DESC
     `,
-    [req.user.id]
+    [req.user.id],
   );
 
   return res.status(200).json({ approvals: result.rows });
@@ -75,8 +82,16 @@ export const getSupervisorPaths = async (_req, res) => {
 
 export const enrollTeamMembers = async (req, res) => {
   const { learningPathId, employeePrincipalIds } = req.body;
-  if (!Array.isArray(employeePrincipalIds) || employeePrincipalIds.length === 0) {
-    return sendError(res, 400, 'VALIDATION_ERROR', 'employeePrincipalIds must be a non-empty array.');
+  if (
+    !Array.isArray(employeePrincipalIds) ||
+    employeePrincipalIds.length === 0
+  ) {
+    return sendError(
+      res,
+      400,
+      "VALIDATION_ERROR",
+      "employeePrincipalIds must be a non-empty array.",
+    );
   }
 
   const pathResult = await query(
@@ -86,11 +101,11 @@ export const enrollTeamMembers = async (req, res) => {
       WHERE id = $1 AND is_deleted = FALSE AND status = 'ACTIVE'
       LIMIT 1
     `,
-    [learningPathId]
+    [learningPathId],
   );
   const path = pathResult.rows[0];
   if (!path) {
-    return sendError(res, 404, 'NOT_FOUND', 'Learning path not found.');
+    return sendError(res, 404, "NOT_FOUND", "Learning path not found.");
   }
 
   const teamResult = await query(
@@ -100,9 +115,11 @@ export const enrollTeamMembers = async (req, res) => {
       JOIN auth_principals ap ON ap.id = e.principal_id
       WHERE e.supervisor_id = $1
     `,
-    [req.user.id]
+    [req.user.id],
   );
-  const teamPrincipalIds = new Set(teamResult.rows.map((row) => row.principal_id));
+  const teamPrincipalIds = new Set(
+    teamResult.rows.map((row) => row.principal_id),
+  );
 
   const inserted = [];
   const insertedLearners = [];
@@ -110,7 +127,8 @@ export const enrollTeamMembers = async (req, res) => {
     if (!teamPrincipalIds.has(principalId)) {
       continue;
     }
-    const teamMember = teamResult.rows.find((row) => row.principal_id === principalId) || null;
+    const teamMember =
+      teamResult.rows.find((row) => row.principal_id === principalId) || null;
     const created = await query(
       `
         INSERT INTO enrollments (principal_id, learning_path_id, status, progress, enrolled_at, enrollment_source)
@@ -118,24 +136,26 @@ export const enrollTeamMembers = async (req, res) => {
         ON CONFLICT (principal_id, learning_path_id) DO NOTHING
         RETURNING id, principal_id, learning_path_id, status, progress, enrolled_at
       `,
-      [principalId, learningPathId]
+      [principalId, learningPathId],
     );
     if (created.rowCount > 0) {
       inserted.push(created.rows[0]);
       insertedLearners.push({
         principalId,
-        employeeNumber: String(teamMember?.employee_number || '').trim(),
-        learnerName: String(teamMember?.name || '').trim() || 'Learner',
-        learnerEmail: String(teamMember?.email || '').trim().toLowerCase(),
-        designation: String(teamMember?.designation || '').trim() || 'Learner',
-        gradeName: String(teamMember?.grade_name || '').trim() || 'N/A'
+        employeeNumber: String(teamMember?.employee_number || "").trim(),
+        learnerName: String(teamMember?.name || "").trim() || "Learner",
+        learnerEmail: String(teamMember?.email || "")
+          .trim()
+          .toLowerCase(),
+        designation: String(teamMember?.designation || "").trim() || "Learner",
+        gradeName: String(teamMember?.grade_name || "").trim() || "N/A",
       });
       await query(
         `
           INSERT INTO notifications (principal_id, title, message, type, is_read)
           VALUES ($1, 'Enrollment Assigned', $2, 'INFO', FALSE)
         `,
-        [principalId, `Your supervisor enrolled you in "${path.title}".`]
+        [principalId, `Your supervisor enrolled you in "${path.title}".`],
       );
     }
   }
@@ -145,18 +165,18 @@ export const enrollTeamMembers = async (req, res) => {
       learningPathId,
       learningPathTitle: path.title,
       assignedByPrincipalId: req.user.id || null,
-      assignedByName: req.user.name || 'Supervisor',
-      assignedByRole: req.user.role || 'SUPERVISOR',
+      assignedByName: req.user.name || "Supervisor",
+      assignedByRole: req.user.role || "SUPERVISOR",
       assignmentSource: ASSIGNMENT_REPORT_SOURCE.SUPERVISOR,
-      learners: insertedLearners
+      learners: insertedLearners,
     });
   }
 
   await logAudit({
     actorPrincipalId: req.user.id,
-    action: 'SUPERVISOR_ENROLL_TEAM',
-    resourceType: 'ENROLLMENT',
-    metadata: { learningPathId, inserted: inserted.length }
+    action: "SUPERVISOR_ENROLL_TEAM",
+    resourceType: "ENROLLMENT",
+    metadata: { learningPathId, inserted: inserted.length },
   });
 
   return res.status(201).json({ enrollments: inserted });
@@ -176,18 +196,18 @@ export const approveEnrollment = async (req, res) => {
         )
       RETURNING id, approval_status, approval_updated_at
     `,
-    [id, req.user.id]
+    [id, req.user.id],
   );
 
   if (result.rowCount === 0) {
-    return sendError(res, 404, 'NOT_FOUND', 'Enrollment not found.');
+    return sendError(res, 404, "NOT_FOUND", "Enrollment not found.");
   }
 
   await logAudit({
     actorPrincipalId: req.user.id,
-    action: 'APPROVE_ENROLLMENT',
-    resourceType: 'ENROLLMENT',
-    resourceId: id
+    action: "APPROVE_ENROLLMENT",
+    resourceType: "ENROLLMENT",
+    resourceId: id,
   });
 
   return res.status(200).json({ enrollment: result.rows[0] });
@@ -207,18 +227,18 @@ export const rejectEnrollment = async (req, res) => {
         )
       RETURNING id, approval_status, approval_updated_at
     `,
-    [id, req.user.id]
+    [id, req.user.id],
   );
 
   if (result.rowCount === 0) {
-    return sendError(res, 404, 'NOT_FOUND', 'Enrollment not found.');
+    return sendError(res, 404, "NOT_FOUND", "Enrollment not found.");
   }
 
   await logAudit({
     actorPrincipalId: req.user.id,
-    action: 'REJECT_ENROLLMENT',
-    resourceType: 'ENROLLMENT',
-    resourceId: id
+    action: "REJECT_ENROLLMENT",
+    resourceType: "ENROLLMENT",
+    resourceId: id,
   });
 
   return res.status(200).json({ enrollment: result.rows[0] });

@@ -14,6 +14,7 @@ vi.mock("../utils/erpClient.js", () => ({
   fetchEmployeeSubordinates: vi
     .fn()
     .mockResolvedValue({ success: true, message: "", data: [] }),
+  getErpEmployeeDirectoryMap: vi.fn().mockResolvedValue(new Map()),
 }));
 
 vi.mock("../utils/auth.js", () => ({
@@ -47,6 +48,7 @@ import { query } from "../db.js";
 import {
   fetchEmployeeDetailsForServiceNo,
   fetchEmployeeSubordinates,
+  getErpEmployeeDirectoryMap,
 } from "../utils/erpClient.js";
 import {
   signAccessToken,
@@ -118,6 +120,7 @@ beforeEach(() => {
   vi.mocked(fetchEmployeeDetailsForServiceNo).mockRejectedValue(
     new Error("No ERP mock set for this test"),
   );
+  vi.mocked(getErpEmployeeDirectoryMap).mockResolvedValue(new Map());
   vi.mocked(signAccessToken).mockReturnValue("mock-access-token");
   vi.mocked(signRefreshToken).mockReturnValue("mock-refresh-token");
   vi.mocked(hashToken).mockImplementation((token) => `hashed-${token}`);

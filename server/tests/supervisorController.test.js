@@ -28,6 +28,10 @@ vi.mock("../utils/assignmentReports.js", () => ({
   createAssignmentReport: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../utils/erpClient.js", () => ({
+  getErpEmployeeDirectoryMap: vi.fn().mockResolvedValue(new Map()),
+}));
+
 // Imports (after mocks)
 
 import { query } from "../db.js";

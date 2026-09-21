@@ -3,7 +3,10 @@ import { query } from "../db.js";
 import { ALL_ROLES, ROLES } from "../constants/roles.js";
 import { sendError } from "../utils/http.js";
 import { logAudit } from "../utils/audit.js";
-import { fetchEmployeeDetailsForServiceNo } from "../utils/erpClient.js";
+import {
+  fetchEmployeeDetailsForServiceNo,
+  getErpEmployeeDirectoryMap,
+} from "../utils/erpClient.js";
 
 const hasTable = async (tableName) => {
   const result = await query(
@@ -350,27 +353,13 @@ export const getAssignedLearningAdmins = async (_req, res) => {
     `,
   );
 
-  const admins = result.rows;
-
-  const enrichedAdmins = await Promise.all(
-    admins.map(async (admin) => {
-      try {
-        if (admin.employee_number) {
-          const erpResponse = await fetchEmployeeDetailsForServiceNo(
-            admin.employee_number,
-          );
-          const erpData = erpResponse?.data?.[0];
-
-          if (erpData && erpData.email && String(erpData.email).trim()) {
-            admin.email = String(erpData.email).trim().toLowerCase();
-          }
-        }
-      } catch (err) {
-        // silently fallback to the local DB email
-      }
-      return admin;
-    }),
-  );
+  const directoryMap = await getErpEmployeeDirectoryMap();
+  const enrichedAdmins = result.rows.map((admin) => {
+    if (admin.employee_number && directoryMap.has(admin.employee_number)) {
+      admin.email = directoryMap.get(admin.employee_number);
+    }
+    return admin;
+  });
 
   return res.status(200).json({ learningAdmins: enrichedAdmins });
 };
@@ -523,19 +512,9 @@ export const assignLearningAdmin = async (req, res) => {
     metadata: { employeeNumber: normalizedEmployeeNumber },
   });
 
-  let enrichedEmail = employee.rows[0].email;
-  try {
-    const erpResponse = await fetchEmployeeDetailsForServiceNo(
-      normalizedEmployeeNumber,
-    );
-    const erpData = erpResponse?.data?.[0];
-
-    if (erpData && erpData.email && String(erpData.email).trim()) {
-      enrichedEmail = String(erpData.email).trim().toLowerCase();
-    }
-  } catch (err) {
-    // Silently fallback to the local DB email
-  }
+  const directoryMap = await getErpEmployeeDirectoryMap();
+  const enrichedEmail =
+    directoryMap.get(normalizedEmployeeNumber) || employee.rows[0].email;
 
   return res.status(200).json({
     assignment: {
@@ -692,27 +671,13 @@ export const getAllLearners = async (req, res) => {
   ]);
 
   const total = countResult.rows[0]?.total || 0;
-  const learners = learnersResult.rows;
-
-  const enrichedLearners = await Promise.all(
-    learners.map(async (learner) => {
-      try {
-        if (learner.employee_number) {
-          const erpResponse = await fetchEmployeeDetailsForServiceNo(
-            learner.employee_number,
-          );
-          const erpData = erpResponse?.data?.[0];
-
-          if (erpData && erpData.email && String(erpData.email).trim()) {
-            learner.email = String(erpData.email).trim().toLowerCase();
-          }
-        }
-      } catch (err) {
-        // Silently fallback to the Local DB email if the ERP API request fails
-      }
-      return learner;
-    }),
-  );
+  const directoryMap = await getErpEmployeeDirectoryMap();
+  const enrichedLearners = learnersResult.rows.map((learner) => {
+    if (learner.employee_number && directoryMap.has(learner.employee_number)) {
+      learner.email = directoryMap.get(learner.employee_number);
+    }
+    return learner;
+  });
 
   return res.status(200).json({
     learners: enrichedLearners,
@@ -741,25 +706,11 @@ const sendLearnerLearningPaths = async (res, principalId) => {
     return sendError(res, 404, "NOT_FOUND", "Learner not found.");
   }
 
-  let enrichedEmail = principal.rows[0].email;
+  const directoryMap = await getErpEmployeeDirectoryMap();
   const employeeNumber = principal.rows[0].employee_number;
-
-  if (employeeNumber) {
-    try {
-      const erpResponse =
-        await fetchEmployeeDetailsForServiceNo(employeeNumber);
-      const erpData = erpResponse?.data?.[0];
-      if (erpData && erpData.email && String(erpData.email).trim()) {
-        enrichedEmail = String(erpData.email).trim().toLowerCase();
-      }
-    } catch (err) {
-      console.error(
-        `Failed to fetch real email for learner ${employeeNumber}:`,
-        err.message,
-      );
-      // Silently fallback to DB email if fetch fails
-    }
-  }
+  const enrichedEmail =
+    (employeeNumber && directoryMap.get(employeeNumber)) ||
+    principal.rows[0].email;
 
   const result = await query(
     `
@@ -861,25 +812,16 @@ export const getLearningPathEnrollments = async (req, res) => {
     [learningPathId],
   );
 
-  const enrichedEnrollments = await Promise.all(
-    enrollmentsResult.rows.map(async (enrollment) => {
-      try {
-        if (enrollment.employee_number) {
-          const erpResponse = await fetchEmployeeDetailsForServiceNo(
-            enrollment.employee_number,
-          );
-          const erpData = erpResponse?.data?.[0];
-
-          if (erpData && erpData.email && String(erpData.email).trim()) {
-            enrollment.email = String(erpData.email).trim().toLowerCase();
-          }
-        }
-      } catch (err) {
-        // Silently fallback to the Local DB email if the ERP API request fails
-      }
-      return enrollment;
-    }),
-  );
+  const directoryMap = await getErpEmployeeDirectoryMap();
+  const enrichedEnrollments = enrollmentsResult.rows.map((enrollment) => {
+    if (
+      enrollment.employee_number &&
+      directoryMap.has(enrollment.employee_number)
+    ) {
+      enrollment.email = directoryMap.get(enrollment.employee_number);
+    }
+    return enrollment;
+  });
 
   return res.status(200).json({
     learningPath: learningPathResult.rows[0],
