@@ -13,8 +13,8 @@ const getErpConfig = () => ({
   password: process.env.ERP_PASSWORD,
   searchUsername: process.env.ERP_SEARCH_USERNAME || process.env.ERP_USERNAME,
   searchPassword: process.env.ERP_SEARCH_PASSWORD || process.env.ERP_PASSWORD,
-  defaultCostCenterCode: process.env.ERP_DEFAULT_COST_CENTER_CODE || '6221',
-  defaultOrganizationId: process.env.ERP_DEFAULT_ORGANIZATION_ID || 'string'
+  defaultCostCenterCode: process.env.ERP_DEFAULT_COST_CENTER_CODE || "6221",
+  defaultOrganizationId: process.env.ERP_DEFAULT_ORGANIZATION_ID || "string",
 });
 
 const parseErpResponse = (rawText) => {
@@ -32,45 +32,47 @@ const parseErpResponse = (rawText) => {
 const buildSuccessResponse = (message, data) => ({
   success: true,
   message,
-  data
+  data,
 });
 
-const postErp = async ({ url, username, password, body, method = 'POST' }) => {
+const postErp = async ({ url, username, password, body, method = "POST" }) => {
   if (!url) {
-    throw new Error('ERP URL is not configured. Set ERP_*_URL in .env.');
+    throw new Error("ERP URL is not configured. Set ERP_*_URL in .env.");
   }
   if (!username || !password) {
-    throw new Error('ERP credentials are not configured (ERP_USERNAME / ERP_PASSWORD).');
+    throw new Error(
+      "ERP credentials are not configured (ERP_USERNAME / ERP_PASSWORD).",
+    );
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const upperMethod = String(method || 'POST').toUpperCase();
+    const upperMethod = String(method || "POST").toUpperCase();
     const response = await fetch(url, {
       method: upperMethod,
       headers: {
-        accept: 'text/plain',
+        accept: "text/plain",
         UserName: username,
         Password: password,
-        'Content-Type': 'application/json'
+        "Content-Type": "application/json",
       },
-      body: upperMethod === 'GET' ? undefined : JSON.stringify(body ?? {}),
-      signal: controller.signal
+      body: upperMethod === "GET" ? undefined : JSON.stringify(body ?? {}),
+      signal: controller.signal,
     });
 
     const rawText = await response.text();
     const data = parseErpResponse(rawText);
 
     if (!response.ok) {
-      const error = new Error('ERP request failed.');
+      const error = new Error("ERP request failed.");
       error.status = response.status;
       error.details = data;
       throw error;
     }
 
-    return data || buildSuccessResponse('Success', []);
+    return data || buildSuccessResponse("Success", []);
   } finally {
     clearTimeout(timeout);
   }
@@ -82,7 +84,7 @@ export const fetchEmployeeSubordinates = async (employeeNo) => {
     url: config.subordinatesUrl,
     username: config.username,
     password: config.password,
-    body: { employeeNo }
+    body: { employeeNo },
   });
 };
 
@@ -95,8 +97,8 @@ export const fetchEmployeeDetailsForServiceNo = async (employeeNo) => {
     body: {
       organizationID: config.defaultOrganizationId,
       costCenterCode: config.defaultCostCenterCode,
-      employeeNo
-    }
+      employeeNo,
+    },
   });
 };
 
@@ -106,7 +108,7 @@ export const fetchEmployeesByPartialName = async (empName) => {
     url: config.partNameUrl,
     username: config.searchUsername,
     password: config.searchPassword,
-    body: { empName }
+    body: { empName },
   });
 };
 
@@ -116,7 +118,7 @@ export const fetchAllDesignations = async () => {
     url: config.designationsUrl,
     username: config.searchUsername,
     password: config.searchPassword,
-    body: {}
+    body: {},
   });
 };
 
@@ -126,7 +128,7 @@ export const fetchAllSalaryGrades = async () => {
     url: config.salaryGradesUrl,
     username: config.searchUsername,
     password: config.searchPassword,
-    body: {}
+    body: {},
   });
 };
 
@@ -136,7 +138,7 @@ export const fetchOrganizationList = async () => {
     url: config.organizationsUrl,
     username: config.username,
     password: config.password,
-    method: 'GET'
+    method: "GET",
   });
 };
 
@@ -144,7 +146,7 @@ export const fetchEmployeesByFilters = async ({
   designation,
   gradeName,
   orgName,
-  payroll
+  payroll,
 }) => {
   const config = getErpConfig();
   return postErp({
@@ -155,8 +157,8 @@ export const fetchEmployeesByFilters = async ({
       designation,
       gradeName,
       orgName,
-      payroll
-    }
+      payroll,
+    },
   });
 };
 
@@ -166,7 +168,7 @@ export const fetchAllCourses = async () => {
     url: config.coursesUrl,
     username: config.searchUsername,
     password: config.searchPassword,
-    body: {}
+    body: {},
   });
 };
 
@@ -176,7 +178,7 @@ export const fetchClassesByCourseCode = async (courseCode) => {
     url: config.classesUrl,
     username: config.searchUsername,
     password: config.searchPassword,
-    body: { courseCode }
+    body: { courseCode },
   });
 };
 
@@ -186,6 +188,60 @@ export const fetchCourseEnrollmentDetails = async (employeeNumber) => {
     url: config.courseEnrollmentsUrl,
     username: config.searchUsername,
     password: config.searchPassword,
-    body: { employeeNumber }
+    body: { employeeNumber },
   });
+};
+
+// Bulk Employee Directory Cache
+let directoryCache = null;
+let directoryCacheTime = 0;
+let directoryInFlightPromise = null;
+const DIRECTORY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export const getErpEmployeeDirectoryMap = async () => {
+  const now = Date.now();
+  // Return cached map if fresh
+  if (directoryCache && now - directoryCacheTime < DIRECTORY_CACHE_TTL_MS) {
+    return directoryCache;
+  }
+
+  // Deduplicate concurrent requests so only 1 request goes to ERP
+  if (directoryInFlightPromise) {
+    return directoryInFlightPromise;
+  }
+
+  directoryInFlightPromise = (async () => {
+    try {
+      const response = await fetchEmployeesByFilters({
+        designation: "alldes",
+        gradeName: "allgra",
+        orgName: "allorg",
+        payroll: "allpay",
+      });
+
+      const map = new Map();
+      const list = Array.isArray(response?.data) ? response.data : [];
+      for (const emp of list) {
+        const empNo = String(emp.employeeNumber || "").trim();
+        const email = String(emp.email || "")
+          .trim()
+          .toLowerCase();
+        if (empNo && email) {
+          map.set(empNo, email);
+        }
+      }
+
+      directoryCache = map;
+      directoryCacheTime = Date.now();
+      return map;
+    } catch (err) {
+      console.error("Failed to load ERP employee directory:", err.message);
+      // Return stale cache if available, otherwise empty map
+      return directoryCache || new Map();
+    } finally {
+      directoryInFlightPromise = null;
+    }
+  })();
+
+  return directoryInFlightPromise;
 };
