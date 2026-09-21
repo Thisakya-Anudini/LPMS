@@ -11,6 +11,7 @@ import {
   fetchEmployeeDetailsForServiceNo,
   fetchEmployeesByPartialName,
   fetchOrganizationList,
+  getErpEmployeeDirectoryMap,
 } from "../utils/erpClient.js";
 import { renderCertificatePdf } from "../utils/certificatePdf.js";
 import {
@@ -119,41 +120,12 @@ const getErpEmailForEmployeeNumber = async (employeeNumber) => {
   if (!normalizedEmployeeNumber) {
     return "";
   }
-
-  try {
-    const detailsResponse = await fetchEmployeeDetailsForServiceNo(
-      normalizedEmployeeNumber,
-    );
-    const employee = Array.isArray(detailsResponse?.data)
-      ? detailsResponse.data[0]
-      : null;
-    return employee?.email ? String(employee.email).trim().toLowerCase() : "";
-  } catch (error) {
-    console.warn("LPMS ERP learner email lookup failed:", {
-      employeeNumber: normalizedEmployeeNumber,
-      message: error.message,
-    });
-    return "";
-  }
+  const directoryMap = await getErpEmployeeDirectoryMap();
+  return directoryMap.get(normalizedEmployeeNumber) || "";
 };
 
-const getErpEmailsByEmployeeNumber = async (employeeNumbers) => {
-  const uniqueEmployeeNumbers = Array.from(
-    new Set(
-      employeeNumbers
-        .map((employeeNumber) => String(employeeNumber || "").trim())
-        .filter(Boolean),
-    ),
-  );
-
-  const entries = await Promise.all(
-    uniqueEmployeeNumbers.map(async (employeeNumber) => [
-      employeeNumber,
-      await getErpEmailForEmployeeNumber(employeeNumber),
-    ]),
-  );
-
-  return new Map(entries.filter(([, email]) => Boolean(email)));
+const getErpEmailsByEmployeeNumber = async () => {
+  return await getErpEmployeeDirectoryMap();
 };
 
 const normalizeSearchText = (value) =>
@@ -1380,25 +1352,16 @@ export const getLearningPathEnrollments = async (req, res) => {
     [id],
   );
 
-  const enrichedEnrollments = await Promise.all(
-    enrollmentsResult.rows.map(async (enrollment) => {
-      try {
-        if (enrollment.employee_number) {
-          const erpResponse = await fetchEmployeeDetailsForServiceNo(
-            enrollment.employee_number,
-          );
-          const erpData = erpResponse?.data?.[0];
-
-          if (erpData && erpData.email && String(erpData.email).trim()) {
-            enrollment.email = String(erpData.email).trim().toLowerCase();
-          }
-        }
-      } catch (err) {
-        // Fallback to local email if ERP request fails
-      }
-      return enrollment;
-    }),
-  );
+  const directoryMap = await getErpEmployeeDirectoryMap();
+  const enrichedEnrollments = enrollmentsResult.rows.map((enrollment) => {
+    if (
+      enrollment.employee_number &&
+      directoryMap.has(enrollment.employee_number)
+    ) {
+      enrollment.email = directoryMap.get(enrollment.employee_number);
+    }
+    return enrollment;
+  });
 
   return res.status(200).json({
     learningPath: pathResult.rows[0],
@@ -2120,33 +2083,12 @@ export const searchAssignableEmployees = async (req, res) => {
     const learningAdminAssignments =
       await mapLearningAdminAssignments(employees);
 
-    const employeesWithAssignments = await Promise.all(
-      employees.map(async (employee) => {
-        let enrichedEmail = employee.email;
-        try {
-          if (employee.employeeNumber) {
-            const erpResponse = await fetchEmployeeDetailsForServiceNo(
-              employee.employeeNumber,
-            );
-            const erpData = erpResponse?.data?.[0];
-
-            if (erpData && erpData.email && String(erpData.email).trim()) {
-              enrichedEmail = String(erpData.email).trim().toLowerCase();
-            }
-          }
-        } catch (err) {
-          // Silently fallback to the existing email if fetch fails
-        }
-
-        return {
-          ...employee,
-          email: enrichedEmail,
-          isLearningAdmin: learningAdminAssignments.has(
-            employee.employeeNumber,
-          ),
-        };
-      }),
-    );
+    const directoryMap = await getErpEmployeeDirectoryMap();
+    const employeesWithAssignments = employees.map((employee) => ({
+      ...employee,
+      email: directoryMap.get(employee.employeeNumber) || employee.email,
+      isLearningAdmin: learningAdminAssignments.has(employee.employeeNumber),
+    }));
 
     await logAudit({
       actorPrincipalId: await resolveActorPrincipalId(req.user),
@@ -2459,9 +2401,8 @@ export const assignClassEnrollments = async (req, res) => {
     );
   }
 
-  const erpEmailsByEmployeeNumber = await getErpEmailsByEmployeeNumber(
-    validEnrollments.rows.map((row) => row.employee_number),
-  );
+  const erpEmailsByEmployeeNumber = await getErpEmployeeDirectoryMap();
+
   const actorPrincipalId = await resolveActorPrincipalId(req.user);
   const assigned = [];
   for (const row of validEnrollments.rows) {
