@@ -10,6 +10,8 @@ import {
   Globe,
   Layers,
   Lock,
+  MapPin,
+  MonitorPlay,
   Users,
 } from "lucide-react";
 import { learningApi, superAdminApi } from "../../api/lpmsApi";
@@ -48,7 +50,7 @@ export function AdminLearningPathDetailsPage() {
         course_id: string;
         title: string;
         course_order: number;
-        delivery_mode?: "ONLINE" | "PHYSICAL";
+        delivery_mode?: string;
       }>;
     }>;
   } | null>(null);
@@ -289,61 +291,160 @@ export function AdminLearningPathDetailsPage() {
         )}
       </Card>
 
-      <div className="flex gap-2 flex-wrap">
+      {/* Super Admin Segmented Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-px">
         <button
           type="button"
           onClick={() => setPopupSection("DETAILS")}
-          className={`px-3 py-1.5 rounded-md text-sm border ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             popupSection === "DETAILS"
-              ? "bg-blue-100 border-blue-300 text-blue-800"
-              : "bg-white border-slate-200 text-slate-700"
+              ? "border-primary-600 text-primary-600 font-semibold"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
           }`}
         >
-          Learning Path Details
+          <Layers className="h-4 w-4" />
+          <span>Curriculum & Stages</span>
+          <span
+            className={`ml-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+              popupSection === "DETAILS"
+                ? "bg-primary-100 text-primary-700"
+                : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {stagedCourses.length}
+          </span>
         </button>
+
         <button
           type="button"
           onClick={() => setPopupSection("ENROLLMENTS")}
-          className={`px-3 py-1.5 rounded-md text-sm border ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
             popupSection === "ENROLLMENTS"
-              ? "bg-blue-100 border-blue-300 text-blue-800"
-              : "bg-white border-slate-200 text-slate-700"
+              ? "border-primary-600 text-primary-600 font-semibold"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
           }`}
         >
-          Enrolled Learners & Progress
+          <Users className="h-4 w-4" />
+          <span>Enrolled Learners</span>
+          <span
+            className={`ml-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
+              popupSection === "ENROLLMENTS"
+                ? "bg-primary-100 text-primary-700"
+                : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {pathEnrollments.length}
+          </span>
         </button>
       </div>
 
+      {/* Course Stages Section */}
       {popupSection === "DETAILS" ? (
-        <Card title="Courses">
+        <div className="space-y-4">
           {loading ? (
-            <p className="text-sm text-slate-500">Loading courses...</p>
+            <Card className="p-6">
+              <div className="space-y-4">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-12 w-full rounded-xl" />
+                <Skeleton className="h-12 w-full rounded-xl" />
+              </div>
+            </Card>
           ) : stagedCourses.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No courses found for this learning path.
-            </p>
+            <Card className="p-12 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <Layers className="h-6 w-6" />
+              </div>
+              <p className="font-medium text-slate-700">
+                No curriculum stages found
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                This learning path does not have any stages or courses defined
+                yet.
+              </p>
+            </Card>
           ) : (
-            <div className="space-y-2">
-              {stagedCourses.map((stage) => (
-                <div
-                  key={stage.id}
-                  className="p-2 rounded border border-slate-200 bg-white text-sm text-slate-800"
-                >
-                  <p className="font-semibold text-slate-900">
-                    Stage {stage.stage_order}: {stage.title}
-                  </p>
-                  <div className="mt-1 space-y-1">
-                    {(stage.courses || []).map((course) => (
-                      <p key={course.course_id} className="text-slate-700">
-                        {course.course_order}. {course.title}
-                      </p>
-                    ))}
+            stagedCourses.map((stage) => (
+              <Card
+                key={stage.id}
+                className="overflow-hidden border-slate-200/80 shadow-sm"
+                bodyClassName="p-0"
+              >
+                {/* Stage Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 bg-slate-50/75 px-5 py-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex items-center justify-center rounded-lg bg-primary-100 px-2.5 py-1 text-xs font-bold text-primary-700">
+                      Stage {stage.stage_order}
+                    </span>
+                    <h3 className="font-semibold text-slate-900 text-base">
+                      {stage.title}
+                    </h3>
                   </div>
+                  <span className="text-xs font-medium text-slate-500">
+                    {stage.courses?.length || 0}{" "}
+                    {(stage.courses?.length || 0) === 1 ? "Course" : "Courses"}
+                  </span>
                 </div>
-              ))}
-            </div>
+
+                {/* Courses in Stage */}
+                <div className="p-4 sm:p-5">
+                  {!stage.courses || stage.courses.length === 0 ? (
+                    <p className="text-sm text-slate-400 italic py-2">
+                      No courses assigned to this stage.
+                    </p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {stage.courses.map((course) => {
+                        const titleLower = String(
+                          course.title || "",
+                        ).toLowerCase();
+                        const isOnline =
+                          titleLower.includes("online") ||
+                          titleLower.includes("elearning") ||
+                          titleLower.includes("e-learning");
+                        const displayMode = isOnline ? "ONLINE" : "PHYSICAL";
+
+                        return (
+                          <div
+                            key={course.course_id}
+                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-slate-200/80 bg-white p-3.5 transition-all hover:border-primary-200 hover:bg-primary-50/20"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                                {course.course_order}
+                              </span>
+                              <div className="min-w-0">
+                                <p className="font-medium text-slate-900 text-sm truncate">
+                                  {course.title}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                                  isOnline
+                                    ? "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20"
+                                    : "bg-emerald-100 text-emerald-600 ring-1 ring-inset ring-emerald-500/20"
+                                }`}
+                              >
+                                {isOnline ? (
+                                  <MonitorPlay className="h-3 w-3" />
+                                ) : (
+                                  <MapPin className="h-3 w-3" />
+                                )}
+                                {displayMode}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            ))
           )}
-        </Card>
+        </div>
       ) : (
         <Card title="Enrolled Learners & Progress">
           {loading ? (
