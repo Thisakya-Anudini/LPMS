@@ -10,14 +10,19 @@ import {
   Globe,
   Layers,
   Lock,
+  Mail,
   MapPin,
   MonitorPlay,
+  PlayCircle,
+  Search,
+  UserRound,
   Users,
 } from "lucide-react";
 import { learningApi, superAdminApi } from "../../api/lpmsApi";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { Input } from "../../components/ui/Input";
 import { ProgressBar } from "../../components/ui/ProgressBar";
 import { Skeleton } from "../../components/ui/Skeleton";
 import { useAuth } from "../../contexts/useAuth";
@@ -32,6 +37,7 @@ export function AdminLearningPathDetailsPage() {
   const [popupSection, setPopupSection] = useState<"DETAILS" | "ENROLLMENTS">(
     "DETAILS",
   );
+  const [learnerQuery, setLearnerQuery] = useState("");
   const [pathDetail, setPathDetail] = useState<{
     id: string;
     title: string;
@@ -145,6 +151,47 @@ export function AdminLearningPathDetailsPage() {
     );
     return Math.round(sum / pathEnrollments.length);
   }, [pathEnrollments]);
+
+  const filteredEnrollments = useMemo(() => {
+    const q = learnerQuery.trim().toLowerCase();
+    if (!q) return pathEnrollments;
+    return pathEnrollments.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        (e.employee_number && e.employee_number.toLowerCase().includes(q)) ||
+        (e.email && e.email.toLowerCase().includes(q)) ||
+        (e.designation && e.designation.toLowerCase().includes(q)),
+    );
+  }, [pathEnrollments, learnerQuery]);
+
+  const getEnrollmentStatus = (enrollment: {
+    progress: number;
+    status: string;
+  }) => {
+    const progress = Math.min(
+      100,
+      Math.max(0, Number(enrollment.progress || 0)),
+    );
+    if (progress === 100 || enrollment.status?.toUpperCase() === "COMPLETED") {
+      return {
+        label: "Completed",
+        className: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
+        progressVariant: "success" as const,
+      };
+    }
+    if (progress > 0 || enrollment.status?.toUpperCase() === "IN_PROGRESS") {
+      return {
+        label: "In Progress",
+        className: "bg-amber-50 text-amber-700 ring-amber-600/20",
+        progressVariant: "warning" as const,
+      };
+    }
+    return {
+      label: "Not Started",
+      className: "bg-slate-100 text-slate-600 ring-slate-500/20",
+      progressVariant: "default" as const,
+    };
+  };
 
   return (
     <div className="space-y-6">
@@ -446,40 +493,153 @@ export function AdminLearningPathDetailsPage() {
           )}
         </div>
       ) : (
-        <Card title="Enrolled Learners & Progress">
-          {loading ? (
-            <p className="text-sm text-slate-500">Loading enrollments...</p>
-          ) : pathEnrollments.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No learners enrolled in this learning path yet.
+        <Card
+          title="Enrolled Learners & Progress"
+          className="shadow-sm"
+          bodyClassName="p-5 sm:p-6"
+        >
+          {/* Search bar and counter */}
+          <div className="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search learners by name or employeeNo"
+                className="pl-9 h-9 text-sm"
+                value={learnerQuery}
+                onChange={(e) => setLearnerQuery(e.target.value)}
+              />
+            </div>
+            <p className="text-xs font-medium text-slate-500">
+              Showing{" "}
+              <span className="font-semibold text-slate-700">
+                {filteredEnrollments.length}
+              </span>{" "}
+              of{" "}
+              <span className="font-semibold text-slate-700">
+                {pathEnrollments.length}
+              </span>{" "}
+              learners
             </p>
-          ) : (
-            <div className="space-y-2">
-              {pathEnrollments.map((enrollment) => (
-                <div
-                  key={enrollment.enrollment_id}
-                  className="p-3 rounded-lg border border-slate-200 bg-slate-50"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <p className="font-medium text-slate-900">
-                        {enrollment.name} ({enrollment.employee_number})
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {enrollment.designation || "-"} | {enrollment.email}
-                      </p>
-                    </div>
-                    <span className="text-xs text-slate-600">
-                      {enrollment.status.replace("_", " ")}
-                    </span>
-                  </div>
-                  <ProgressBar
-                    progress={Number(enrollment.progress || 0)}
-                    showLabel
-                    size="sm"
-                  />
+          </div>
+
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-xl border border-slate-100 p-4">
+                  <Skeleton className="h-5 w-48" />
+                  <Skeleton className="mt-2 h-3 w-72" />
+                  <Skeleton className="mt-3 h-2 w-full" />
                 </div>
               ))}
+            </div>
+          ) : pathEnrollments.length === 0 ? (
+            <div className="p-12 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <Users className="h-6 w-6" />
+              </div>
+              <p className="font-medium text-slate-700">No learners enrolled</p>
+              <p className="mt-1 text-sm text-slate-500">
+                No learners have been enrolled in this learning path yet.
+              </p>
+            </div>
+          ) : filteredEnrollments.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="font-medium text-slate-700">No matching learners</p>
+              <p className="mt-1 text-xs text-slate-500">
+                No enrolled learners matched "{learnerQuery}".
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => setLearnerQuery("")}
+              >
+                Clear Search
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredEnrollments.map((enrollment) => {
+                const status = getEnrollmentStatus(enrollment);
+                return (
+                  <div
+                    key={enrollment.enrollment_id}
+                    className="rounded-xl border border-slate-200/80 bg-white p-4"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 ring-4 ring-sky-50/60 font-bold text-xs">
+                          {enrollment.name ? (
+                            enrollment.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join("")
+                              .toUpperCase()
+                          ) : (
+                            <UserRound className="h-4 w-4" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-slate-900 text-sm truncate">
+                              {enrollment.name}
+                            </p>
+
+                            {enrollment.employee_number && (
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600 shrink-0">
+                                {enrollment.employee_number}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
+                            {enrollment.designation && (
+                              <span>{enrollment.designation}</span>
+                            )}
+                            {enrollment.grade_name && (
+                              <>
+                                <span>•</span>
+                                <span>{enrollment.grade_name}</span>
+                              </>
+                            )}
+                            {enrollment.email && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <Mail className="h-3 w-3 text-slate-400" />
+                                  {enrollment.email}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center gap-1 self-start rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset shrink-0 ${status.className}`}
+                      >
+                        {status.label === "Completed" ? (
+                          <CheckCircle2 className="h-3 w-3" />
+                        ) : status.label === "In Progress" ? (
+                          <PlayCircle className="h-3 w-3" />
+                        ) : null}
+                        {status.label}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mt-3">
+                      <ProgressBar
+                        progress={Number(enrollment.progress || 0)}
+                        showLabel
+                        size="sm"
+                        variant={status.progressVariant}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
