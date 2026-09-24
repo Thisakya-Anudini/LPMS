@@ -2174,9 +2174,9 @@ export const getPublicLearningPathById = async (req, res) => {
             sc.course_title AS course_title,
             sc.course_order,
             CASE
-              WHEN CONCAT(course.title, ' ', lps.title, ' ', sc.course_title) ILIKE '%online%' OR 
-                   CONCAT(course.title, ' ', lps.title, ' ', sc.course_title) ILIKE '%elearning%' OR
-                   CONCAT(course.title, ' ', lps.title, ' ', sc.course_title) ILIKE '%e-learning%'
+              WHEN CONCAT(lps.title, ' ', sc.course_title) ILIKE '%online%' OR 
+                   CONCAT(lps.title, ' ', sc.course_title) ILIKE '%elearning%' OR
+                   CONCAT(lps.title, ' ', sc.course_title) ILIKE '%e-learning%'
               THEN 'ONLINE'
               ELSE 'N/A'
             END AS delivery_mode
