@@ -827,12 +827,7 @@ const listLearnerPathCourses = async ({
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             course.duration AS course_duration,
-            CASE
-              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR
-                   COALESCE(course.title, lps.title) ILIKE '%elearning%'
-              THEN 'ONLINE'
-              ELSE 'N/A'
-            END AS delivery_mode,       
+            COALESCE(course.type::text, sc.delivery_mode, 'N/A') AS delivery_mode,      
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -857,12 +852,7 @@ const listLearnerPathCourses = async ({
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
             sc.course_duration,
-            CASE
-              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
-                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
-              THEN 'ONLINE'
-              ELSE 'N/A'
-            END AS delivery_mode,
+            COALESCE(sc.delivery_mode, 'N/A') AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -1900,13 +1890,7 @@ export const getLearnerOtherCourses = async (req, res) => {
               COALESCE(c.title, sc.course_title) AS course_title,
               COALESCE(c.description, sc.course_title) AS course_description,
               COALESCE(c.duration, sc.course_duration) AS course_duration,
-              CASE
-                WHEN CONCAT(c.title, ' ', sc.course_title, ' ', lps.title) ILIKE '%online%' OR 
-                     CONCAT(c.title, ' ', sc.course_title, ' ', lps.title) ILIKE '%elearning%' OR
-                     CONCAT(c.title, ' ', sc.course_title, ' ', lps.title) ILIKE '%e-learning%'
-                THEN 'ONLINE'
-                ELSE 'N/A'
-              END AS delivery_mode,
+              COALESCE(c.type::text, sc.delivery_mode, 'N/A') AS delivery_mode,
               lps.title AS stage_title,
               lps.stage_order,
               sc.course_order
@@ -1935,12 +1919,7 @@ export const getLearnerOtherCourses = async (req, res) => {
               sc.course_title,
               sc.course_title AS course_description,
               sc.course_duration,
-              CASE
-                WHEN sc.course_title ILIKE '%online%' OR 
-                     sc.course_title ILIKE '%elearning%' 
-                THEN 'ONLINE'
-                ELSE 'N/A'
-              END AS delivery_mode,
+              COALESCE(sc.delivery_mode, 'N/A') AS delivery_mode,
               lps.title AS stage_title,
               lps.stage_order,
               sc.course_order
@@ -2155,12 +2134,7 @@ export const getPublicLearningPathById = async (req, res) => {
             course.id AS course_id,
             course.title AS course_title,
             sc.course_order,
-            CASE
-              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR 
-                   COALESCE(course.title, lps.title) ILIKE '%elearning%' 
-              THEN 'ONLINE'
-              ELSE 'N/A'
-            END AS delivery_mode
+            COALESCE(course.type::text, sc.delivery_mode, 'N/A') AS delivery_mode
           FROM learning_path_stages lps
           JOIN stage_courses sc ON sc.stage_id = lps.id
           JOIN courses course ON course.id = sc.course_id
@@ -2173,13 +2147,7 @@ export const getPublicLearningPathById = async (req, res) => {
             COALESCE(sc.course_code, sc.course_title) AS course_id,
             sc.course_title AS course_title,
             sc.course_order,
-            CASE
-              WHEN CONCAT(lps.title, ' ', sc.course_title) ILIKE '%online%' OR 
-                   CONCAT(lps.title, ' ', sc.course_title) ILIKE '%elearning%' OR
-                   CONCAT(lps.title, ' ', sc.course_title) ILIKE '%e-learning%'
-              THEN 'ONLINE'
-              ELSE 'N/A'
-            END AS delivery_mode
+            COALESCE(sc.delivery_mode, 'N/A') AS delivery_mode
           FROM learning_path_stages lps
           JOIN stage_courses sc ON sc.stage_id = lps.id
           WHERE lps.learning_path_id = $1
@@ -2611,12 +2579,7 @@ export const updateLearnerCourseCompletion = async (req, res) => {
             lps.title AS stage_title,
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
-            CASE
-              WHEN COALESCE(course.title, lps.title) ILIKE '%online%' OR 
-                   COALESCE(course.title, lps.title) ILIKE '%elearning%' 
-              THEN 'ONLINE'
-              ELSE 'N/A'
-            END AS delivery_mode,
+            COALESCE(course.type::text, sc.delivery_mode, 'N/A') AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
@@ -2637,12 +2600,7 @@ export const updateLearnerCourseCompletion = async (req, res) => {
             lps.title AS stage_title,
             lps.stage_order,
             COALESCE(sc.course_order, lps.stage_order) AS course_order,
-            CASE
-              WHEN COALESCE(sc.course_title, lps.title) ILIKE '%online%' OR 
-                   COALESCE(sc.course_title, lps.title) ILIKE '%elearning%' 
-              THEN 'ONLINE'
-              ELSE 'N/A'
-            END AS delivery_mode,
+            COALESCE(sc.delivery_mode, 'N/A') AS delivery_mode,
             COALESCE(ep.progress, 0) >= 100 AS is_completed
           FROM learning_path_stages lps
           LEFT JOIN stage_courses sc ON sc.stage_id = lps.id
