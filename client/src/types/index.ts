@@ -1,13 +1,13 @@
-export type Role = 'SUPER_ADMIN' | 'LEARNING_ADMIN' | 'SUPERVISOR' | 'EMPLOYEE';
+export type Role = "SUPER_ADMIN" | "LEARNING_ADMIN" | "SUPERVISOR" | "EMPLOYEE";
 
 export type User = {
   id: string;
   name: string;
   email: string;
   role: Role;
-  principalType: 'USER' | 'EMPLOYEE';
+  principalType: "USER" | "EMPLOYEE";
   mustChangePassword: boolean;
-  authSource?: 'SYSTEM' | 'MOCK_LEARNER';
+  authSource?: "SYSTEM" | "MOCK_LEARNER";
   employeeNo?: string | null;
   isSupervisor?: boolean;
   isLearningAdmin?: boolean;
@@ -19,7 +19,7 @@ export type Course = {
   title: string;
   description: string;
   duration: string; // e.g., "2 hours"
-  type: 'ONLINE' | 'CLASSROOM' | 'HYBRID';
+  type: "ONLINE" | "CLASSROOM" | "HYBRID";
 };
 
 export type Stage = {
@@ -29,7 +29,7 @@ export type Stage = {
   courses: Course[];
 };
 
-export type LPCategory = 'RESTRICTED' | 'PUBLIC';
+export type LPCategory = "RESTRICTED" | "PUBLIC";
 
 export type LearningPath = {
   id: string;
@@ -39,14 +39,14 @@ export type LearningPath = {
   stages: Stage[];
   totalDuration: string;
   createdAt: string;
-  status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
+  status: "ACTIVE" | "ARCHIVED" | "DRAFT";
 };
 
 export type EnrollmentStatus =
-'NOT_STARTED' |
-'IN_PROGRESS' |
-'COMPLETED' |
-'OVERDUE';
+  | "NOT_STARTED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "OVERDUE";
 
 export type Enrollment = {
   id: string;
@@ -63,7 +63,7 @@ export type Notification = {
   principalId: string;
   title: string;
   message: string;
-  type: 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR';
+  type: "INFO" | "SUCCESS" | "WARNING" | "ERROR";
   isRead: boolean;
   createdAt: string;
 };
@@ -73,3 +73,5 @@ export type AuthResponse = {
   refreshToken: string;
   user: User;
 };
+
+export * from "./talent.types";

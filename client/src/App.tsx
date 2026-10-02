@@ -1,32 +1,39 @@
-import React from 'react';
-import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { DashboardLayout } from './components/layout/DashboardLayout';
-import { AuthProvider } from './contexts/AuthContext';
-import { useAuth } from './contexts/useAuth';
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { AdminEmployeeHierarchyPage } from './pages/admin/AdminEmployeeHierarchyPage';
-import { AdminLearnersPage } from './pages/admin/AdminLearnersPage';
-import { AdminLearnerDetailsPage } from './pages/admin/AdminLearnerDetailsPage';
-import { AdminLearningPathsPage } from './pages/admin/AdminLearningPathsPage';
-import { AdminLearningPathDetailsPage } from './pages/admin/AdminLearningPathDetailsPage';
-import { LearningAdminDashboard } from './pages/learning-admin/LearningAdminDashboard';
-import { AssignmentReportsPage } from './pages/learning-admin/AssignmentReportsPage';
-import { LearningPathManagement } from './pages/learning-admin/LearningPathManagement';
-import { CertificateCustomizationPage } from './pages/learning-admin/CertificateCustomizationPage';
-import { AssignEnrollmentToClassesPage } from './pages/learning-admin/AssignEnrollmentToClassesPage';
-import { LoginPage } from './pages/LoginPage';
-import { ChangePasswordPage } from './pages/ChangePasswordPage';
-import { Role } from './types';
-import { getDefaultRouteForRole } from './utils/navigation';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { SupervisorDashboard } from './pages/supervisor/SupervisorDashboard';
-import { LearnerMyProgressPage } from './pages/learner/LearnerMyProgressPage';
-import { LearnerPublicPathsPage } from './pages/learner/LearnerPublicPathsPage';
-import { LearnerCertificatesPage } from './pages/learner/LearnerCertificatesPage';
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
+import { DashboardLayout } from "./components/layout/DashboardLayout";
+import { AuthProvider } from "./contexts/AuthContext";
+import { useAuth } from "./contexts/useAuth";
+import { AdminDashboard } from "./pages/admin/AdminDashboard";
+import { AdminEmployeeHierarchyPage } from "./pages/admin/AdminEmployeeHierarchyPage";
+import { AdminLearnersPage } from "./pages/admin/AdminLearnersPage";
+import { AdminLearnerDetailsPage } from "./pages/admin/AdminLearnerDetailsPage";
+import { AdminLearningPathsPage } from "./pages/admin/AdminLearningPathsPage";
+import { AdminLearningPathDetailsPage } from "./pages/admin/AdminLearningPathDetailsPage";
+import { LearningAdminDashboard } from "./pages/learning-admin/LearningAdminDashboard";
+import { AssignmentReportsPage } from "./pages/learning-admin/AssignmentReportsPage";
+import { LearningPathManagement } from "./pages/learning-admin/LearningPathManagement";
+import { CertificateCustomizationPage } from "./pages/learning-admin/CertificateCustomizationPage";
+import { AssignEnrollmentToClassesPage } from "./pages/learning-admin/AssignEnrollmentToClassesPage";
+import { LoginPage } from "./pages/LoginPage";
+import { ChangePasswordPage } from "./pages/ChangePasswordPage";
+import { Role } from "./types";
+import { getDefaultRouteForRole } from "./utils/navigation";
+import { NotificationsPage } from "./pages/NotificationsPage";
+import { SupervisorDashboard } from "./pages/supervisor/SupervisorDashboard";
+import { LearnerMyProgressPage } from "./pages/learner/LearnerMyProgressPage";
+import { LearnerPublicPathsPage } from "./pages/learner/LearnerPublicPathsPage";
+import { LearnerCertificatesPage } from "./pages/learner/LearnerCertificatesPage";
+import { TalentDashboardPage } from "./pages/talent-dashboard/TalentDashboardPage";
 
 function ProtectedRoute({
   children,
-  allowedRoles
+  allowedRoles,
 }: {
   children: React.ReactNode;
   allowedRoles?: Role[];
@@ -35,7 +42,11 @@ function ProtectedRoute({
   const location = useLocation();
 
   if (isBootstrapping) {
-    return <div className="min-h-screen grid place-items-center text-slate-500">Loading session...</div>;
+    return (
+      <div className="min-h-screen grid place-items-center text-slate-500">
+        Loading session...
+      </div>
+    );
   }
 
   if (!isAuthenticated || !user) {
@@ -46,11 +57,11 @@ function ProtectedRoute({
     return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
   }
 
-  if (user.mustChangePassword && location.pathname !== '/change-password') {
+  if (user.mustChangePassword && location.pathname !== "/change-password") {
     return <Navigate to="/change-password" replace />;
   }
 
-  if (!user.mustChangePassword && location.pathname === '/change-password') {
+  if (!user.mustChangePassword && location.pathname === "/change-password") {
     return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
   }
 
@@ -60,7 +71,11 @@ function ProtectedRoute({
 function RootRedirect() {
   const { user, isBootstrapping } = useAuth();
   if (isBootstrapping) {
-    return <div className="min-h-screen grid place-items-center text-slate-500">Loading...</div>;
+    return (
+      <div className="min-h-screen grid place-items-center text-slate-500">
+        Loading...
+      </div>
+    );
   }
 
   if (!user) {
@@ -72,7 +87,7 @@ function RootRedirect() {
 
 function SupervisorOnlyRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  if (!user || user.role !== 'EMPLOYEE' || !user.isSupervisor) {
+  if (!user || user.role !== "EMPLOYEE" || !user.isSupervisor) {
     return <Navigate to="/learner" replace />;
   }
   return <>{children}</>;
@@ -85,7 +100,8 @@ function LearningAdminAccessRoute({ children }: { children: React.ReactNode }) {
   }
 
   const hasLearningAdminAccess =
-    user.role === 'LEARNING_ADMIN' || (user.role === 'EMPLOYEE' && Boolean(user.isLearningAdmin));
+    user.role === "LEARNING_ADMIN" ||
+    (user.role === "EMPLOYEE" && Boolean(user.isLearningAdmin));
 
   if (!hasLearningAdminAccess) {
     return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
@@ -115,7 +131,7 @@ export function App() {
             <Route
               path="admin"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
                   <Navigate to="/admin/learners" replace />
                 </ProtectedRoute>
               }
@@ -123,7 +139,7 @@ export function App() {
             <Route
               path="admin/learners"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
                   <AdminLearnersPage />
                 </ProtectedRoute>
               }
@@ -131,7 +147,7 @@ export function App() {
             <Route
               path="admin/learners/:principalId"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
                   <AdminLearnerDetailsPage />
                 </ProtectedRoute>
               }
@@ -139,7 +155,7 @@ export function App() {
             <Route
               path="admin/accounts"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
                   <AdminDashboard />
                 </ProtectedRoute>
               }
@@ -147,7 +163,7 @@ export function App() {
             <Route
               path="admin/hierarchy"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
                   <AdminEmployeeHierarchyPage />
                 </ProtectedRoute>
               }
@@ -155,7 +171,7 @@ export function App() {
             <Route
               path="admin/learning-paths"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
                   <AdminLearningPathsPage />
                 </ProtectedRoute>
               }
@@ -163,7 +179,7 @@ export function App() {
             <Route
               path="admin/learning-paths/:id"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                <ProtectedRoute allowedRoles={["SUPER_ADMIN"]}>
                   <AdminLearningPathDetailsPage />
                 </ProtectedRoute>
               }
@@ -172,7 +188,7 @@ export function App() {
             <Route
               path="learning-admin"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <LearningAdminDashboard />
                   </LearningAdminAccessRoute>
@@ -182,7 +198,7 @@ export function App() {
             <Route
               path="learning-admin/paths"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <Navigate to="/learning-admin/paths/create" replace />
                   </LearningAdminAccessRoute>
@@ -192,7 +208,7 @@ export function App() {
             <Route
               path="learning-admin/paths/create"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <LearningPathManagement section="create" />
                   </LearningAdminAccessRoute>
@@ -202,7 +218,7 @@ export function App() {
             <Route
               path="learning-admin/paths/assign"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <LearningPathManagement section="assign" />
                   </LearningAdminAccessRoute>
@@ -212,7 +228,7 @@ export function App() {
             <Route
               path="learning-admin/paths/manage"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <LearningPathManagement section="manage" />
                   </LearningAdminAccessRoute>
@@ -222,7 +238,7 @@ export function App() {
             <Route
               path="learning-admin/classes/assign"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <AssignEnrollmentToClassesPage />
                   </LearningAdminAccessRoute>
@@ -232,7 +248,7 @@ export function App() {
             <Route
               path="learning-admin/certificates"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <CertificateCustomizationPage />
                   </LearningAdminAccessRoute>
@@ -242,7 +258,7 @@ export function App() {
             <Route
               path="learning-admin/assignment-reports"
               element={
-                <ProtectedRoute allowedRoles={['LEARNING_ADMIN', 'EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["LEARNING_ADMIN", "EMPLOYEE"]}>
                   <LearningAdminAccessRoute>
                     <AssignmentReportsPage />
                   </LearningAdminAccessRoute>
@@ -253,7 +269,7 @@ export function App() {
             <Route
               path="learner"
               element={
-                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                   <Navigate to="/learner/my-progress" replace />
                 </ProtectedRoute>
               }
@@ -261,7 +277,7 @@ export function App() {
             <Route
               path="learner/my-progress"
               element={
-                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                   <LearnerMyProgressPage />
                 </ProtectedRoute>
               }
@@ -269,7 +285,7 @@ export function App() {
             <Route
               path="learner/public-paths"
               element={
-                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                   <LearnerPublicPathsPage />
                 </ProtectedRoute>
               }
@@ -277,7 +293,7 @@ export function App() {
             <Route
               path="learner/certificates"
               element={
-                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                   <LearnerCertificatesPage />
                 </ProtectedRoute>
               }
@@ -285,7 +301,7 @@ export function App() {
             <Route
               path="employee"
               element={
-                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                   <Navigate to="/learner/my-progress" replace />
                 </ProtectedRoute>
               }
@@ -293,7 +309,7 @@ export function App() {
             <Route
               path="supervisor"
               element={
-                <ProtectedRoute allowedRoles={['EMPLOYEE']}>
+                <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                   <SupervisorOnlyRoute>
                     <SupervisorDashboard />
                   </SupervisorOnlyRoute>
@@ -301,9 +317,31 @@ export function App() {
               }
             />
             <Route
+              path="talent-dashboard"
+              element={
+                <ProtectedRoute
+                  allowedRoles={[
+                    "SUPER_ADMIN",
+                    "LEARNING_ADMIN",
+                    "EMPLOYEE",
+                    "SUPERVISOR",
+                  ]}
+                >
+                  <TalentDashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="notifications"
               element={
-                <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'LEARNING_ADMIN', 'EMPLOYEE', 'SUPERVISOR']}>
+                <ProtectedRoute
+                  allowedRoles={[
+                    "SUPER_ADMIN",
+                    "LEARNING_ADMIN",
+                    "EMPLOYEE",
+                    "SUPERVISOR",
+                  ]}
+                >
                   <NotificationsPage />
                 </ProtectedRoute>
               }
