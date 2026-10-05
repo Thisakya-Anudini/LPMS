@@ -18,6 +18,7 @@ import {
   MousePointerClick,
   Activity,
   Clock,
+  UserMinus,
 } from "lucide-react";
 import { learningApi } from "../../api/lpmsApi";
 import { Button } from "../../components/ui/Button";
@@ -490,7 +491,7 @@ export function AssignEnrollmentToClassesPage() {
   const [statusTransferEnrollmentIds, setStatusTransferEnrollmentIds] =
     useState<string[]>([]);
   const [assignmentMode, setAssignmentMode] = useState<
-    "assign" | "reassign" | "completion"
+    "assign" | "reassign" | "completion" | "learners"
   >("assign");
   const [showCourseStatusPanel, setShowCourseStatusPanel] = useState(false);
   const [setupCourseStatusTab, setSetupCourseStatusTab] = useState<
@@ -693,13 +694,16 @@ export function AssignEnrollmentToClassesPage() {
     () =>
       assignmentMode === "completion"
         ? []
-        : assignmentMode === "reassign"
-          ? reassignableLearners
-          : statusTransferLearners.length > 0
-            ? statusTransferLearners
-            : unassignedLearners,
+        : assignmentMode === "learners"
+          ? learners
+          : assignmentMode === "reassign"
+            ? reassignableLearners
+            : statusTransferLearners.length > 0
+              ? statusTransferLearners
+              : unassignedLearners,
     [
       assignmentMode,
+      learners,
       reassignableLearners,
       statusTransferLearners,
       unassignedLearners,
@@ -733,6 +737,27 @@ export function AssignEnrollmentToClassesPage() {
 
     return result.filter((learner) => learnerMatchesSearch(learner, search));
   }, [learnerSearch, selectableLearners, designationFilter, gradeFilter]);
+
+  const handleRemoveLearner = async (enrollmentId: string) => {
+    if (!window.confirm("Are you sure you want to remove this learner from the learning path?")) {
+      return;
+    }
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        showToast("Session expired. Please login again.", "error");
+        return;
+      }
+      await learningApi.removeLearningPathEnrollment(token, selectedPathId, enrollmentId);
+      setLearners((prev) => prev.filter((l) => l.enrollmentId !== enrollmentId));
+      showToast("Learner removed successfully.", "success");
+    } catch (error) {
+      showToast(
+        error instanceof Error ? error.message : "Failed to remove learner.",
+        "error"
+      );
+    }
+  };
 
   const selectedLearnersForCourse = useMemo(
     () =>
@@ -1635,17 +1660,21 @@ export function AssignEnrollmentToClassesPage() {
                 ? "Completion Course Status"
                 : assignmentMode === "reassign"
                   ? "Reassign Learners to Replacement Class"
-                  : "Learners in Selected Learning Path"
+                  : assignmentMode === "learners"
+                    ? "Assigned Learners"
+                    : "Learners in Selected Learning Path"
             }
             description={
               assignmentMode === "completion"
                 ? "Review learners who have completed the selected course."
                 : assignmentMode === "reassign"
                   ? "Move learners who missed an earlier session into the selected course class."
-                  : "Select unassigned learners to allocate to the selected course class."
+                  : assignmentMode === "learners"
+                    ? "Manage learners enrolled in the learning path."
+                    : "Select unassigned learners to allocate to the selected course class."
             }
             action={
-              assignmentMode === "completion" ? undefined : (
+              assignmentMode === "completion" || assignmentMode === "learners" ? undefined : (
                 <Button
                   onClick={handleAssign}
                   isLoading={assigning}
@@ -1660,14 +1689,14 @@ export function AssignEnrollmentToClassesPage() {
               )
             }
           >
-            <div className="mb-4 flex flex-wrap gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-2 shadow-sm w-fit">
+            <div className="mb-4 flex gap-2 rounded-xl border border-slate-200 bg-slate-50/80 p-2 shadow-sm overflow-x-auto w-full">
               <button
                 type="button"
                 onClick={() => {
                   setAssignmentMode("assign");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "assign"
                     ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
                     : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
@@ -1686,10 +1715,32 @@ export function AssignEnrollmentToClassesPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setAssignmentMode("learners");
+                  setSelectedEnrollmentIds([]);
+                }}
+                className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                  assignmentMode === "learners"
+                    ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
+                    : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
+                }`}
+              >
+                <Users
+                  size={18}
+                  className={
+                    assignmentMode === "learners"
+                      ? "text-primary-100"
+                      : "text-slate-400 group-hover:text-primary-500"
+                  }
+                />
+                Learners
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setAssignmentMode("reassign");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "reassign"
                     ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
                     : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
@@ -1711,7 +1762,7 @@ export function AssignEnrollmentToClassesPage() {
                   setAssignmentMode("completion");
                   setSelectedEnrollmentIds([]);
                 }}
-                className={`flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200 ${
                   assignmentMode === "completion"
                     ? "bg-primary-700 text-white shadow-md ring-1 ring-primary-700/50"
                     : "text-slate-600 hover:bg-white hover:text-primary-600 hover:shadow-sm"
@@ -1770,6 +1821,7 @@ export function AssignEnrollmentToClassesPage() {
                     onClick={selectNextBatch}
                     disabled={
                       assignmentMode === "completion" ||
+                      assignmentMode === "learners" ||
                       !selectedCourseCode ||
                       selectableLearners.length === 0
                     }
@@ -1781,6 +1833,7 @@ export function AssignEnrollmentToClassesPage() {
                     onClick={selectVisibleLearners}
                     disabled={
                       assignmentMode === "completion" ||
+                      assignmentMode === "learners" ||
                       filteredLearners.length === 0
                     }
                   >
@@ -1910,6 +1963,99 @@ export function AssignEnrollmentToClassesPage() {
                   )}
                 </div>
               </div>
+            ) : assignmentMode === "learners" ? (
+              <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[36rem]">
+                <div className="overflow-auto flex-1 relative">
+                  <div className="grid min-w-[760px] grid-cols-[2fr_1fr_1.5fr_1fr_100px] bg-white px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 sticky top-0 z-10">
+                    <span>LEARNER</span>
+                    <span>EMPLOYEE NO</span>
+                    <span>DESIGNATION</span>
+                    <span>PROGRESS</span>
+                    <span className="text-right">ACTION</span>
+                  </div>
+                  {optionsLoading ? (
+                    <div className="space-y-2 p-4 min-w-[760px]">
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                      <Skeleton className="h-12 w-full" />
+                    </div>
+                  ) : filteredLearners.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center bg-white min-w-[760px]">
+                      <div className="h-12 w-12 rounded-full bg-slate-50 flex items-center justify-center mb-3 border border-slate-100 shadow-sm">
+                        <Users className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <p className="text-sm font-bold text-slate-900 mb-1">
+                        No learners found
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        Try adjusting your search or filter criteria.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="min-w-[760px] flex flex-col divide-y divide-slate-100">
+                      {filteredLearners.map((learner) => (
+                        <div
+                          key={learner.enrollmentId}
+                          className="grid grid-cols-[2fr_1fr_1.5fr_1fr_100px] items-center px-4 py-4 hover:bg-slate-50/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold">
+                              {learner.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-slate-900">
+                                {learner.name}
+                              </div>
+                              <div className="text-xs text-slate-500 mt-0.5">
+                                {learner.email}
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs font-semibold rounded">
+                              {learner.employeeNumber || "-"}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="text-sm font-semibold text-slate-700">
+                              {learner.designation || "-"}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {learner.gradeName || "-"}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`flex justify-center w-[90px] px-2 py-1 text-[10px] font-bold rounded ${
+                                learner.progress > 0
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {learner.progress > 0
+                                ? "IN PROGRESS"
+                                : "NOT STARTED"}
+                            </span>
+                            <span className="text-xs font-semibold text-slate-600 w-8">
+                              {learner.progress}%
+                            </span>
+                          </div>
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() =>
+                                handleRemoveLearner(learner.enrollmentId)
+                              }
+                              className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors"
+                            >
+                              <UserMinus className="h-4 w-4" /> Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : (
               <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col max-h-[36rem]">
                 <div className="overflow-auto flex-1 relative">
@@ -1998,6 +2144,8 @@ export function AssignEnrollmentToClassesPage() {
           </Card>
         </div>
       ) : null}
+
+      {/* Learners modal removed */}
 
       {showCourseStatusPanel && selectedCourse ? (
         <ModalOverlay className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
