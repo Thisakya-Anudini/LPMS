@@ -523,6 +523,8 @@ export function AssignEnrollmentToClassesPage() {
   );
   const [classDetailLoading, setClassDetailLoading] = useState(false);
   const [classDetailSaving, setClassDetailSaving] = useState(false);
+  const [learnerToRemove, setLearnerToRemove] = useState<EnrolledLearner | null>(null);
+  const [isRemovingLearner, setIsRemovingLearner] = useState(false);
 
   const closeReportModal = useCallback(() => {
     setIsReportModalOpen(false);
@@ -738,24 +740,27 @@ export function AssignEnrollmentToClassesPage() {
     return result.filter((learner) => learnerMatchesSearch(learner, search));
   }, [learnerSearch, selectableLearners, designationFilter, gradeFilter]);
 
-  const handleRemoveLearner = async (enrollmentId: string) => {
-    if (!window.confirm("Are you sure you want to remove this learner from the learning path?")) {
-      return;
-    }
+  const handleConfirmRemoveLearner = async () => {
+    if (!learnerToRemove) return;
+    setIsRemovingLearner(true);
     try {
       const token = await getAccessToken();
       if (!token) {
         showToast("Session expired. Please login again.", "error");
+        setIsRemovingLearner(false);
         return;
       }
-      await learningApi.removeLearningPathEnrollment(token, selectedPathId, enrollmentId);
-      setLearners((prev) => prev.filter((l) => l.enrollmentId !== enrollmentId));
+      await learningApi.removeLearningPathEnrollment(token, selectedPathId, learnerToRemove.enrollmentId);
+      setLearners((prev) => prev.filter((l) => l.enrollmentId !== learnerToRemove.enrollmentId));
       showToast("Learner removed successfully.", "success");
+      setLearnerToRemove(null);
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : "Failed to remove learner.",
         "error"
       );
+    } finally {
+      setIsRemovingLearner(false);
     }
   };
 
@@ -2042,9 +2047,7 @@ export function AssignEnrollmentToClassesPage() {
                           </div>
                           <div className="flex justify-end">
                             <button
-                              onClick={() =>
-                                handleRemoveLearner(learner.enrollmentId)
-                              }
+                              onClick={() => setLearnerToRemove(learner)}
                               className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors"
                             >
                               <UserMinus className="h-4 w-4" /> Remove
@@ -2709,6 +2712,59 @@ export function AssignEnrollmentToClassesPage() {
                 onClick={closeReportModal}
               >
                 Close
+              </Button>
+            </div>
+          </div>
+        </ModalOverlay>
+      ) : null}
+
+      {learnerToRemove ? (
+        <ModalOverlay className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div
+            className="flex w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-white/20 animate-in fade-in zoom-in-95"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-learner-title"
+          >
+            <div className="p-6">
+              <h2 id="remove-learner-title" className="text-xl font-bold text-slate-900">
+                Remove Assigned Learner
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                This will unassign the learner and remove their enrollment progress and class assignments for this learning path.
+              </p>
+
+              <div className="mt-5 rounded-xl border border-slate-200 p-4 bg-white">
+                <div className="text-sm">
+                  <span className="font-bold text-slate-900">Learner:</span>{" "}
+                  <span className="text-slate-600">
+                    {learnerToRemove.name} {learnerToRemove.employeeNumber ? `(${learnerToRemove.employeeNumber})` : ""}
+                  </span>
+                </div>
+                <div className="text-sm mt-1">
+                  <span className="font-bold text-slate-900">Learning Path:</span>{" "}
+                  <span className="text-slate-600">{selectedPath?.title || "Unknown"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-center sm:justify-end gap-3 border-t border-slate-100 bg-white px-6 py-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLearnerToRemove(null)}
+                disabled={isRemovingLearner}
+                className="h-10 px-4"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={handleConfirmRemoveLearner}
+                disabled={isRemovingLearner}
+                className="h-10 px-4 !bg-[#dc2626] hover:!bg-[#b91c1c] !text-white border-transparent"
+              >
+                {isRemovingLearner ? "Removing..." : "Confirm Remove"}
               </Button>
             </div>
           </div>
