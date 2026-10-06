@@ -1790,7 +1790,9 @@ export function LearningPathManagement({
         surname: assignSurnameSearch,
         designation: assignDesignationFilter,
         grade: assignGradeFilter,
-        organizationName: assignOrganizationFilter,
+        organizationName: assignOrganizationFilter 
+          ? organizationOptions.find(o => o.organizationId === assignOrganizationFilter)?.organizationName || "" 
+          : "",
         payrollType: assignPayrollFilter as "" | "EXECUTIVE" | "NON_EXECUTIVE",
       });
 
@@ -2233,7 +2235,7 @@ export function LearningPathManagement({
                     options={[
                       { value: "", label: "All Organizations" },
                       ...organizationOptions.map((option) => ({
-                        value: option.organizationName,
+                        value: option.organizationId,
                         label: option.parentOrganizationName
                           ? `${option.organizationName} (${option.parentOrganizationName})`
                           : option.organizationName,

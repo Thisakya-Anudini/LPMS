@@ -28,6 +28,8 @@ interface SearchableSelectProps {
   disabled?: boolean;
   required?: boolean;
   error?: string;
+  isLoading?: boolean;
+  loadingLabel?: string;
   className?: string;
 }
 
@@ -45,6 +47,8 @@ export function SearchableSelect({
   required = false,
   error,
   className = '',
+  isLoading = false,
+  loadingLabel = 'Loading...',
 }: SearchableSelectProps) {
   const generatedId = useId();
   const selectId = id || name || generatedId;
@@ -211,7 +215,7 @@ export function SearchableSelect({
         ref={triggerRef}
         type="button"
         id={`${selectId}-button`}
-        disabled={disabled}
+        disabled={disabled || isLoading}
         onClick={() => (isOpen ? closeDropdown() : openDropdown())}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -219,18 +223,22 @@ export function SearchableSelect({
         className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-4 py-2.5 text-left text-sm transition-all duration-150 cursor-pointer ${error
           ? 'border-red-500 focus:ring-2 focus:ring-red-500'
           : 'border-slate-300 hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent'
-          } ${disabled ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''} ${className}`}
+          } ${(disabled || isLoading) ? 'cursor-not-allowed opacity-50 bg-slate-50' : ''} ${className}`}
       >
         <span
-          className={`truncate ${selectedOption ? 'text-slate-900 font-medium' : 'text-slate-500'
+          className={`truncate ${selectedOption && !isLoading ? 'text-slate-900 font-medium' : 'text-slate-500'
             }`}
         >
-          {selectedOption ? selectedOption.label : placeholder}
+          {isLoading ? loadingLabel : (selectedOption ? selectedOption.label : placeholder)}
         </span>
-        <ChevronDown
-          className={`ml-2 h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : ''
-            }`}
-        />
+        {isLoading ? (
+          <div className="ml-2 h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-primary-600" />
+        ) : (
+          <ChevronDown
+            className={`ml-2 h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180 text-primary-600' : ''
+              }`}
+          />
+        )}
       </button>
 
       {/* Dropdown panel */}
