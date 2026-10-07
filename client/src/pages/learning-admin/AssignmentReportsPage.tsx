@@ -89,6 +89,7 @@ export function AssignmentReportsPage() {
   const [selectedReport, setSelectedReport] = useState<AssignmentReport | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const PAGE_SIZE = 10;
   const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
@@ -116,9 +117,28 @@ export function AssignmentReportsPage() {
     loadReports();
   }, [loadReports]);
 
+  const filteredReports = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return reports;
+    }
+    return reports.filter((report) => {
+      const titleMatch = report.learning_path_title?.toLowerCase().includes(query);
+      const assignerMatch = report.assigned_by_name?.toLowerCase().includes(query);
+      const learnerMatch = report.learners?.some(
+        (learner) =>
+          learner.learnerName?.toLowerCase().includes(query) ||
+          learner.employeeNumber?.toLowerCase().includes(query) ||
+          (learner.designation && learner.designation.toLowerCase().includes(query)) ||
+          (learner.gradeName && learner.gradeName.toLowerCase().includes(query))
+      );
+      return Boolean(titleMatch || assignerMatch || learnerMatch);
+    });
+  }, [reports, searchQuery]);
+
   useEffect(() => {
     setPage(1);
-  }, [reports.length]);
+  }, [reports.length, searchQuery]);
 
   const stats = useMemo(() => {
     return {
@@ -159,8 +179,8 @@ export function AssignmentReportsPage() {
 
   const paginatedReports = useMemo(() => {
     const startIndex = (page - 1) * PAGE_SIZE;
-    return reports.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [page, PAGE_SIZE, reports]);
+    return filteredReports.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [page, PAGE_SIZE, filteredReports]);
 
   const toggleSelect = (id: string) => {
     setSelectedRowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -176,9 +196,9 @@ export function AssignmentReportsPage() {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(reports.length / PAGE_SIZE));
-  const pageStart = reports.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const pageEnd = reports.length === 0 ? 0 : Math.min(page * PAGE_SIZE, reports.length);
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / PAGE_SIZE));
+  const pageStart = filteredReports.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const pageEnd = filteredReports.length === 0 ? 0 : Math.min(page * PAGE_SIZE, filteredReports.length);
   const canGoPrevious = page > 1;
   const canGoNext = page < totalPages;
   const visiblePages = useMemo(() => {
@@ -309,14 +329,37 @@ export function AssignmentReportsPage() {
       <Card title="Assignment Report List">
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
-            {loading ? <Skeleton className="h-5 w-52" /> : <p className="text-sm font-semibold text-slate-900">Showing {pageStart}-{pageEnd} of {reports.length} reports</p>}
+            {loading ? (
+              <Skeleton className="h-5 w-52" />
+            ) : (
+              <p className="text-sm font-semibold text-slate-900">
+                Showing {pageStart}-{pageEnd} of {filteredReports.length} reports
+                {searchQuery && reports.length !== filteredReports.length && (
+                  <span className="ml-1 text-xs font-normal text-slate-500">
+                    (filtered from {reports.length})
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input type="search" placeholder="Search" className="h-9 w-56 rounded-full border border-slate-200 bg-white pl-9 pr-4 text-sm shadow-sm placeholder:text-slate-400 focus:border-[#7dd3fc] focus:outline-none focus:ring-0" />
+              <input
+                type="search"
+                placeholder="Search by learning path, assigner, or learner..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-72 sm:w-80 md:w-96 rounded-full border border-slate-200 bg-white pl-9 pr-4 text-sm shadow-sm placeholder:text-slate-400 focus:border-[#7dd3fc] focus:outline-none focus:ring-0"
+              />
             </div>
-            {loading ? <Skeleton className="h-8 w-28 rounded-full" /> : <span className="rounded-full bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-3 py-1 font-medium text-white shadow-sm">Page {reports.length === 0 ? 0 : page} of {totalPages}</span>}
+            {loading ? (
+              <Skeleton className="h-8 w-28 rounded-full" />
+            ) : (
+              <span className="rounded-full bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-3 py-1 font-medium text-white shadow-sm">
+                Page {filteredReports.length === 0 ? 0 : page} of {totalPages}
+              </span>
+            )}
           </div>
         </div>
 
@@ -354,8 +397,12 @@ export function AssignmentReportsPage() {
                     <td className="px-4 py-4"><Skeleton className="h-8 w-36 rounded-full" /></td>
                     <td className="px-4 py-4"><Skeleton className="h-8 w-28 rounded-lg" /></td>
                   </tr>
-                )) : (reports.length === 0 ? (
-                  <tr><td className="px-4 py-4 text-slate-500" colSpan={8}>No assignment reports available yet.</td></tr>
+                )) : (filteredReports.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-4 text-slate-500 text-center" colSpan={8}>
+                      {searchQuery ? `No assignment reports match "${searchQuery}".` : 'No assignment reports available yet.'}
+                    </td>
+                  </tr>
                 ) : (
                   paginatedReports.map((report, idx) => {
                     const isSelected = selectedRowIds.includes(report.id);
