@@ -2,6 +2,9 @@ import { query } from "../db.js";
 import { sendError } from "../utils/http.js";
 import { ROLES } from "../constants/roles.js";
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Validates whether the logged-in caller has permission to view data
  * for the requested target principal (either themselves or a subordinate).
@@ -20,6 +23,16 @@ export const verifyTalentScope = async (req, res, next) => {
   // Support viewAsId passed via query string or route parameter
   const requestedTargetId =
     req.query.viewAsId || req.params.principalId || null;
+
+  // Validate UUID format if a target ID was supplied
+  if (requestedTargetId && !UUID_REGEX.test(requestedTargetId)) {
+    return sendError(
+      res,
+      400,
+      "INVALID_UUID",
+      "The provided viewAsId is not a valid UUID format.",
+    );
+  }
 
   // 1. Viewing self (default when no viewAsId is specified or matches caller ID)
   if (!requestedTargetId || requestedTargetId === callerId) {
