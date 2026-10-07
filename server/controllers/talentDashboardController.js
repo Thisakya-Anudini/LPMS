@@ -1,5 +1,5 @@
 import { getKpiMetrics } from "../services/talentDashboard/aggregatesService.js";
-import { sendSuccess, sendError } from "../utils/http.js";
+import { sendError } from "../utils/http.js";
 
 export const getKpis = async (req, res) => {
   try {
@@ -17,7 +17,11 @@ export const getKpis = async (req, res) => {
       },
     });
 
-    return sendSuccess(res, "KPI metrics retrieved successfully", metrics);
+    return res.status(200).json({
+      success: true,
+      message: "KPI metrics retrieved successfully",
+      data: metrics,
+    });
   } catch (error) {
     console.error("Error in getKpis controller:", error);
     return sendError(
