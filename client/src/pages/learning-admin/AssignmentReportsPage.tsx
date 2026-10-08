@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Eye } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock, Eye, FileText, Search } from 'lucide-react';
 import { learningApi } from '../../api/lpmsApi';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -33,11 +33,6 @@ type AssignmentReport = {
 const formatStatusLabel = (value: AssignmentReport['report_status']) =>
   value === 'ASSIGNED_IN_LPMS' ? 'Assigned in LPMS' : 'Enrolled in ERP';
 
-const getStatusSelectClassName = (value: AssignmentReport['report_status']) =>
-  value === 'ASSIGNED_IN_LPMS'
-    ? 'border border-[#034c96] bg-[#034c96] text-white focus:ring-[#034c96]'
-    : 'border border-transparent bg-gradient-to-r from-[#bffb7e] to-[#7CFC00] text-[#064c00] focus:ring-[#7CFC00]/40 shadow-md hover:brightness-105';
-
 function StatusSelect({
   value,
   disabled,
@@ -47,26 +42,39 @@ function StatusSelect({
   disabled?: boolean;
   onChange: (value: AssignmentReport['report_status']) => void;
 }) {
+  const isAssigned = value === 'ASSIGNED_IN_LPMS';
+
   return (
-    <div className="relative inline-block w-auto min-w-[150px]">
+    <div className="relative inline-block w-auto min-w-[155px]">
       <select
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value as AssignmentReport['report_status'])}
-        className={`h-8 w-full appearance-none rounded-full px-3 pr-9 text-xs font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-70 ${getStatusSelectClassName(value)}`}
+        className={`h-8 w-full appearance-none rounded-full px-3.5 pr-8 text-xs font-semibold shadow-sm transition-colors focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-70 cursor-pointer ${
+          isAssigned
+            ? 'bg-[#0b66b2] text-white border border-[#0b66b2] hover:bg-[#085292] focus:ring-[#0b66b2]/40'
+            : 'bg-[#16a34a] text-white border border-[#16a34a] hover:bg-[#15803d] focus:ring-[#16a34a]/40'
+        }`}
       >
-        <option value="ASSIGNED_IN_LPMS">Assigned in LPMS</option>
-        <option value="ENROLLED_IN_ERP">Enrolled in ERP</option>
+        <option value="ASSIGNED_IN_LPMS" className="bg-white text-slate-800 py-1.5 font-medium">
+          Assigned in LPMS
+        </option>
+        <option value="ENROLLED_IN_ERP" className="bg-white text-slate-800 py-1.5 font-medium">
+          Enrolled in ERP
+        </option>
       </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-current opacity-70" />
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/90" />
     </div>
   );
 }
 
 function StatusBadge({ value }: { value: AssignmentReport['report_status'] }) {
+  const isAssigned = value === 'ASSIGNED_IN_LPMS';
   return (
     <span
-      className={`inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold shadow-sm ${getStatusSelectClassName(value)}`}
+      className={`inline-flex h-7 items-center rounded-full px-3 text-xs font-semibold shadow-sm ${
+        isAssigned ? 'bg-[#0b66b2] text-white' : 'bg-[#16a34a] text-white'
+      }`}
     >
       {formatStatusLabel(value)}
     </span>
@@ -81,6 +89,7 @@ export function AssignmentReportsPage() {
   const [selectedReport, setSelectedReport] = useState<AssignmentReport | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const PAGE_SIZE = 10;
   const statSkeletons = Array.from({ length: 3 }, (_, index) => index);
@@ -108,9 +117,28 @@ export function AssignmentReportsPage() {
     loadReports();
   }, [loadReports]);
 
+  const filteredReports = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return reports;
+    }
+    return reports.filter((report) => {
+      const titleMatch = report.learning_path_title?.toLowerCase().includes(query);
+      const assignerMatch = report.assigned_by_name?.toLowerCase().includes(query);
+      const learnerMatch = report.learners?.some(
+        (learner) =>
+          learner.learnerName?.toLowerCase().includes(query) ||
+          learner.employeeNumber?.toLowerCase().includes(query) ||
+          (learner.designation && learner.designation.toLowerCase().includes(query)) ||
+          (learner.gradeName && learner.gradeName.toLowerCase().includes(query))
+      );
+      return Boolean(titleMatch || assignerMatch || learnerMatch);
+    });
+  }, [reports, searchQuery]);
+
   useEffect(() => {
     setPage(1);
-  }, [reports.length]);
+  }, [reports.length, searchQuery]);
 
   const stats = useMemo(() => {
     return {
@@ -151,8 +179,8 @@ export function AssignmentReportsPage() {
 
   const paginatedReports = useMemo(() => {
     const startIndex = (page - 1) * PAGE_SIZE;
-    return reports.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [page, PAGE_SIZE, reports]);
+    return filteredReports.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [page, PAGE_SIZE, filteredReports]);
 
   const toggleSelect = (id: string) => {
     setSelectedRowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -168,9 +196,9 @@ export function AssignmentReportsPage() {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(reports.length / PAGE_SIZE));
-  const pageStart = reports.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const pageEnd = reports.length === 0 ? 0 : Math.min(page * PAGE_SIZE, reports.length);
+  const totalPages = Math.max(1, Math.ceil(filteredReports.length / PAGE_SIZE));
+  const pageStart = filteredReports.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const pageEnd = filteredReports.length === 0 ? 0 : Math.min(page * PAGE_SIZE, filteredReports.length);
   const canGoPrevious = page > 1;
   const canGoNext = page < totalPages;
   const visiblePages = useMemo(() => {
@@ -243,36 +271,20 @@ export function AssignmentReportsPage() {
         {statSkeletons.map((index) => {
           const title = index === 0 ? 'Total Reports' : index === 1 ? 'Pending ERP Enrollment' : 'Enrolled in ERP';
           const value = index === 0 ? stats.totalReports : index === 1 ? stats.assignedInLpms : stats.enrolledInErp;
-          const accent = index === 0 ? ['#d8ecff', '#1E90FF'] : index === 1 ? ['#cffaf6', '#2dd6c9'] : ['#e6f9e8', '#7CFC00'];
           const percent = stats.totalReports > 0 ? Math.round((value / stats.totalReports) * 100) : index === 0 ? 100 : 0;
 
           return (
             <Card
               key={`report-stat-${index}`}
-              className={`relative overflow-hidden p-4 rounded-2xl shadow-sm transform transition-all duration-200 hover:scale-[1.02] ${index === 0 ? 'bg-gradient-to-r from-[#e8f7ff] to-[#cfe9ff]' : index === 1 ? 'bg-gradient-to-r from-[#f6fffd] to-[#e6fbfd]' : 'bg-gradient-to-r from-[#f7fff7] to-[#d4ffb8]'}`}
+              className={`relative overflow-hidden p-4 rounded-2xl shadow-sm transform transition-all duration-200 hover:scale-[1.02] ${index === 0 ? 'bg-gradient-to-r from-[#e8f7ff] to-[#cfe9ff]' : index === 1 ? 'bg-gradient-to-r from-[#f6fffd] to-[#e6fbfd]' : 'bg-gradient-to-r from-[#f7fff7] to-[#dcfce7]'}`}
             >
-              <div className={`absolute right-4 top-3 h-14 w-14 rounded-full flex items-center justify-center ${index === 0 ? 'bg-gradient-to-br from-white/80 to-[#e8f7ff] ring-1 ring-white/60 shadow' : 'bg-white/70 ring-1 ring-white/50 shadow-sm'}`}>
+              <div className={`absolute right-4 top-3 h-12 w-12 rounded-full flex items-center justify-center bg-white/80 shadow-sm backdrop-blur-sm ${index === 0 ? 'text-[#0b66b2] ring-1 ring-[#0b66b2]/20' : index === 1 ? 'text-[#0e7490] ring-1 ring-[#0e7490]/20' : 'text-[#0b7a00] ring-1 ring-[#0b7a00]/20'}`}>
                 {index === 0 ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <defs>
-                        <linearGradient id="g1" x1="0" x2="1">
-                          <stop offset="0%" stopColor="#d8ecff" />
-                          <stop offset="100%" stopColor="#1E90FF" />
-                        </linearGradient>
-                      </defs>
-                      <circle cx="12" cy="12" r="9" stroke="url(#g1)" strokeWidth="1.2" fill="none" />
-                      <rect x="8" y="8" width="8" height="8" rx="2" fill="#e8f7ff" />
-                  </svg>
-                ) : index === 2 ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="9" stroke="#7CFC00" strokeWidth="1.4" fill="none" />
-                    <path d="M8 12a4 4 0 018 0" stroke="#7CFC00" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <FileText className="h-6 w-6" />
+                ) : index === 1 ? (
+                  <Clock className="h-6 w-6" />
                 ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="9" stroke={accent[0]} strokeWidth="1.4" fill="none" />
-                    <path d="M8 12a4 4 0 018 0" stroke={accent[1]} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <CheckCircle2 className="h-6 w-6" />
                 )}
               </div>
 
@@ -284,17 +296,27 @@ export function AssignmentReportsPage() {
                   <div className="mt-3 flex items-center justify-between">
                     <p className={`text-3xl font-extrabold ${index === 2 ? 'text-[#0b7a00]' : 'text-[#0b66b2]'}`}>{value}</p>
                     <div className="ml-4 w-28">
-                      <div className="h-2 w-full rounded-full bg-white/60">
+                      <div className="h-2 w-full rounded-full bg-slate-200/80">
                         <div
-                          className="h-2 rounded-full"
+                          className="h-2 rounded-full transition-all duration-500"
                           style={{
                             width: `${percent}%`,
-                            background: index === 2 ? 'linear-gradient(90deg, #bffb7e, #7CFC00)' : `linear-gradient(90deg, ${accent[0]}, ${accent[1]})`,
-                            boxShadow: index === 2 ? '0 2px 8px #7CFC0030' : `0 1px 6px ${accent[1]}30`
+                            background:
+                              index === 0
+                                ? 'linear-gradient(90deg, #0b66b2, #0ea5e9)'
+                                : index === 1
+                                ? 'linear-gradient(90deg, #0891b2, #06b6d4)'
+                                : 'linear-gradient(90deg, #15803d, #22c55e)',
+                            boxShadow:
+                              index === 0
+                                ? '0 1px 4px #0b66b230'
+                                : index === 1
+                                ? '0 1px 4px #0891b230'
+                                : '0 1px 4px #15803d30'
                           }}
                         />
                       </div>
-                      <p className={`mt-1 text-xs ${index === 2 ? 'text-[#7CFC00]' : 'text-slate-500'}`}>{percent}%</p>
+                      <p className={`mt-1 text-xs font-semibold ${index === 0 ? 'text-[#0b66b2]' : index === 1 ? 'text-[#0891b2]' : 'text-[#15803d]'}`}>{percent}%</p>
                     </div>
                   </div>
                 )}
@@ -307,14 +329,37 @@ export function AssignmentReportsPage() {
       <Card title="Assignment Report List">
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <div>
-            {loading ? <Skeleton className="h-5 w-52" /> : <p className="text-sm font-semibold text-slate-900">Showing {pageStart}-{pageEnd} of {reports.length} reports</p>}
+            {loading ? (
+              <Skeleton className="h-5 w-52" />
+            ) : (
+              <p className="text-sm font-semibold text-slate-900">
+                Showing {pageStart}-{pageEnd} of {filteredReports.length} reports
+                {searchQuery && reports.length !== filteredReports.length && (
+                  <span className="ml-1 text-xs font-normal text-slate-500">
+                    (filtered from {reports.length})
+                  </span>
+                )}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <input type="search" placeholder="Search" className="h-9 w-56 rounded-full border border-slate-200 bg-white px-4 text-sm shadow-sm placeholder:text-slate-400" />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">🔍</div>
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                placeholder="Search by learning path, assigner, or learner..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-72 sm:w-80 md:w-96 rounded-full border border-slate-200 bg-white pl-9 pr-4 text-sm shadow-sm placeholder:text-slate-400 focus:border-[#7dd3fc] focus:outline-none focus:ring-0"
+              />
             </div>
-            {loading ? <Skeleton className="h-8 w-28 rounded-full" /> : <span className="rounded-full bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-3 py-1 font-medium text-white shadow-sm">Page {reports.length === 0 ? 0 : page} of {totalPages}</span>}
+            {loading ? (
+              <Skeleton className="h-8 w-28 rounded-full" />
+            ) : (
+              <span className="rounded-full bg-[linear-gradient(90deg,#034c96_0%,#0563bb_35%,#3faa45_100%)] px-3 py-1 font-medium text-white shadow-sm">
+                Page {filteredReports.length === 0 ? 0 : page} of {totalPages}
+              </span>
+            )}
           </div>
         </div>
 
@@ -352,8 +397,12 @@ export function AssignmentReportsPage() {
                     <td className="px-4 py-4"><Skeleton className="h-8 w-36 rounded-full" /></td>
                     <td className="px-4 py-4"><Skeleton className="h-8 w-28 rounded-lg" /></td>
                   </tr>
-                )) : (reports.length === 0 ? (
-                  <tr><td className="px-4 py-4 text-slate-500" colSpan={8}>No assignment reports available yet.</td></tr>
+                )) : (filteredReports.length === 0 ? (
+                  <tr>
+                    <td className="px-4 py-4 text-slate-500 text-center" colSpan={8}>
+                      {searchQuery ? `No assignment reports match "${searchQuery}".` : 'No assignment reports available yet.'}
+                    </td>
+                  </tr>
                 ) : (
                   paginatedReports.map((report, idx) => {
                     const isSelected = selectedRowIds.includes(report.id);
@@ -371,7 +420,7 @@ export function AssignmentReportsPage() {
                             onChange={() => toggleSelect(report.id)}
                           />
                         </td>
-                        <td className={`px-4 py-4 ${isSelected ? 'bg-slate-100' : ''}`}><span className={`inline-block h-3 w-3 rounded-full ${report.report_status === 'ASSIGNED_IN_LPMS' ? 'bg-[#0b66b2]' : 'bg-[#7CFC00]'}`} /></td>
+                        <td className={`px-4 py-4 ${isSelected ? 'bg-slate-100' : ''}`}><span className={`inline-block h-3 w-3 rounded-full ${report.report_status === 'ASSIGNED_IN_LPMS' ? 'bg-[#0b66b2]' : 'bg-emerald-500'}`} /></td>
                         <td className={`px-4 py-4 font-medium text-slate-900 ${isSelected ? 'bg-slate-100' : ''}`}>{report.learning_path_title}</td>
                         <td className={`px-4 py-4 text-slate-600 ${isSelected ? 'bg-slate-100' : ''}`}>{report.learners.length}</td>
                         <td className={`px-4 py-4 text-slate-600 ${isSelected ? 'bg-slate-100' : ''}`}><p className="font-medium text-slate-800">{report.assigned_by_name}</p></td>
