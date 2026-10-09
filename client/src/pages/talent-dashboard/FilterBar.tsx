@@ -5,9 +5,12 @@ import {
     RotateCcw,
     SlidersHorizontal,
     GraduationCap,
-    Users,
+    Briefcase,
+    Loader2,
 } from "lucide-react";
 import { useTalentDashboardScope } from "../../contexts/TalentDashboardScopeContext";
+import { useAuth } from "../../contexts/useAuth";
+import { talentDashboardApi } from "../../api/talentDashboardApi";
 import { TalentFilterParams } from "../../types";
 
 const TRAINING_TYPES = [
@@ -18,24 +21,47 @@ const TRAINING_TYPES = [
     { value: "EXTERNAL", label: "External" },
 ];
 
-const STAFF_CATEGORIES = [
-    { value: "ALL", label: "All Categories" },
-    { value: "EXECUTIVE", label: "Executive" },
-    { value: "MANAGERIAL", label: "Managerial" },
-    { value: "TECHNICAL", label: "Technical" },
-    { value: "OPERATIONAL", label: "Operational" },
-];
-
 export function FilterBar() {
     const { filters, updateFilters, resetFilters } = useTalentDashboardScope();
+    const { getAccessToken } = useAuth();
 
     // Local draft state so users can make selections before triggering API calls
     const [draft, setDraft] = useState<TalentFilterParams>(filters);
+    const [designations, setDesignations] = useState<string[]>([]);
+    const [isLoadingDesignations, setIsLoadingDesignations] = useState(false);
 
     // Sync draft whenever context filters change (e.g. on external reset)
     useEffect(() => {
         setDraft(filters);
     }, [filters]);
+
+    // Fetch dynamic designations from Database / ERP on mount
+    useEffect(() => {
+        let isMounted = true;
+        const loadDesignations = async () => {
+            setIsLoadingDesignations(true);
+            try {
+                const token = await getAccessToken();
+                if (token) {
+                    const data = await talentDashboardApi.getDesignations(token);
+                    if (isMounted) {
+                        setDesignations(data);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to load designations:", err);
+            } finally {
+                if (isMounted) {
+                    setIsLoadingDesignations(false);
+                }
+            }
+        };
+
+        loadDesignations();
+        return () => {
+            isMounted = false;
+        };
+    }, [getAccessToken]);
 
     const handleChange = (key: keyof TalentFilterParams, value: string) => {
         setDraft((prev) => ({
@@ -57,8 +83,7 @@ export function FilterBar() {
         draft.startDate ||
         draft.endDate ||
         (draft.trainingType && draft.trainingType !== "ALL") ||
-        (draft.staffCategory && draft.staffCategory !== "ALL") ||
-        draft.designation,
+        (draft.designation && draft.designation !== "ALL"),
     );
 
     return (
@@ -128,7 +153,6 @@ export function FilterBar() {
                         </div>
                     </div>
 
-
                     {/* Training Type Dropdown */}
                     <div>
                         <label
@@ -154,28 +178,34 @@ export function FilterBar() {
                         </div>
                     </div>
 
-                    {/* Staff Category Dropdown */}
+                    {/* Dynamic Designation Dropdown */}
                     <div>
                         <label
-                            htmlFor="filter-staff-category"
+                            htmlFor="filter-designation"
                             className="mb-1 block text-xs font-medium text-slate-600"
                         >
-                            Staff Category
+                            Designation
                         </label>
                         <div className="relative">
                             <select
-                                id="filter-staff-category"
-                                value={draft.staffCategory || "ALL"}
-                                onChange={(e) => handleChange("staffCategory", e.target.value)}
-                                className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/60 pl-8 pr-8 text-xs text-slate-800 transition focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+                                id="filter-designation"
+                                value={draft.designation || "ALL"}
+                                onChange={(e) => handleChange("designation", e.target.value)}
+                                disabled={isLoadingDesignations}
+                                className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-slate-50/60 pl-8 pr-8 text-xs text-slate-800 transition focus:border-primary-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:opacity-60"
                             >
-                                {STAFF_CATEGORIES.map((c) => (
-                                    <option key={c.value} value={c.value}>
-                                        {c.label}
+                                <option value="ALL">All Designations</option>
+                                {designations.map((des) => (
+                                    <option key={des} value={des}>
+                                        {des}
                                     </option>
                                 ))}
                             </select>
-                            <Users className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                            {isLoadingDesignations ? (
+                                <Loader2 className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400 animate-spin" />
+                            ) : (
+                                <Briefcase className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                            )}
                         </div>
                     </div>
 

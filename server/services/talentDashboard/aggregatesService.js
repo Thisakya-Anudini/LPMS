@@ -26,6 +26,16 @@ const buildFilterConditions = (filters = {}, startIndex = 1) => {
     params.push(filters.trainingType);
     index++;
   }
+  if (filters.designation && filters.designation !== "ALL") {
+    conditions.push(
+      `tr.principal_id IN (SELECT principal_id FROM employees WHERE designation = $${index})`,
+    );
+    params.push(filters.designation);
+    index++;
+  }
+
+
+
 
   const clause = conditions.length > 0 ? `AND ${conditions.join(" AND ")}` : "";
   return { clause, params };
