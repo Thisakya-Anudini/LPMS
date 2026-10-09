@@ -4,6 +4,10 @@ import {
   useTalentDashboardScope,
 } from "../../contexts/TalentDashboardScopeContext";
 import { Eye, RotateCcw } from "lucide-react";
+import { FilterBar } from "./FilterBar";
+import { KpiCardRow } from "./KpiCardRow";
+
+
 
 function DrillDownBanner() {
   const { isSelfView, viewAsUser, resetToSelf } = useTalentDashboardScope();
@@ -59,10 +63,17 @@ function TalentDashboardContent() {
       {/* Drill-down indicator banner when inspecting a subordinate */}
       <DrillDownBanner />
 
-      {/* Widget Grid Scaffolding (Will be connected in next tasks) */}
+      {/* Global Filter Bar */}
+      <FilterBar />
+
+      {/* Top KPI Summary Metrics Row */}
+      <KpiCardRow />
+
+      {/* Widget Grid Scaffolding */}
       <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-        Ready for FilterBar (`[N1.6]`) and KPI Cards (`[N1.7]`).
+        Ready for Target Gauges (`[T2.5]`) and Hierarchy Tree (`[N1.8]`).
       </div>
+
     </div>
   );
 }

@@ -26,10 +26,23 @@ const buildFilterConditions = (filters = {}, startIndex = 1) => {
     params.push(filters.trainingType);
     index++;
   }
+  if (filters.designation && filters.designation !== "ALL") {
+    conditions.push(
+      `tr.principal_id IN (SELECT principal_id FROM employees WHERE designation = $${index})`,
+    );
+    params.push(filters.designation);
+    index++;
+  }
+
+
+
 
   const clause = conditions.length > 0 ? `AND ${conditions.join(" AND ")}` : "";
   return { clause, params };
 };
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Calculates core Talent Development Dashboard KPI metrics
@@ -41,10 +54,30 @@ export const getKpiMetrics = async ({
   isSelfView,
   filters = {},
 }) => {
-  // 1. Opportunistic background hierarchy sync if supervisor has employee number
-  if (employeeNumber && targetPrincipalId) {
+  // 1. If targetPrincipalId is an ERP string (e.g., "erp-learner-008668"), attempt to resolve real UUID
+  let resolvedPrincipalId = targetPrincipalId;
+  if (
+    targetPrincipalId &&
+    !UUID_REGEX.test(targetPrincipalId) &&
+    employeeNumber
+  ) {
+    const empRes = await query(
+      `SELECT principal_id FROM employees WHERE employee_number = $1 LIMIT 1;`,
+      [employeeNumber],
+    );
+    if (empRes.rows.length > 0 && empRes.rows[0]?.principal_id) {
+      resolvedPrincipalId = empRes.rows[0].principal_id;
+    }
+  }
+
+  const isValidUuid = Boolean(
+    resolvedPrincipalId && UUID_REGEX.test(resolvedPrincipalId),
+  );
+
+  // 2. Opportunistic background hierarchy sync if supervisor has a valid UUID
+  if (employeeNumber && isValidUuid) {
     try {
-      await syncHierarchyForUser(targetPrincipalId, employeeNumber);
+      await syncHierarchyForUser(resolvedPrincipalId, employeeNumber);
     } catch {
       // Soft fail: proceed with cached closure data
     }
@@ -54,28 +87,29 @@ export const getKpiMetrics = async ({
     isSelfView &&
     (callerRole === ROLES.SUPER_ADMIN || callerRole === ROLES.LEARNING_ADMIN);
 
-  // 1. Calculate Total Staff Count
+  // 3. Calculate Total Staff Count
   let totalStaff = 0;
   if (isAdminGlobal) {
     const staffRes = await query(
       `SELECT COUNT(*)::int AS count FROM employees;`,
     );
     totalStaff = staffRes.rows[0]?.count || 0;
-  } else {
+  } else if (isValidUuid) {
     const staffRes = await query(
       `SELECT COUNT(DISTINCT descendant_principal_id)::int AS count
        FROM org_hierarchy_closure
        WHERE ancestor_principal_id = $1 AND depth > 0;`,
-      [targetPrincipalId],
+      [resolvedPrincipalId],
     );
     totalStaff = staffRes.rows[0]?.count || 0;
+  } else {
+    totalStaff = 0;
   }
 
-  // 2. Calculate Total Training Hours (across all in-scope staff)
+  // 4. Calculate Total Training Hours (across in-scope staff)
   let totalTrainingHours = 0;
 
   if (isAdminGlobal) {
-    // Admin query: parameters start at $1
     const { clause, params } = buildFilterConditions(filters, 1);
     const totalHoursRes = await query(
       `SELECT COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS total_hours
@@ -84,8 +118,7 @@ export const getKpiMetrics = async ({
       params,
     );
     totalTrainingHours = parseFloat(totalHoursRes.rows[0]?.total_hours || "0");
-  } else if (totalStaff > 0) {
-    // Scoped supervisor query: $1 is targetPrincipalId, filters start at $2
+  } else if (totalStaff > 0 && isValidUuid) {
     const { clause, params } = buildFilterConditions(filters, 2);
     const totalHoursRes = await query(
       `SELECT COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS total_hours
@@ -95,28 +128,34 @@ export const getKpiMetrics = async ({
        WHERE ohc.ancestor_principal_id = $1 
          AND ohc.depth > 0 
          ${clause};`,
-      [targetPrincipalId, ...params],
+      [resolvedPrincipalId, ...params],
     );
     totalTrainingHours = parseFloat(totalHoursRes.rows[0]?.total_hours || "0");
   } else {
     totalTrainingHours = 0;
   }
 
-  // 3. Calculate Self Training Hours (user's personal hours)
-  // $1 is targetPrincipalId, filters start at $2
-  const { clause: selfClause, params: selfParams } = buildFilterConditions(
-    filters,
-    2,
-  );
-  const selfHoursRes = await query(
-    `SELECT COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS self_hours
-     FROM training_records tr
-     WHERE tr.principal_id = $1 ${selfClause};`,
-    [targetPrincipalId, ...selfParams],
-  );
-  const selfTrainingHours = parseFloat(selfHoursRes.rows[0]?.self_hours || "0");
+  // 5. Calculate Self Training Hours (user's personal hours)
+  // Safely handles both UUID principal_id and text employee_number
+  let selfTrainingHours = 0;
+  const selfParam = isValidUuid ? resolvedPrincipalId : employeeNumber;
+  const selfField = isValidUuid ? "tr.principal_id" : "tr.employee_number";
 
-  // 4. Calculate Average Training Hours
+  if (selfParam) {
+    const { clause: selfClause, params: selfParams } = buildFilterConditions(
+      filters,
+      2,
+    );
+    const selfHoursRes = await query(
+      `SELECT COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS self_hours
+       FROM training_records tr
+       WHERE ${selfField} = $1 ${selfClause};`,
+      [selfParam, ...selfParams],
+    );
+    selfTrainingHours = parseFloat(selfHoursRes.rows[0]?.self_hours || "0");
+  }
+
+  // 6. Calculate Average Training Hours
   const averageTrainingHours =
     totalStaff > 0
       ? Math.round((totalTrainingHours / totalStaff) * 10) / 10
