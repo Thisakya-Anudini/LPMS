@@ -5,6 +5,8 @@ import {
 } from "../../contexts/TalentDashboardScopeContext";
 import { Eye, RotateCcw } from "lucide-react";
 import { FilterBar } from "./FilterBar";
+import { KpiCardRow } from "./KpiCardRow";
+
 
 
 function DrillDownBanner() {
@@ -64,9 +66,12 @@ function TalentDashboardContent() {
       {/* Global Filter Bar */}
       <FilterBar />
 
+      {/* Top KPI Summary Metrics Row */}
+      <KpiCardRow />
+
       {/* Widget Grid Scaffolding */}
       <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-        Ready for KPI Cards (`[N1.7]`).
+        Ready for Target Gauges (`[T2.5]`) and Hierarchy Tree (`[N1.8]`).
       </div>
 
     </div>
