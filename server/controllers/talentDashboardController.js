@@ -73,11 +73,17 @@ export const getDesignations = async (_req, res) => {
 
 export const getKpis = async (req, res) => {
   try {
+    const targetEmpNo =
+      req.targetEmployeeNumber ||
+      (req.isSelfView ? req.user.employeeNo : req.targetPrincipalId);
+
     const metrics = await getKpiMetrics({
       callerRole: req.user.role,
+      isLearningAdmin: Boolean(req.user?.isLearningAdmin),
       targetPrincipalId: req.targetPrincipalId,
-      employeeNumber: req.user.employeeNo,
+      employeeNumber: targetEmpNo,
       isSelfView: req.isSelfView,
+
       filters: {
         startDate: req.query.startDate,
         endDate: req.query.endDate,

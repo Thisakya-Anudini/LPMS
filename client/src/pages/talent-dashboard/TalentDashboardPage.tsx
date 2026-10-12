@@ -52,6 +52,19 @@ function TalentDashboardContent() {
   const { user } = useAuth();
   const { drillDown, viewAsUser, refreshData } = useTalentDashboardScope();
 
+  // Super Admin & Learning Admin see the whole enterprise tree starting at the CEO ("020987").
+  // In LPMS, Learning Admins have role === "EMPLOYEE" with isLearningAdmin === true.
+  // Supervisors see only their own hierarchy starting from their employee number.
+  const isCompanyWideAdmin =
+    user?.role === "SUPER_ADMIN" ||
+    user?.role === "LEARNING_ADMIN" ||
+    Boolean(user?.isLearningAdmin);
+  const hierarchyRootEmployeeNo = isCompanyWideAdmin
+    ? undefined
+    : user?.employeeNo || undefined;
+
+
+
   const handleSelectSubordinate = (employee: SelectedHierarchyEmployee) => {
     drillDown({
       principalId: employee.employeeNumber,
@@ -85,11 +98,11 @@ function TalentDashboardContent() {
       <KpiCardRow />
 
       {/* Main Interactive Grid: Hierarchy Tree + Chart Scaffolding */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Organization Hierarchy Drill-Down Tree */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-5 xl:col-span-5">
           <EmployeeHierarchyPanel
-            rootEmployeeNumber={user?.employeeNo || "008668"}
+            rootEmployeeNumber={hierarchyRootEmployeeNo}
             selectedEmployeeNumber={viewAsUser?.employeeNumber}
             onSelectSubordinate={handleSelectSubordinate}
             onRefresh={refreshData}
@@ -97,7 +110,7 @@ function TalentDashboardContent() {
         </div>
 
         {/* Right Column: Scaffolding for Week 2 Charts */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
           <div className="rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-500 bg-slate-50/50 min-h-[420px] flex flex-col items-center justify-center">
             <p className="text-base font-semibold text-slate-700">
               Week 2 Charts Scaffolding

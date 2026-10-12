@@ -30,9 +30,17 @@ export const verifyTalentScope = async (req, res, next) => {
     return next();
   }
 
-  // Resolve target if passed as an employee number (e.g., "EMP-1001" or "008668")
+  const isGlobalAdmin =
+    callerRole === ROLES.SUPER_ADMIN ||
+    callerRole === ROLES.LEARNING_ADMIN ||
+    Boolean(req.user?.isLearningAdmin);
+
+  // Resolve target if passed as an employee number (e.g., "EMP-1001", "008668", or "010402")
   let resolvedTargetId = requestedTargetId;
+  let targetEmployeeNumber = null;
+
   if (requestedTargetId && !UUID_REGEX.test(requestedTargetId)) {
+    targetEmployeeNumber = requestedTargetId;
     const empRes = await query(
       `SELECT principal_id FROM employees WHERE employee_number = $1 LIMIT 1;`,
       [requestedTargetId],
@@ -42,7 +50,28 @@ export const verifyTalentScope = async (req, res, next) => {
     }
   }
 
-  // Validate UUID format after resolution
+  // 2. Super Admins & Learning Admins have global organization visibility
+  if (isGlobalAdmin) {
+    // Admins can inspect any UUID or valid employee service number from ERP
+    if (
+      !UUID_REGEX.test(resolvedTargetId) &&
+      !/^[A-Za-z0-9_-]{2,30}$/.test(resolvedTargetId)
+    ) {
+      return sendError(
+        res,
+        400,
+        "INVALID_TARGET_IDENTIFIER",
+        "The provided viewAsId is not a valid identifier.",
+      );
+    }
+
+    req.targetPrincipalId = resolvedTargetId;
+    req.targetEmployeeNumber = targetEmployeeNumber;
+    req.isSelfView = false;
+    return next();
+  }
+
+  // Validate UUID format for regular supervisors before hierarchy closure lookup
   if (resolvedTargetId && !UUID_REGEX.test(resolvedTargetId)) {
     return sendError(
       res,
@@ -52,12 +81,7 @@ export const verifyTalentScope = async (req, res, next) => {
     );
   }
 
-  // 2. Super Admins & Learning Admins have global organization visibility
-  if (callerRole === ROLES.SUPER_ADMIN || callerRole === ROLES.LEARNING_ADMIN) {
-    req.targetPrincipalId = resolvedTargetId;
-    req.isSelfView = false;
-    return next();
-  }
+
 
   // Resolve caller principal ID if caller has temporary ERP ID
   let effectiveCallerId = callerId;
