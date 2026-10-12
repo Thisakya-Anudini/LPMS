@@ -20,19 +20,8 @@ export const verifyTalentScope = async (req, res, next) => {
 
   const callerId = req.user.id;
   const callerRole = req.user.role;
-  // Support viewAsId passed via query string or route parameter
   const requestedTargetId =
     req.query.viewAsId || req.params.principalId || null;
-
-  // Validate UUID format if a target ID was supplied
-  if (requestedTargetId && !UUID_REGEX.test(requestedTargetId)) {
-    return sendError(
-      res,
-      400,
-      "INVALID_UUID",
-      "The provided viewAsId is not a valid UUID format.",
-    );
-  }
 
   // 1. Viewing self (default when no viewAsId is specified or matches caller ID)
   if (!requestedTargetId || requestedTargetId === callerId) {
@@ -41,11 +30,69 @@ export const verifyTalentScope = async (req, res, next) => {
     return next();
   }
 
+  const isGlobalAdmin =
+    callerRole === ROLES.SUPER_ADMIN ||
+    callerRole === ROLES.LEARNING_ADMIN ||
+    Boolean(req.user?.isLearningAdmin);
+
+  // Resolve target if passed as an employee number (e.g., "EMP-1001", "008668", or "010402")
+  let resolvedTargetId = requestedTargetId;
+  let targetEmployeeNumber = null;
+
+  if (requestedTargetId && !UUID_REGEX.test(requestedTargetId)) {
+    targetEmployeeNumber = requestedTargetId;
+    const empRes = await query(
+      `SELECT principal_id FROM employees WHERE employee_number = $1 LIMIT 1;`,
+      [requestedTargetId],
+    );
+    if (empRes.rows.length > 0 && empRes.rows[0].principal_id) {
+      resolvedTargetId = empRes.rows[0].principal_id;
+    }
+  }
+
   // 2. Super Admins & Learning Admins have global organization visibility
-  if (callerRole === ROLES.SUPER_ADMIN || callerRole === ROLES.LEARNING_ADMIN) {
-    req.targetPrincipalId = requestedTargetId;
+  if (isGlobalAdmin) {
+    // Admins can inspect any UUID or valid employee service number from ERP
+    if (
+      !UUID_REGEX.test(resolvedTargetId) &&
+      !/^[A-Za-z0-9_-]{2,30}$/.test(resolvedTargetId)
+    ) {
+      return sendError(
+        res,
+        400,
+        "INVALID_TARGET_IDENTIFIER",
+        "The provided viewAsId is not a valid identifier.",
+      );
+    }
+
+    req.targetPrincipalId = resolvedTargetId;
+    req.targetEmployeeNumber = targetEmployeeNumber;
     req.isSelfView = false;
     return next();
+  }
+
+  // Validate UUID format for regular supervisors before hierarchy closure lookup
+  if (resolvedTargetId && !UUID_REGEX.test(resolvedTargetId)) {
+    return sendError(
+      res,
+      400,
+      "INVALID_UUID",
+      "The provided viewAsId is not a valid UUID format or known employee number.",
+    );
+  }
+
+
+
+  // Resolve caller principal ID if caller has temporary ERP ID
+  let effectiveCallerId = callerId;
+  if (!UUID_REGEX.test(callerId) && req.user.employeeNo) {
+    const callerEmpRes = await query(
+      `SELECT principal_id FROM employees WHERE employee_number = $1 LIMIT 1;`,
+      [req.user.employeeNo],
+    );
+    if (callerEmpRes.rows.length > 0 && callerEmpRes.rows[0].principal_id) {
+      effectiveCallerId = callerEmpRes.rows[0].principal_id;
+    }
   }
 
   // 3. For Supervisors and Employees: verify descendant in org_hierarchy_closure
@@ -57,7 +104,10 @@ export const verifyTalentScope = async (req, res, next) => {
         AND descendant_principal_id = $2
       LIMIT 1;
     `;
-    const result = await query(checkQuery, [callerId, requestedTargetId]);
+    const result = await query(checkQuery, [
+      effectiveCallerId,
+      resolvedTargetId,
+    ]);
 
     if (result.rows.length === 0) {
       return sendError(
@@ -68,7 +118,7 @@ export const verifyTalentScope = async (req, res, next) => {
       );
     }
 
-    req.targetPrincipalId = requestedTargetId;
+    req.targetPrincipalId = resolvedTargetId;
     req.drillDownDepth = result.rows[0].depth;
     req.isSelfView = false;
     return next();
@@ -82,3 +132,4 @@ export const verifyTalentScope = async (req, res, next) => {
     );
   }
 };
+

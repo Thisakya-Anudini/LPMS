@@ -49,26 +49,34 @@ const UUID_REGEX =
  */
 export const getKpiMetrics = async ({
   callerRole,
+  isLearningAdmin,
   targetPrincipalId,
   employeeNumber,
   isSelfView,
   filters = {},
 }) => {
-  // 1. If targetPrincipalId is an ERP string (e.g., "erp-learner-008668"), attempt to resolve real UUID
+  // 1. If targetPrincipalId is an ERP string (e.g., "erp-learner-008668" or "010402"), attempt to resolve real UUID
   let resolvedPrincipalId = targetPrincipalId;
+  const lookupEmpNo =
+    employeeNumber ||
+    (targetPrincipalId && !UUID_REGEX.test(targetPrincipalId)
+      ? targetPrincipalId.replace(/^erp-learner-/, "")
+      : null);
+
   if (
     targetPrincipalId &&
     !UUID_REGEX.test(targetPrincipalId) &&
-    employeeNumber
+    lookupEmpNo
   ) {
     const empRes = await query(
       `SELECT principal_id FROM employees WHERE employee_number = $1 LIMIT 1;`,
-      [employeeNumber],
+      [lookupEmpNo],
     );
     if (empRes.rows.length > 0 && empRes.rows[0]?.principal_id) {
       resolvedPrincipalId = empRes.rows[0].principal_id;
     }
   }
+
 
   const isValidUuid = Boolean(
     resolvedPrincipalId && UUID_REGEX.test(resolvedPrincipalId),
@@ -85,7 +93,9 @@ export const getKpiMetrics = async ({
 
   const isAdminGlobal =
     isSelfView &&
-    (callerRole === ROLES.SUPER_ADMIN || callerRole === ROLES.LEARNING_ADMIN);
+    (callerRole === ROLES.SUPER_ADMIN ||
+      callerRole === ROLES.LEARNING_ADMIN ||
+      Boolean(isLearningAdmin));
 
   // 3. Calculate Total Staff Count
   let totalStaff = 0;

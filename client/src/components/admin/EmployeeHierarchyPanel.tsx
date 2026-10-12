@@ -115,14 +115,18 @@ const getDepthStyle = (depth: number) =>
   hierarchyDepthStyles[depth % hierarchyDepthStyles.length];
 
 type EmployeeHierarchyPanelProps = {
+  rootEmployeeNumber?: string | null;
   selectedEmployeeNumber?: string | null;
   onViewDetails?: (employee: SelectedHierarchyEmployee) => void;
+  onSelectSubordinate?: (employee: SelectedHierarchyEmployee) => void;
   onRefresh?: () => void;
 };
 
 export function EmployeeHierarchyPanel({
+  rootEmployeeNumber,
   selectedEmployeeNumber,
   onViewDetails,
+  onSelectSubordinate,
   onRefresh,
 }: EmployeeHierarchyPanelProps) {
   const { getAccessToken } = useAuth();
@@ -177,8 +181,8 @@ export function EmployeeHierarchyPanel({
         );
         const rows = Array.isArray(response.data)
           ? response.data
-              .map((row) => mapHierarchyEmployee(row))
-              .filter((row) => row.employeeNumber.length > 0)
+            .map((row) => mapHierarchyEmployee(row))
+            .filter((row) => row.employeeNumber.length > 0)
           : [];
 
         setHierarchyChildrenByEmployee((prev) => ({
@@ -213,6 +217,9 @@ export function EmployeeHierarchyPanel({
     setHierarchyLoading(true);
     setHierarchyError(null);
 
+    // Use passed rootEmployeeNumber if provided, otherwise fallback to ROOT_EMPLOYEE_NO
+    const effectiveRoot = (rootEmployeeNumber || ROOT_EMPLOYEE_NO).trim();
+
     try {
       const token = await getAccessToken();
       if (!token) {
@@ -221,8 +228,8 @@ export function EmployeeHierarchyPanel({
       }
 
       const [detailsResponse, childrenResponse] = await Promise.all([
-        integrationApi.getErpLearnerDetails(token, ROOT_EMPLOYEE_NO),
-        integrationApi.getErpSubordinates(token, ROOT_EMPLOYEE_NO),
+        integrationApi.getErpLearnerDetails(token, effectiveRoot),
+        integrationApi.getErpSubordinates(token, effectiveRoot),
       ]);
 
       const detailRow =
@@ -231,28 +238,28 @@ export function EmployeeHierarchyPanel({
           : {};
       const childRows = Array.isArray(childrenResponse.data)
         ? childrenResponse.data
-            .map((row) => mapHierarchyEmployee(row))
-            .filter((row) => row.employeeNumber.length > 0)
+          .map((row) => mapHierarchyEmployee(row))
+          .filter((row) => row.employeeNumber.length > 0)
         : [];
 
       setHierarchyRoot({
-        employeeNumber: ROOT_EMPLOYEE_NO,
-        name: normalizeHierarchyName(detailRow, ROOT_EMPLOYEE_NO),
+        employeeNumber: effectiveRoot,
+        name: normalizeHierarchyName(detailRow, effectiveRoot),
         designation:
           String(
             detailRow.designation || detailRow.designationName || "",
-          ).trim() || "Chief Executive Officer",
+          ).trim() || "Lead / Supervisor",
         orgName: String(detailRow.orgName || "").trim(),
       });
       setHierarchyChildrenByEmployee({
-        [ROOT_EMPLOYEE_NO]: {
+        [effectiveRoot]: {
           rows: childRows,
           loaded: true,
           loading: false,
           error: null,
         },
       });
-      setExpandedEmployees({ [ROOT_EMPLOYEE_NO]: true });
+      setExpandedEmployees({ [effectiveRoot]: true });
     } catch (err) {
       setHierarchyError(
         err instanceof Error
@@ -262,7 +269,8 @@ export function EmployeeHierarchyPanel({
     } finally {
       setHierarchyLoading(false);
     }
-  }, [getAccessToken, showToast]);
+  }, [getAccessToken, showToast, rootEmployeeNumber]);
+
 
   useEffect(() => {
     loadHierarchy();
@@ -374,11 +382,10 @@ export function EmployeeHierarchyPanel({
         ) : null}
 
         <div
-          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all duration-200 ease-out ${
-            isRoot
-              ? "border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm hover:border-amber-300 hover:shadow-md hover:shadow-amber-100 hover:-translate-y-0.5"
-              : depthStyle.cardClass
-          } ${isSelected ? "ring-2 ring-primary-600 ring-offset-1 shadow-md" : ""}`}
+          className={`group flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-all duration-200 ease-out ${isRoot
+            ? "border-amber-200 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm hover:border-amber-300 hover:shadow-md hover:shadow-amber-100 hover:-translate-y-0.5"
+            : depthStyle.cardClass
+            } ${isSelected ? "ring-2 ring-primary-600 ring-offset-1 shadow-md" : ""}`}
         >
           <button
             type="button"
@@ -387,13 +394,11 @@ export function EmployeeHierarchyPanel({
                 console.error,
               );
             }}
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
-              hasChildren ? "cursor-pointer" : "cursor-default"
-            } ${
-              isRoot
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${hasChildren ? "cursor-pointer" : "cursor-default"
+              } ${isRoot
                 ? "border-amber-200 bg-amber-100 text-amber-700 group-hover:scale-105 group-hover:bg-amber-200/80 transition-all duration-200"
                 : depthStyle.iconWrapClass
-            }`}
+              }`}
             disabled={!canExpand && !nodeState?.loading}
             aria-label={`${isExpanded ? "Collapse" : "Expand"} ${employee.name}`}
           >
@@ -425,11 +430,10 @@ export function EmployeeHierarchyPanel({
 
           {childCount !== null ? (
             <span
-              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                isRoot
-                  ? "border-amber-200 bg-amber-50 text-amber-700"
-                  : depthStyle.countClass
-              }`}
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${isRoot
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : depthStyle.countClass
+                }`}
             >
               {childCount}
             </span>
@@ -440,10 +444,21 @@ export function EmployeeHierarchyPanel({
             variant={isSelected ? "primary" : "outline"}
             size="sm"
             className="shrink-0"
-            onClick={() => onViewDetails?.(employee)}
+            onClick={() => {
+              if (onSelectSubordinate) {
+                onSelectSubordinate(employee);
+              } else {
+                onViewDetails?.(employee);
+              }
+            }}
           >
-            View
+            {onSelectSubordinate
+              ? isSelected
+                ? "Active View"
+                : "Drill Down"
+              : "View"}
           </Button>
+
 
           <button
             type="button"
@@ -452,11 +467,10 @@ export function EmployeeHierarchyPanel({
                 console.error,
               );
             }}
-            className={`shrink-0 rounded-full p-1.5 text-slate-400 transition ${
-              hasChildren
-                ? "group-hover:bg-slate-100 group-hover:text-slate-600"
-                : "opacity-40"
-            }`}
+            className={`shrink-0 rounded-full p-1.5 text-slate-400 transition ${hasChildren
+              ? "group-hover:bg-slate-100 group-hover:text-slate-600"
+              : "opacity-40"
+              }`}
             disabled={!canExpand && !nodeState?.loading}
             aria-label={`${isExpanded ? "Collapse" : "Expand"} ${employee.name}`}
           >
