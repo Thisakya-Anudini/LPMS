@@ -3,11 +3,14 @@ import {
   TalentDashboardScopeProvider,
   useTalentDashboardScope,
 } from "../../contexts/TalentDashboardScopeContext";
+import { useAuth } from "../../contexts/useAuth";
 import { Eye, RotateCcw } from "lucide-react";
 import { FilterBar } from "./FilterBar";
 import { KpiCardRow } from "./KpiCardRow";
-
-
+import {
+  EmployeeHierarchyPanel,
+  SelectedHierarchyEmployee,
+} from "../../components/admin/EmployeeHierarchyPanel";
 
 function DrillDownBanner() {
   const { isSelfView, viewAsUser, resetToSelf } = useTalentDashboardScope();
@@ -29,8 +32,7 @@ function DrillDownBanner() {
           </p>
           <p className="text-xs text-amber-700">
             {viewAsUser.designation ? `${viewAsUser.designation} • ` : ""}
-            Showing metrics scoped strictly to this subordinate's hierarchy
-            branch.
+            Showing metrics scoped strictly to this subordinate's hierarchy branch.
           </p>
         </div>
       </div>
@@ -47,6 +49,19 @@ function DrillDownBanner() {
 }
 
 function TalentDashboardContent() {
+  const { user } = useAuth();
+  const { drillDown, viewAsUser, refreshData } = useTalentDashboardScope();
+
+  const handleSelectSubordinate = (employee: SelectedHierarchyEmployee) => {
+    drillDown({
+      principalId: employee.employeeNumber,
+      employeeNumber: employee.employeeNumber,
+      name: employee.name,
+      designation: employee.designation,
+      department: employee.orgName,
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -69,11 +84,31 @@ function TalentDashboardContent() {
       {/* Top KPI Summary Metrics Row */}
       <KpiCardRow />
 
-      {/* Widget Grid Scaffolding */}
-      <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-        Ready for Target Gauges (`[T2.5]`) and Hierarchy Tree (`[N1.8]`).
-      </div>
+      {/* Main Interactive Grid: Hierarchy Tree + Chart Scaffolding */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Left Column: Organization Hierarchy Drill-Down Tree */}
+        <div className="lg:col-span-1">
+          <EmployeeHierarchyPanel
+            rootEmployeeNumber={user?.employeeNo || "008668"}
+            selectedEmployeeNumber={viewAsUser?.employeeNumber}
+            onSelectSubordinate={handleSelectSubordinate}
+            onRefresh={refreshData}
+          />
+        </div>
 
+        {/* Right Column: Scaffolding for Week 2 Charts */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-500 bg-slate-50/50 min-h-[420px] flex flex-col items-center justify-center">
+            <p className="text-base font-semibold text-slate-700">
+              Week 2 Charts Scaffolding
+            </p>
+            <p className="text-xs text-slate-500 mt-1 max-w-md">
+              Target vs. Achievement Semicircular Gauges (`[T2.5]`) and Learning
+              Hours Trend Charts (`[T2.6]`) will mount here.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
