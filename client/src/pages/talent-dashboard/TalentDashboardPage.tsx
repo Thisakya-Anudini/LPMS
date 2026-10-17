@@ -1,4 +1,3 @@
-import React from "react";
 import {
   TalentDashboardScopeProvider,
   useTalentDashboardScope,
@@ -11,6 +10,7 @@ import {
   EmployeeHierarchyPanel,
   SelectedHierarchyEmployee,
 } from "../../components/admin/EmployeeHierarchyPanel";
+import { LearningHoursTrendChart } from "./LearningHoursTrendChart";
 
 function DrillDownBanner() {
   const { isSelfView, viewAsUser, resetToSelf } = useTalentDashboardScope();
@@ -109,17 +109,9 @@ function TalentDashboardContent() {
           />
         </div>
 
-        {/* Right Column: Scaffolding for Week 2 Charts */}
+        {/* Right Column: Learning Hours Trend Chart */}
         <div className="lg:col-span-7 xl:col-span-7 space-y-6">
-          <div className="rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-500 bg-slate-50/50 min-h-[420px] flex flex-col items-center justify-center">
-            <p className="text-base font-semibold text-slate-700">
-              Week 2 Charts Scaffolding
-            </p>
-            <p className="text-xs text-slate-500 mt-1 max-w-md">
-              Target vs. Achievement Semicircular Gauges (`[T2.5]`) and Learning
-              Hours Trend Charts (`[T2.6]`) will mount here.
-            </p>
-          </div>
+          <LearningHoursTrendChart />
         </div>
       </div>
     </div>
