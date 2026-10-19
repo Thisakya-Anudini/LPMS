@@ -7,6 +7,7 @@ import { useAuth } from "../../contexts/useAuth";
 import { Eye, RotateCcw } from "lucide-react";
 import { FilterBar } from "./FilterBar";
 import { KpiCardRow } from "./KpiCardRow";
+import { TargetGaugeRow } from "./TargetGaugeRow";
 import {
   EmployeeHierarchyPanel,
   SelectedHierarchyEmployee,
@@ -109,15 +110,18 @@ function TalentDashboardContent() {
           />
         </div>
 
-        {/* Right Column: Scaffolding for Week 2 Charts */}
+        {/* Right Column: Gauges (T2.5) + Trend Chart Scaffolding (T2.6) */}
         <div className="lg:col-span-7 xl:col-span-7 space-y-6">
-          <div className="rounded-3xl border border-dashed border-slate-300 p-12 text-center text-slate-500 bg-slate-50/50 min-h-[420px] flex flex-col items-center justify-center">
+          {/* Target vs. Achievement Semicircular Gauges (Fixed 18-Hour Target) */}
+          <TargetGaugeRow />
+
+          {/* Scaffolding for Week 2 Trend Chart [T2.6] */}
+          <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-slate-500 bg-slate-50/50 min-h-[260px] flex flex-col items-center justify-center">
             <p className="text-base font-semibold text-slate-700">
-              Week 2 Charts Scaffolding
+              Learning Hours Trend Charts (`[T2.6]`)
             </p>
             <p className="text-xs text-slate-500 mt-1 max-w-md">
-              Target vs. Achievement Semicircular Gauges (`[T2.5]`) and Learning
-              Hours Trend Charts (`[T2.6]`) will mount here.
+              Monthly and Yearly training hours progression charts will mount here.
             </p>
           </div>
         </div>
