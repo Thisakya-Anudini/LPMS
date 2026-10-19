@@ -6,6 +6,7 @@ import { useAuth } from "../../contexts/useAuth";
 import { Eye, RotateCcw } from "lucide-react";
 import { FilterBar } from "./FilterBar";
 import { KpiCardRow } from "./KpiCardRow";
+import { TargetGaugeRow } from "./TargetGaugeRow";
 import {
   EmployeeHierarchyPanel,
   SelectedHierarchyEmployee,
@@ -109,6 +110,13 @@ function TalentDashboardContent() {
           />
         </div>
 
+        {/* Right Column: Gauges (T2.5) + Trend Chart Scaffolding (T2.6) */}
+        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
+          {/* Target vs. Achievement Semicircular Gauges (Fixed 18-Hour Target) */}
+          <TargetGaugeRow />
+        </div>  
+
+          
         {/* Right Column: Learning Hours Trend Chart */}
         <div className="lg:col-span-7 xl:col-span-7 space-y-6">
           <LearningHoursTrendChart />
