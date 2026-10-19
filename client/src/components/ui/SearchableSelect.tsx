@@ -105,6 +105,8 @@ export function SearchableSelect({
         searchInputRef.current?.focus();
       });
     }
+    // Only synchronize highlight and focus upon opening, not on query changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   // Click outside to close
