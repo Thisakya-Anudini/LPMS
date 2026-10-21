@@ -3,6 +3,7 @@ import {
     TalentKpiMetrics,
     TrendDataPoint,
     SubordinateProgress,
+    PaginatedHistoryResponse,
 } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -125,5 +126,90 @@ export const talentDashboardApi = {
         const json = await res.json();
         return json.data || [];
     },
+
+    /**
+ * Fetches paginated training history records with sorting and search
+ */
+    async getTrainingHistory(
+        token: string,
+        filters: TalentFilterParams & { search?: string } = {},
+        page: number = 1,
+        pageSize: number = 10,
+        sortBy: string = "startDate",
+        sortOrder: "ASC" | "DESC" = "DESC",
+    ): Promise<PaginatedHistoryResponse> {
+        const params = new URLSearchParams();
+        params.set("page", String(page));
+        params.set("pageSize", String(pageSize));
+        params.set("sortBy", sortBy);
+        params.set("sortOrder", sortOrder);
+
+        if (filters.startDate) params.set("startDate", filters.startDate);
+        if (filters.endDate) params.set("endDate", filters.endDate);
+        if (filters.trainingType && filters.trainingType !== "ALL") {
+            params.set("trainingType", filters.trainingType);
+        }
+        if (filters.designation && filters.designation !== "ALL") {
+            params.set("designation", filters.designation);
+        }
+        if (filters.viewAsId) {
+            params.set("viewAsId", filters.viewAsId);
+        }
+        if (filters.search) {
+            params.set("search", filters.search);
+        }
+
+        const res = await fetch(
+            `${API_BASE_URL}/talent-dashboard/history?${params.toString()}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
+        );
+        if (!res.ok) {
+            throw new Error(`Failed to fetch training history: ${res.statusText}`);
+        }
+        const json = await res.json();
+        return json.data;
+    },
+
+    /**
+     * Downloads an exported CSV file of the filtered training history
+     */
+    async exportTrainingHistory(
+        token: string,
+        filters: TalentFilterParams & { search?: string } = {},
+    ): Promise<Blob> {
+        const params = new URLSearchParams();
+        if (filters.startDate) params.set("startDate", filters.startDate);
+        if (filters.endDate) params.set("endDate", filters.endDate);
+        if (filters.trainingType && filters.trainingType !== "ALL") {
+            params.set("trainingType", filters.trainingType);
+        }
+        if (filters.designation && filters.designation !== "ALL") {
+            params.set("designation", filters.designation);
+        }
+        if (filters.viewAsId) {
+            params.set("viewAsId", filters.viewAsId);
+        }
+        if (filters.search) {
+            params.set("search", filters.search);
+        }
+
+        const res = await fetch(
+            `${API_BASE_URL}/talent-dashboard/history/export?${params.toString()}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
+        );
+        if (!res.ok) {
+            throw new Error(`Failed to export training history: ${res.statusText}`);
+        }
+        return await res.blob();
+    },
+
 
 };
