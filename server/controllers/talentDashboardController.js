@@ -3,6 +3,10 @@ import {
   getTrendData,
   getImmediateSubordinates,
 } from "../services/talentDashboard/aggregatesService.js";
+import {
+  getPaginatedTrainingHistory,
+  generateTrainingHistoryCsv,
+} from "../services/talentDashboard/historyService.js";
 import { query } from "../db.js";
 import { fetchAllDesignations } from "../utils/erpClient.js";
 import { sendError } from "../utils/http.js";
@@ -185,3 +189,83 @@ export const getSubordinates = async (req, res) => {
   }
 };
 
+export const getHistory = async (req, res) => {
+  try {
+    const targetEmpNo =
+      req.targetEmployeeNumber ||
+      (req.isSelfView ? req.user.employeeNo : req.targetPrincipalId);
+
+    const result = await getPaginatedTrainingHistory({
+      callerRole: req.user.role,
+      isLearningAdmin: Boolean(req.user?.isLearningAdmin),
+      targetPrincipalId: req.targetPrincipalId,
+      employeeNumber: targetEmpNo,
+      isSelfView: req.isSelfView,
+      filters: {
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        trainingType: req.query.trainingType,
+        staffCategory: req.query.staffCategory,
+        designation: req.query.designation,
+        search: req.query.search,
+      },
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+      sortBy: req.query.sortBy,
+      sortOrder: req.query.sortOrder,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Training history retrieved successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error in getHistory controller:", error);
+    return sendError(
+      res,
+      500,
+      "HISTORY_FETCH_FAILED",
+      "Failed to retrieve training history.",
+    );
+  }
+};
+
+export const exportHistory = async (req, res) => {
+  try {
+    const targetEmpNo =
+      req.targetEmployeeNumber ||
+      (req.isSelfView ? req.user.employeeNo : req.targetPrincipalId);
+
+    const csvData = await generateTrainingHistoryCsv({
+      callerRole: req.user.role,
+      isLearningAdmin: Boolean(req.user?.isLearningAdmin),
+      targetPrincipalId: req.targetPrincipalId,
+      employeeNumber: targetEmpNo,
+      isSelfView: req.isSelfView,
+      filters: {
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        trainingType: req.query.trainingType,
+        staffCategory: req.query.staffCategory,
+        designation: req.query.designation,
+        search: req.query.search,
+      },
+    });
+
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const filename = `talent_training_history_${dateStamp}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    return res.status(200).send(csvData);
+  } catch (error) {
+    console.error("Error in exportHistory controller:", error);
+    return sendError(
+      res,
+      500,
+      "HISTORY_EXPORT_FAILED",
+      "Failed to export training history.",
+    );
+  }
+};

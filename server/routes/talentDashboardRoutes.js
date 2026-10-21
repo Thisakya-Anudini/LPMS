@@ -6,6 +6,8 @@ import {
     getDesignations,
     getTrend,
     getSubordinates,
+    getHistory,
+    exportHistory,
 } from "../controllers/talentDashboardController.js";
 
 const router = Router();
@@ -24,5 +26,11 @@ router.get("/trend", verifyTalentScope, getTrend);
 
 // GET /api/talent-dashboard/immediate-subordinates
 router.get("/immediate-subordinates", verifyTalentScope, getSubordinates);
+
+// GET /api/talent-dashboard/history
+router.get("/history", verifyTalentScope, getHistory);
+
+// GET /api/talent-dashboard/history/export
+router.get("/history/export", verifyTalentScope, exportHistory);
 
 export default router;
