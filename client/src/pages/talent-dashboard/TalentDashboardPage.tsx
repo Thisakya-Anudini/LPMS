@@ -98,7 +98,10 @@ function TalentDashboardContent() {
       {/* Top KPI Summary Metrics Row */}
       <KpiCardRow />
 
-      {/* Main Interactive Grid: Hierarchy Tree + Chart Scaffolding */}
+      {/* Target vs. Achievement Semicircular Gauges (Full Width below KPIs) */}
+      <TargetGaugeRow />
+
+      {/* Main Interactive Grid: Hierarchy Tree (Left) + Learning Hours Trend Chart (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Organization Hierarchy Drill-Down Tree */}
         <div className="lg:col-span-5 xl:col-span-5">
@@ -110,18 +113,12 @@ function TalentDashboardContent() {
           />
         </div>
 
-        {/* Right Column: Gauges (T2.5) + Trend Chart Scaffolding (T2.6) */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
-          {/* Target vs. Achievement Semicircular Gauges (Fixed 18-Hour Target) */}
-          <TargetGaugeRow />
-        </div>  
-
-          
         {/* Right Column: Learning Hours Trend Chart */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
+        <div className="lg:col-span-7 xl:col-span-7">
           <LearningHoursTrendChart />
         </div>
       </div>
+
     </div>
   );
 }
