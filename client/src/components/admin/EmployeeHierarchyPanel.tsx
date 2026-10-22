@@ -9,6 +9,8 @@ import {
   Network,
   RotateCw,
   UsersRound,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { integrationApi } from "../../api/lpmsApi";
 import { Button } from "../ui/Button";
@@ -120,6 +122,8 @@ type EmployeeHierarchyPanelProps = {
   onViewDetails?: (employee: SelectedHierarchyEmployee) => void;
   onSelectSubordinate?: (employee: SelectedHierarchyEmployee) => void;
   onRefresh?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 };
 
 export function EmployeeHierarchyPanel({
@@ -128,6 +132,8 @@ export function EmployeeHierarchyPanel({
   onViewDetails,
   onSelectSubordinate,
   onRefresh,
+  isCollapsed = false,
+  onToggleCollapse,
 }: EmployeeHierarchyPanelProps) {
   const { getAccessToken } = useAuth();
   const { showToast } = useToast();
@@ -276,6 +282,28 @@ export function EmployeeHierarchyPanel({
     loadHierarchy();
   }, [loadHierarchy]);
 
+  // Smooth-scroll to drilled-down employee on drill-down, or reset to top when returning to My View
+  useEffect(() => {
+    if (!isCollapsed && selectedEmployeeNumber) {
+      const timer = setTimeout(() => {
+        const element = document.getElementById(
+          `hierarchy-node-${selectedEmployeeNumber}`
+        );
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 120);
+      return () => clearTimeout(timer);
+    } else if (!selectedEmployeeNumber) {
+      // Reset scroll position back to root/top
+      const container = document.querySelector(".hierarchy-scroll-container");
+      if (container) {
+        container.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+  }, [isCollapsed, selectedEmployeeNumber]);
+
+
   const toggleHierarchyEmployee = useCallback(
     async (employeeNo: string) => {
       const isExpanded = Boolean(expandedEmployees[employeeNo]);
@@ -371,9 +399,11 @@ export function EmployeeHierarchyPanel({
     return (
       <div
         key={`${employee.employeeNumber}-${depth}`}
+        id={`hierarchy-node-${employee.employeeNumber}`}
         className="relative space-y-2"
         style={{ paddingLeft: depth === 0 ? 0 : 25 }}
       >
+
         {depth > 0 ? (
           <span
             className="absolute left-[12px] top-6 h-px w-[13px] bg-slate-300"
@@ -496,69 +526,169 @@ export function EmployeeHierarchyPanel({
   };
 
   return (
-    <Card
-      title={<span className="text-xl">Employee Hierarchy</span>}
-      className="flex h-full min-h-[520px] flex-col xl:h-[calc(100vh-170px)] transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-xl"
-      bodyClassName="min-h-0 flex-1 overflow-y-auto"
-      action={
-        <Button
+    <>
+      {/* 1. Compact Mini-Sidebar Rail when collapsed (hidden when expanded) */}
+      <div
+        className={`${isCollapsed ? "flex" : "hidden"
+          } flex-col items-center justify-between rounded-3xl border border-slate-200 bg-white py-4 px-2 shadow-sm min-h-[520px] h-full xl:h-[calc(100vh-170px)] transition-all duration-300`}
+      >
+        <div className="flex flex-col items-center gap-4 w-full">
+          {/* Expand Button with PanelLeftOpen Icon */}
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title="Expand Hierarchy Panel"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-primary-50 hover:border-primary-300 hover:text-primary-600 shadow-xs transition-all duration-200 cursor-pointer"
+          >
+            <PanelLeftOpen className="h-5 w-5" />
+          </button>
+
+          {/* Vertical Icon & Label */}
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <Network className="h-4 w-4" />
+            </div>
+            <span
+              className="text-[11px] font-semibold text-slate-400 tracking-wider uppercase select-none"
+              style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+            >
+              Hierarchy
+            </span>
+          </div>
+
+          {/* Active Drill-Down Badge (stays visible when collapsed) */}
+          {selectedEmployeeNumber && (
+            <div
+              className="mt-2 flex flex-col items-center gap-1 rounded-xl bg-amber-50 border border-amber-200 p-1.5 text-amber-800"
+              title={`Active drill-down: ${selectedEmployeeNumber}`}
+            >
+              <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              <span
+                className="text-[10px] font-bold text-amber-800 font-mono tracking-tight"
+                style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}
+              >
+                {selectedEmployeeNumber}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Refresh Action */}
+        <button
           type="button"
-          variant="outline"
-          size="sm"
           onClick={() => {
             loadHierarchy().catch(console.error);
             onRefresh?.();
           }}
-          isLoading={hierarchyLoading}
-          className="group transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-700 hover:shadow-sm active:translate-y-0"
+          disabled={hierarchyLoading}
+          title="Refresh Hierarchy Data"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-100 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
         >
-          {!hierarchyLoading && (
-            <RotateCw className="h-3.5 w-3.5 text-slate-400 transition-transform duration-500 group-hover:rotate-180 group-hover:text-primary-600" />
-          )}
-          <span>Refresh</span>
-        </Button>
-      }
-    >
-      {hierarchyError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {hierarchyError}
-        </div>
-      ) : hierarchyLoading && !hierarchyRoot ? (
-        <div className="space-y-3">
-          {Array.from({ length: 4 }, (_, index) => (
-            <div
-              key={`hierarchy-root-skeleton-${index}`}
-              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
-            >
-              <Skeleton className="h-10 w-10 rounded-xl" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-4 w-28" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : hierarchyRoot ? (
-        <div className="rounded-3xl border border-slate-200 bg-[#fcfcfd] p-3 shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-slate-300 hover:shadow-[0_12px_36px_rgba(15,23,42,0.08)]">
-          <div className="mb-3 flex items-center justify-between px-2">
+          <RotateCw className={`h-4 w-4 ${hierarchyLoading ? "animate-spin text-primary-600" : ""}`} />
+        </button>
+      </div>
+
+      {/* 2. Full Hierarchy Card when expanded (hidden with CSS when collapsed so DOM & scroll are never destroyed) */}
+      <div className={`${isCollapsed ? "hidden" : "flex"} h-full flex-col`}>
+        <Card
+          title={<span className="text-xl">Employee Hierarchy</span>}
+          className="flex h-full min-h-[520px] flex-col xl:h-[calc(100vh-170px)] transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-xl"
+          bodyClassName="min-h-0 flex-1 overflow-y-auto hierarchy-scroll-container"
+          action={
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-transform duration-200 group-hover:scale-105">
-                <Network className="h-4 w-4" />
-              </div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                Organization Tree
-              </p>
+              {/* Active Drilled-Down Employee Pill (parallel to Refresh) */}
+              {selectedEmployeeNumber && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById(
+                      `hierarchy-node-${selectedEmployeeNumber}`
+                    );
+                    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-primary-50 border border-primary-200 text-xs font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-300 transition-all shadow-2xs cursor-pointer"
+                  title="Click to jump directly to drilled-down employee"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary-600 animate-pulse" />
+                  <span>Active: {selectedEmployeeNumber}</span>
+                </button>
+              )}
+
+              {/* Refresh Button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  loadHierarchy().catch(console.error);
+                  onRefresh?.();
+                }}
+                isLoading={hierarchyLoading}
+                className="group transition-all duration-200 hover:-translate-y-0.5 hover:border-primary-300 hover:bg-primary-50/50 hover:text-primary-700 hover:shadow-sm active:translate-y-0"
+              >
+                {!hierarchyLoading && (
+                  <RotateCw className="h-3.5 w-3.5 text-slate-400 transition-transform duration-500 group-hover:rotate-180 group-hover:text-primary-600" />
+                )}
+                <span>Refresh</span>
+              </Button>
+
+              {/* Collapse Button with PanelLeftClose Icon */}
+              {onToggleCollapse && (
+                <button
+                  type="button"
+                  onClick={onToggleCollapse}
+                  title="Collapse Hierarchy to Rail"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors shadow-2xs cursor-pointer"
+                >
+                  <PanelLeftClose className="h-4 w-4" />
+                </button>
+              )}
             </div>
-          </div>
-          <div className="space-y-2">
-            {renderHierarchyNode(hierarchyRoot, 0, true)}
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm text-slate-500">
-          Hierarchy is not available right now.
-        </p>
-      )}
-    </Card>
+          }
+        >
+
+          {hierarchyError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {hierarchyError}
+            </div>
+          ) : hierarchyLoading && !hierarchyRoot ? (
+            <div className="space-y-3">
+              {Array.from({ length: 4 }, (_, index) => (
+                <div
+                  key={`hierarchy-root-skeleton-${index}`}
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
+                >
+                  <Skeleton className="h-10 w-10 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : hierarchyRoot ? (
+            <div className="rounded-3xl border border-slate-200 bg-[#fcfcfd] p-3 shadow-[0_8px_30px_rgba(15,23,42,0.04)] transition-all duration-300 hover:border-slate-300 hover:shadow-[0_12px_36px_rgba(15,23,42,0.08)]">
+              <div className="mb-3 flex items-center justify-between px-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-transform duration-200 group-hover:scale-105">
+                    <Network className="h-4 w-4" />
+                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    Organization Tree
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {renderHierarchyNode(hierarchyRoot, 0, true)}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Hierarchy is not available right now.
+            </p>
+          )}
+        </Card>
+      </div>
+    </>
   );
 }
