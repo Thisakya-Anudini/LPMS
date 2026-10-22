@@ -1,9 +1,10 @@
+import { useState } from "react";
 import {
   TalentDashboardScopeProvider,
   useTalentDashboardScope,
 } from "../../contexts/TalentDashboardScopeContext";
 import { useAuth } from "../../contexts/useAuth";
-import { Eye, RotateCcw } from "lucide-react";
+import { Eye, RotateCcw, PanelLeftClose, PanelLeftOpen, Network } from "lucide-react";
 import { FilterBar } from "./FilterBar";
 import { KpiCardRow } from "./KpiCardRow";
 import { TargetGaugeRow } from "./TargetGaugeRow";
@@ -51,7 +52,8 @@ function DrillDownBanner() {
 
 function TalentDashboardContent() {
   const { user } = useAuth();
-  const { drillDown, viewAsUser, refreshData } = useTalentDashboardScope();
+  const { drillDown, viewAsUser, refreshData, resetToSelf } = useTalentDashboardScope();
+  const [isHierarchyCollapsed, setIsHierarchyCollapsed] = useState(false);
 
   // Super Admin & Learning Admin see the whole enterprise tree starting at the CEO ("020987").
   // In LPMS, Learning Admins have role === "EMPLOYEE" with isLearningAdmin === true.
@@ -64,7 +66,10 @@ function TalentDashboardContent() {
     ? undefined
     : user?.employeeNo || undefined;
 
-
+  const handleHierarchyRefresh = () => {
+    resetToSelf(); // Resets drill-down back to self/root view
+    refreshData();  // Reloads all widgets for my view
+  };
 
   const handleSelectSubordinate = (employee: SelectedHierarchyEmployee) => {
     drillDown({
@@ -98,33 +103,44 @@ function TalentDashboardContent() {
       {/* Top KPI Summary Metrics Row */}
       <KpiCardRow />
 
-      {/* Main Interactive Grid: Hierarchy Tree + Chart Scaffolding */}
+      {/* Target vs. Achievement Semicircular Gauges (Full Width below KPIs) */}
+      <TargetGaugeRow />
+
+      {/* Main Interactive Grid: Hierarchy Rail (Left) + Learning Hours Trend Chart (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Organization Hierarchy Drill-Down Tree */}
-        <div className="lg:col-span-5 xl:col-span-5">
+        {/* Left Column: Organization Hierarchy (Collapsible between 5 cols and 1 col) */}
+        <div
+          className={`${isHierarchyCollapsed
+            ? "lg:col-span-1 xl:col-span-1"
+            : "lg:col-span-5 xl:col-span-5"
+            } transition-all duration-300`}
+        >
           <EmployeeHierarchyPanel
             rootEmployeeNumber={hierarchyRootEmployeeNo}
             selectedEmployeeNumber={viewAsUser?.employeeNumber}
             onSelectSubordinate={handleSelectSubordinate}
-            onRefresh={refreshData}
+            onRefresh={handleHierarchyRefresh}
+            isCollapsed={isHierarchyCollapsed}
+            onToggleCollapse={() => setIsHierarchyCollapsed((prev) => !prev)}
           />
+
         </div>
 
-        {/* Right Column: Gauges (T2.5) + Trend Chart Scaffolding (T2.6) */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
-          {/* Target vs. Achievement Semicircular Gauges (Fixed 18-Hour Target) */}
-          <TargetGaugeRow />
-        </div>  
-
-          
-        {/* Right Column: Learning Hours Trend Chart */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
+        {/* Right Column: Learning Hours Trend Chart (Expands between 7 cols and 11 cols) */}
+        <div
+          className={`${isHierarchyCollapsed
+            ? "lg:col-span-11 xl:col-span-11"
+            : "lg:col-span-7 xl:col-span-7"
+            } transition-all duration-300`}
+        >
           <LearningHoursTrendChart />
         </div>
       </div>
+
     </div>
   );
 }
+
 
 export function TalentDashboardPage() {
   return (
