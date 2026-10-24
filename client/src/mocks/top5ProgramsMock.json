@@ -1,0 +1,37 @@
+[
+  {
+    "programId": "prog-arch-001",
+    "programName": "Full-Stack System Architecture & Next.js",
+    "totalCompletedHours": 120.0,
+    "participantCount": 14,
+    "percentageOfTop5": 30.0
+  },
+  {
+    "programId": "prog-k8s-002",
+    "programName": "Kubernetes & Cloud Native Infrastructure",
+    "totalCompletedHours": 96.0,
+    "participantCount": 12,
+    "percentageOfTop5": 24.0
+  },
+  {
+    "programId": "prog-sec-003",
+    "programName": "Enterprise Cyber Security & OWASP Top 10",
+    "totalCompletedHours": 72.0,
+    "participantCount": 18,
+    "percentageOfTop5": 18.0
+  },
+  {
+    "programId": "prog-db-004",
+    "programName": "PostgreSQL Performance Optimization & Indexing",
+    "totalCompletedHours": 64.0,
+    "participantCount": 11,
+    "percentageOfTop5": 16.0
+  },
+  {
+    "programId": "prog-qa-005",
+    "programName": "Automated End-to-End Testing with Playwright",
+    "totalCompletedHours": 48.0,
+    "participantCount": 9,
+    "percentageOfTop5": 12.0
+  }
+]

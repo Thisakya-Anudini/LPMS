@@ -4,7 +4,7 @@ import {
   useTalentDashboardScope,
 } from "../../contexts/TalentDashboardScopeContext";
 import { useAuth } from "../../contexts/useAuth";
-import { Eye, RotateCcw, PanelLeftClose, PanelLeftOpen, Network } from "lucide-react";
+import { Eye, RotateCcw } from "lucide-react";
 import { FilterBar } from "./FilterBar";
 import { KpiCardRow } from "./KpiCardRow";
 import { TargetGaugeRow } from "./TargetGaugeRow";
@@ -13,6 +13,7 @@ import {
   SelectedHierarchyEmployee,
 } from "../../components/admin/EmployeeHierarchyPanel";
 import { LearningHoursTrendChart } from "./LearningHoursTrendChart";
+import { Top5ProgramsWidget } from "./Top5ProgramsWidget";
 
 function DrillDownBanner() {
   const { isSelfView, viewAsUser, resetToSelf } = useTalentDashboardScope();
@@ -106,14 +107,15 @@ function TalentDashboardContent() {
       {/* Target vs. Achievement Semicircular Gauges (Full Width below KPIs) */}
       <TargetGaugeRow />
 
-      {/* Main Interactive Grid: Hierarchy Rail (Left) + Learning Hours Trend Chart (Right) */}
+      {/* Main Interactive Grid: Hierarchy Rail (Left) + Learning Hours Trend Chart & Top 5 Programs (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Organization Hierarchy (Collapsible between 5 cols and 1 col) */}
         <div
-          className={`${isHierarchyCollapsed
-            ? "lg:col-span-1 xl:col-span-1"
-            : "lg:col-span-5 xl:col-span-5"
-            } transition-all duration-300`}
+          className={`${
+            isHierarchyCollapsed
+              ? "lg:col-span-1 xl:col-span-1"
+              : "lg:col-span-5 xl:col-span-5"
+          } transition-all duration-300`}
         >
           <EmployeeHierarchyPanel
             rootEmployeeNumber={hierarchyRootEmployeeNo}
@@ -123,24 +125,23 @@ function TalentDashboardContent() {
             isCollapsed={isHierarchyCollapsed}
             onToggleCollapse={() => setIsHierarchyCollapsed((prev) => !prev)}
           />
-
         </div>
 
-        {/* Right Column: Learning Hours Trend Chart (Expands between 7 cols and 11 cols) */}
+        {/* Right Column: Learning Hours Trend Chart + Top 5 Training Programs Widget */}
         <div
-          className={`${isHierarchyCollapsed
-            ? "lg:col-span-11 xl:col-span-11"
-            : "lg:col-span-7 xl:col-span-7"
-            } transition-all duration-300`}
+          className={`${
+            isHierarchyCollapsed
+              ? "lg:col-span-11 xl:col-span-11"
+              : "lg:col-span-7 xl:col-span-7"
+          } transition-all duration-300 space-y-6`}
         >
           <LearningHoursTrendChart />
+          <Top5ProgramsWidget />
         </div>
       </div>
-
     </div>
   );
 }
-
 
 export function TalentDashboardPage() {
   return (

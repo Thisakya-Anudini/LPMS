@@ -4,6 +4,7 @@ import {
     TrendDataPoint,
     SubordinateProgress,
     PaginatedHistoryResponse,
+    TopTrainingProgram,
 } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -59,8 +60,8 @@ export const talentDashboardApi = {
     },
 
     /**
- * Fetches monthly or yearly learning hours trend data
- */
+     * Fetches monthly or yearly learning hours trend data
+     */
     async getTrendData(
         token: string,
         filters: TalentFilterParams = {},
@@ -128,8 +129,8 @@ export const talentDashboardApi = {
     },
 
     /**
- * Fetches paginated training history records with sorting and search
- */
+     * Fetches paginated training history records with sorting and search
+     */
     async getTrainingHistory(
         token: string,
         filters: TalentFilterParams & { search?: string } = {},
@@ -211,5 +212,39 @@ export const talentDashboardApi = {
         return await res.blob();
     },
 
+    /**
+     * Fetches top 5 training programs by completed hours
+     */
+    async getTopPrograms(
+        token: string,
+        filters: TalentFilterParams = {},
+    ): Promise<TopTrainingProgram[]> {
+        const params = new URLSearchParams();
+        if (filters.startDate) params.set("startDate", filters.startDate);
+        if (filters.endDate) params.set("endDate", filters.endDate);
+        if (filters.trainingType && filters.trainingType !== "ALL") {
+            params.set("trainingType", filters.trainingType);
+        }
+        if (filters.designation && filters.designation !== "ALL") {
+            params.set("designation", filters.designation);
+        }
+        if (filters.viewAsId) {
+            params.set("viewAsId", filters.viewAsId);
+        }
 
+        const queryStr = params.toString() ? `?${params.toString()}` : "";
+        const res = await fetch(
+            `${API_BASE_URL}/talent-dashboard/top-programs${queryStr}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
+        );
+        if (!res.ok) {
+            throw new Error(`Failed to fetch top programs: ${res.statusText}`);
+        }
+        const json = await res.json();
+        return json.data || [];
+    },
 };
