@@ -1,0 +1,56 @@
+[
+  {
+    "employeeNumber": "EMP-1001",
+    "fullName": "Kasun Perera",
+    "designation": "Senior Software Engineer",
+    "department": "Digital Platforms",
+    "completedHours": 33.0,
+    "targetHours": 18.0,
+    "completionPercentage": 100
+  },
+  {
+    "employeeNumber": "EMP-1004",
+    "fullName": "Sahan Jayawardena",
+    "designation": "DevOps Engineer",
+    "department": "Cloud & Infrastructure",
+    "completedHours": 28.5,
+    "targetHours": 18.0,
+    "completionPercentage": 100
+  },
+  {
+    "employeeNumber": "EMP-1005",
+    "fullName": "Nadeesha De Silva",
+    "designation": "Software Engineer",
+    "department": "Core Banking Systems",
+    "completedHours": 27.0,
+    "targetHours": 18.0,
+    "completionPercentage": 100
+  },
+  {
+    "employeeNumber": "EMP-1002",
+    "fullName": "Dilini Fernando",
+    "designation": "QA Engineer",
+    "department": "Quality Assurance",
+    "completedHours": 25.5,
+    "targetHours": 18.0,
+    "completionPercentage": 100
+  },
+  {
+    "employeeNumber": "EMP-1003",
+    "fullName": "Amila Silva",
+    "designation": "UI/UX Designer",
+    "department": "Product Design",
+    "completedHours": 14.5,
+    "targetHours": 18.0,
+    "completionPercentage": 81
+  },
+  {
+    "employeeNumber": "EMP0001",
+    "fullName": "Nuwan Bandara",
+    "designation": "Associate Engineer",
+    "department": "IT Operations",
+    "completedHours": 9.0,
+    "targetHours": 18.0,
+    "completionPercentage": 50
+  }
+]

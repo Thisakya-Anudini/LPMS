@@ -181,8 +181,12 @@ export const talentDashboardApi = {
     async exportTrainingHistory(
         token: string,
         filters: TalentFilterParams & { search?: string } = {},
+        sortBy: string = "startDate",
+        sortOrder: "ASC" | "DESC" = "DESC",
     ): Promise<Blob> {
         const params = new URLSearchParams();
+        params.set("sortBy", sortBy);
+        params.set("sortOrder", sortOrder);
         if (filters.startDate) params.set("startDate", filters.startDate);
         if (filters.endDate) params.set("endDate", filters.endDate);
         if (filters.trainingType && filters.trainingType !== "ALL") {

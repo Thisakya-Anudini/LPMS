@@ -13,7 +13,9 @@ import {
   SelectedHierarchyEmployee,
 } from "../../components/admin/EmployeeHierarchyPanel";
 import { LearningHoursTrendChart } from "./LearningHoursTrendChart";
+import { ImmediateSubordinatesChart } from "./ImmediateSubordinatesChart";
 import { Top5ProgramsWidget } from "./Top5ProgramsWidget";
+import { TrainingHistoryTable } from "./TrainingHistoryTable";
 
 function DrillDownBanner() {
   const { isSelfView, viewAsUser, resetToSelf } = useTalentDashboardScope();
@@ -127,7 +129,7 @@ function TalentDashboardContent() {
           />
         </div>
 
-        {/* Right Column: Learning Hours Trend Chart + Top 5 Training Programs Widget */}
+        {/* Right Column: Learning Hours Trend Chart + Immediate Subordinates + Top 5 Training Programs Widget */}
         <div
           className={`${
             isHierarchyCollapsed
@@ -136,9 +138,13 @@ function TalentDashboardContent() {
           } transition-all duration-300 space-y-6`}
         >
           <LearningHoursTrendChart />
+          <ImmediateSubordinatesChart />
           <Top5ProgramsWidget />
         </div>
       </div>
+
+      {/* Full-Width Bottom Section: Exportable Training History Table */}
+      <TrainingHistoryTable />
     </div>
   );
 }

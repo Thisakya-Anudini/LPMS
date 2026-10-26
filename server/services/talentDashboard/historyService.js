@@ -11,6 +11,8 @@ const ALLOWED_SORT_COLUMNS = {
     programName: "tr.program_name",
     employeeNumber: "tr.employee_number",
     fullName: "COALESCE(ap.name, tr.employee_number)",
+    designation: "COALESCE(e.designation, 'Employee')",
+    department: "COALESCE(e.grade_name, 'General')",
     trainingType: "tr.training_type",
     status: "tr.status",
 };
@@ -134,7 +136,7 @@ export const getPaginatedTrainingHistory = async ({
       INNER JOIN org_hierarchy_closure ohc 
         ON tr.principal_id = ohc.descendant_principal_id
     `;
-        scopeCondition = `ohc.ancestor_principal_id = $${paramIndex} AND ohc.depth > 0`;
+        scopeCondition = `ohc.ancestor_principal_id = $${paramIndex} AND ohc.depth >= 0`;
         initialParams.push(resolvedPrincipalId);
         paramIndex++;
     } else {
@@ -233,6 +235,8 @@ export const generateTrainingHistoryCsv = async ({
     employeeNumber,
     isSelfView,
     filters = {},
+    sortBy = "startDate",
+    sortOrder = "DESC",
 }) => {
     // Fetch up to 10,000 in-scope matching records for export
     const { records } = await getPaginatedTrainingHistory({
@@ -244,8 +248,8 @@ export const generateTrainingHistoryCsv = async ({
         filters,
         page: 1,
         pageSize: 10000,
-        sortBy: "startDate",
-        sortOrder: "DESC",
+        sortBy,
+        sortOrder,
     });
 
     const headers = [
