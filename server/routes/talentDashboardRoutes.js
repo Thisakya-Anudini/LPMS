@@ -8,6 +8,7 @@ import {
     getSubordinates,
     getHistory,
     exportHistory,
+    getTopPrograms,
 } from "../controllers/talentDashboardController.js";
 
 const router = Router();
@@ -26,6 +27,9 @@ router.get("/trend", verifyTalentScope, getTrend);
 
 // GET /api/talent-dashboard/immediate-subordinates
 router.get("/immediate-subordinates", verifyTalentScope, getSubordinates);
+
+// GET /api/talent-dashboard/top-programs
+router.get("/top-programs", verifyTalentScope, getTopPrograms);
 
 // GET /api/talent-dashboard/history
 router.get("/history", verifyTalentScope, getHistory);

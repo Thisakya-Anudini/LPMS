@@ -86,25 +86,26 @@ export function Top5ProgramsWidget() {
               ...filters,
               viewAsId: viewAsUser?.principalId,
             });
-            if (Array.isArray(result) && result.length > 0) {
-              apiData = result;
+            if (Array.isArray(result)) {
+              apiData = result; // Accepts live data even when it is an empty array []
             }
           } catch {
-            // Backend endpoint fallback
+            // Only fallback to mock data if the network/API completely fails
             apiData = null;
           }
         }
 
         if (!isMounted) return;
 
-        if (apiData && apiData.length > 0) {
+        if (apiData !== null) {
           setPrograms(apiData);
           setIsUsingFallback(false);
         } else {
-          // Seamless fallback to sample mock dataset
+          // Seamless fallback only on API network failure
           setPrograms(top5ProgramsMockData as TopTrainingProgram[]);
           setIsUsingFallback(true);
         }
+
       } catch (err: any) {
         if (!isMounted) return;
         console.error("Top 5 Programs fetch error:", err);
@@ -356,11 +357,10 @@ export function Top5ProgramsWidget() {
                       key={slice.programId || index}
                       onMouseEnter={() => setHoveredIndex(index)}
                       onMouseLeave={() => setHoveredIndex(null)}
-                      className={`grid grid-cols-12 gap-2 items-center py-2.5 px-2 rounded-xl transition-all cursor-pointer ${
-                        isHovered
+                      className={`grid grid-cols-12 gap-2 items-center py-2.5 px-2 rounded-xl transition-all cursor-pointer ${isHovered
                           ? "bg-slate-100/90 shadow-xs translate-x-1"
                           : "hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       {/* Program Title with Color Bullet & Learner Meta */}
                       <div className="col-span-7 flex items-center gap-2.5 min-w-0">
@@ -373,9 +373,8 @@ export function Top5ProgramsWidget() {
                         />
                         <div className="min-w-0 flex-1">
                           <p
-                            className={`text-xs font-semibold truncate transition-colors ${
-                              isHovered ? "text-indigo-600 font-bold" : "text-slate-800"
-                            }`}
+                            className={`text-xs font-semibold truncate transition-colors ${isHovered ? "text-indigo-600 font-bold" : "text-slate-800"
+                              }`}
                             title={slice.programName}
                           >
                             {slice.programName}
@@ -398,9 +397,8 @@ export function Top5ProgramsWidget() {
                       {/* % Column */}
                       <div className="col-span-2 text-right">
                         <span
-                          className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-bold ${
-                            slice.theme.lightBg
-                          } ${slice.theme.textClass} border ${slice.theme.borderClass}`}
+                          className={`inline-block px-1.5 py-0.5 rounded text-[11px] font-bold ${slice.theme.lightBg
+                            } ${slice.theme.textClass} border ${slice.theme.borderClass}`}
                         >
                           {slice.percentage.toFixed(1)}%
                         </span>

@@ -2,6 +2,7 @@ import {
   getKpiMetrics,
   getTrendData,
   getImmediateSubordinates,
+  getTopProgramsData,
 } from "../services/talentDashboard/aggregatesService.js";
 import {
   getPaginatedTrainingHistory,
@@ -188,6 +189,48 @@ export const getSubordinates = async (req, res) => {
     );
   }
 };
+
+/**
+ * GET /api/talent-dashboard/top-programs
+ * Retrieves top 5 completed training programs by total hours within active hierarchy scope.
+ */
+export const getTopPrograms = async (req, res) => {
+  try {
+    const targetEmpNo =
+      req.targetEmployeeNumber ||
+      (req.isSelfView ? req.user.employeeNo : req.targetPrincipalId);
+
+    const programs = await getTopProgramsData({
+      callerRole: req.user.role,
+      isLearningAdmin: Boolean(req.user?.isLearningAdmin),
+      targetPrincipalId: req.targetPrincipalId,
+      employeeNumber: targetEmpNo,
+      isSelfView: req.isSelfView,
+      filters: {
+        startDate: req.query.startDate,
+        endDate: req.query.endDate,
+        trainingType: req.query.trainingType,
+        staffCategory: req.query.staffCategory,
+        designation: req.query.designation,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Top training programs retrieved successfully",
+      data: programs,
+    });
+  } catch (error) {
+    console.error("Error in getTopPrograms controller:", error);
+    return sendError(
+      res,
+      500,
+      "TOP_PROGRAMS_FETCH_FAILED",
+      "Failed to retrieve top training programs.",
+    );
+  }
+};
+
 
 export const getHistory = async (req, res) => {
   try {
