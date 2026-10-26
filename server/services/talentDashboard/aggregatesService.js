@@ -400,3 +400,175 @@ export const getImmediateSubordinates = async ({
     };
   });
 };
+
+/**
+ * Calculates the top 5 training programs by total completed hours within in-scope hierarchy.
+ *
+ * @param {Object} options
+ * @param {string} options.callerRole
+ * @param {boolean} [options.isLearningAdmin=false]
+ * @param {string} options.targetPrincipalId
+ * @param {string} options.employeeNumber
+ * @param {boolean} options.isSelfView
+ * @param {Object} options.filters
+ * @returns {Promise<Array<{ programId: string, programName: string, participantCount: number, totalCompletedHours: number, percentageOfTop5: number }>>}
+ */
+export const getTopProgramsData = async ({
+  callerRole,
+  isLearningAdmin = false,
+  targetPrincipalId,
+  employeeNumber,
+  isSelfView,
+  filters = {},
+}) => {
+  let resolvedPrincipalId = targetPrincipalId;
+  const lookupEmpNo =
+    employeeNumber ||
+    (targetPrincipalId && !UUID_REGEX.test(targetPrincipalId)
+      ? targetPrincipalId.replace(/^erp-learner-/, "")
+      : null);
+
+  if (targetPrincipalId && !UUID_REGEX.test(targetPrincipalId) && lookupEmpNo) {
+    const empRes = await query(
+      `SELECT principal_id FROM employees WHERE employee_number = $1 LIMIT 1;`,
+      [lookupEmpNo],
+    );
+    if (empRes.rows.length > 0 && empRes.rows[0]?.principal_id) {
+      resolvedPrincipalId = empRes.rows[0].principal_id;
+    }
+  }
+
+  const isValidUuid = Boolean(
+    resolvedPrincipalId && UUID_REGEX.test(resolvedPrincipalId),
+  );
+
+  const isAdminGlobal =
+    isSelfView &&
+    (callerRole === ROLES.SUPER_ADMIN ||
+      callerRole === ROLES.LEARNING_ADMIN ||
+      Boolean(isLearningAdmin));
+
+  let rows = [];
+
+  if (isAdminGlobal) {
+    // 1. Organization-wide top programs (Super Admin / Learning Admin self view)
+    const { clause, params } = buildFilterConditions(filters, 1);
+    const sql = `
+      WITH top_programs AS (
+        SELECT 
+          MD5(LOWER(TRIM(tr.program_name))) AS program_id,
+          TRIM(tr.program_name) AS program_name,
+          COUNT(DISTINCT tr.employee_number)::int AS participant_count,
+          COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS total_hours
+        FROM training_records tr
+        WHERE 1=1 ${clause}
+        GROUP BY TRIM(tr.program_name)
+        ORDER BY total_hours DESC
+        LIMIT 5
+      ),
+      top_sum AS (
+        SELECT COALESCE(SUM(total_hours), 0) AS grand_top_hours FROM top_programs
+      )
+      SELECT 
+        tp.program_id AS "programId",
+        tp.program_name AS "programName",
+        tp.participant_count AS "participantCount",
+        tp.total_hours AS "totalCompletedHours",
+        CASE 
+          WHEN ts.grand_top_hours > 0 
+          THEN ROUND((tp.total_hours / ts.grand_top_hours) * 100, 1)
+          ELSE 0 
+        END AS "percentageOfTop5"
+      FROM top_programs tp, top_sum ts
+      ORDER BY tp.total_hours DESC;
+    `;
+    const res = await query(sql, params);
+    rows = res.rows;
+  } else if (isValidUuid) {
+    // 2. Supervisor downward hierarchy branch (drill-down view)
+    const { clause, params } = buildFilterConditions(filters, 2);
+    const sql = `
+      WITH top_programs AS (
+        SELECT 
+          MD5(LOWER(TRIM(tr.program_name))) AS program_id,
+          TRIM(tr.program_name) AS program_name,
+          COUNT(DISTINCT tr.employee_number)::int AS participant_count,
+          COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS total_hours
+        FROM training_records tr
+        INNER JOIN org_hierarchy_closure ohc 
+          ON tr.principal_id = ohc.descendant_principal_id
+        WHERE ohc.ancestor_principal_id = $1 
+          AND ohc.depth >= 0
+          ${clause}
+        GROUP BY TRIM(tr.program_name)
+        ORDER BY total_hours DESC
+        LIMIT 5
+      ),
+      top_sum AS (
+        SELECT COALESCE(SUM(total_hours), 0) AS grand_top_hours FROM top_programs
+      )
+      SELECT 
+        tp.program_id AS "programId",
+        tp.program_name AS "programName",
+        tp.participant_count AS "participantCount",
+        tp.total_hours AS "totalCompletedHours",
+        CASE 
+          WHEN ts.grand_top_hours > 0 
+          THEN ROUND((tp.total_hours / ts.grand_top_hours) * 100, 1)
+          ELSE 0 
+        END AS "percentageOfTop5"
+      FROM top_programs tp, top_sum ts
+      ORDER BY tp.total_hours DESC;
+    `;
+    const res = await query(sql, [resolvedPrincipalId, ...params]);
+    rows = res.rows;
+  } else {
+    // 3. Individual learner (safely handles UUID vs text employee number)
+    const selfField = isValidUuid ? "tr.principal_id" : "tr.employee_number";
+    const selfParam = isValidUuid ? resolvedPrincipalId : (lookupEmpNo || resolvedPrincipalId);
+
+    if (selfParam) {
+      const { clause, params } = buildFilterConditions(filters, 2);
+      const sql = `
+        WITH top_programs AS (
+          SELECT 
+            MD5(LOWER(TRIM(tr.program_name))) AS program_id,
+            TRIM(tr.program_name) AS program_name,
+            COUNT(DISTINCT tr.employee_number)::int AS participant_count,
+            COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS total_hours
+          FROM training_records tr
+          WHERE ${selfField} = $1 ${clause}
+          GROUP BY TRIM(tr.program_name)
+          ORDER BY total_hours DESC
+          LIMIT 5
+        ),
+        top_sum AS (
+          SELECT COALESCE(SUM(total_hours), 0) AS grand_top_hours FROM top_programs
+        )
+        SELECT 
+          tp.program_id AS "programId",
+          tp.program_name AS "programName",
+          tp.participant_count AS "participantCount",
+          tp.total_hours AS "totalCompletedHours",
+          CASE 
+            WHEN ts.grand_top_hours > 0 
+            THEN ROUND((tp.total_hours / ts.grand_top_hours) * 100, 1)
+            ELSE 0 
+          END AS "percentageOfTop5"
+        FROM top_programs tp, top_sum ts
+        ORDER BY tp.total_hours DESC;
+      `;
+      const res = await query(sql, [selfParam, ...params]);
+      rows = res.rows;
+    }
+  }
+
+
+  return rows.map((r) => ({
+    programId: String(r.programId || r.programName),
+    programName: r.programName,
+    participantCount: parseInt(r.participantCount || "0", 10),
+    totalCompletedHours: parseFloat(r.totalCompletedHours || "0"),
+    percentageOfTop5: parseFloat(r.percentageOfTop5 || "0"),
+  }));
+};
