@@ -327,8 +327,11 @@ export const getTrendData = async ({
  * @returns {Promise<Array<{ employeeNumber: string, fullName: string, designation: string, department: string, completedHours: number, targetHours: number, completionPercentage: number }>>}
  */
 export const getImmediateSubordinates = async ({
+  callerRole,
+  isLearningAdmin = false,
   targetPrincipalId,
   employeeNumber,
+  isSelfView = true,
   filters = {},
 }) => {
   let resolvedPrincipalId = targetPrincipalId;
@@ -338,48 +341,108 @@ export const getImmediateSubordinates = async ({
       ? targetPrincipalId.replace(/^erp-learner-/, "")
       : null);
 
-  if (targetPrincipalId && !UUID_REGEX.test(targetPrincipalId) && lookupEmpNo) {
-    const empRes = await query(
-      `SELECT principal_id FROM employees WHERE employee_number = $1 LIMIT 1;`,
-      [lookupEmpNo],
+  let ancestorIds = [];
+  if (targetPrincipalId && UUID_REGEX.test(targetPrincipalId)) {
+    ancestorIds.push(targetPrincipalId);
+  }
+
+  if (lookupEmpNo) {
+    const princRes = await query(
+      `SELECT principal_id FROM employees WHERE employee_number = $1
+       UNION
+       SELECT id AS principal_id FROM auth_principals WHERE email ILIKE $2;`,
+      [lookupEmpNo, `${lookupEmpNo}%`],
     );
-    if (empRes.rows.length > 0 && empRes.rows[0]?.principal_id) {
-      resolvedPrincipalId = empRes.rows[0].principal_id;
+    for (const row of princRes.rows) {
+      if (row.principal_id && UUID_REGEX.test(row.principal_id)) {
+        ancestorIds.push(row.principal_id);
+      }
     }
   }
 
-  const isValidUuid = Boolean(
-    resolvedPrincipalId && UUID_REGEX.test(resolvedPrincipalId),
-  );
+  ancestorIds = Array.from(new Set(ancestorIds));
 
-  if (!isValidUuid) {
+  const isAdminGlobal =
+    isSelfView &&
+    (callerRole === ROLES.SUPER_ADMIN ||
+      callerRole === ROLES.LEARNING_ADMIN ||
+      Boolean(isLearningAdmin));
+
+  // Determine if this is a global query (Admin in self view with no direct subordinates)
+  // or a scoped supervisor/subordinate query
+  let useGlobalOrg = false;
+  if (isAdminGlobal) {
+    if (ancestorIds.length === 0) {
+      useGlobalOrg = true;
+    } else {
+      // Check if user has any direct reports at depth 1
+      const checkRes = await query(
+        `SELECT 1 FROM org_hierarchy_closure WHERE ancestor_principal_id = ANY($1::uuid[]) AND depth = 1 LIMIT 1;`,
+        [ancestorIds],
+      );
+      if (checkRes.rowCount === 0) {
+        useGlobalOrg = true;
+      }
+    }
+  }
+
+  if (!useGlobalOrg && ancestorIds.length === 0) {
     return [];
   }
 
-  const { clause, params } = buildFilterConditions(filters, 2);
+  // Parameter index is 1 for global query (no ancestorIds param), 2 for scoped query ($1 is ancestorIds)
+  const startIndex = useGlobalOrg ? 1 : 2;
+  const { clause, params } = buildFilterConditions(filters, startIndex);
 
-  // Query direct subordinates (depth = 1) along with their aggregated completed hours
-  const sql = `
-    SELECT 
-      e.employee_number AS "employeeNumber",
-      p.name AS "fullName",
-      COALESCE(e.designation, 'Employee') AS "designation",
-      COALESCE(e.grade_name, 'General') AS "department",
-      COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS "completedHours"
-    FROM org_hierarchy_closure ohc
-    INNER JOIN auth_principals p 
-      ON ohc.descendant_principal_id = p.id
-    INNER JOIN employees e 
-      ON p.id = e.principal_id
-    LEFT JOIN training_records tr 
-      ON p.id = tr.principal_id ${clause}
-    WHERE ohc.ancestor_principal_id = $1 
-      AND ohc.depth = 1
-    GROUP BY e.employee_number, p.name, e.designation, e.grade_name
-    ORDER BY "completedHours" DESC, p.name ASC;
-  `;
+  let sql = "";
+  let queryParams = [];
 
-  const res = await query(sql, [resolvedPrincipalId, ...params]);
+  if (useGlobalOrg) {
+    // Global admin view: show all direct reports across the organization
+    sql = `
+      SELECT 
+        e.employee_number AS "employeeNumber",
+        p.name AS "fullName",
+        COALESCE(e.designation, 'Employee') AS "designation",
+        COALESCE(e.grade_name, 'General') AS "department",
+        COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS "completedHours"
+      FROM org_hierarchy_closure ohc
+      INNER JOIN auth_principals p 
+        ON ohc.descendant_principal_id = p.id
+      INNER JOIN employees e 
+        ON p.id = e.principal_id
+      LEFT JOIN training_records tr 
+        ON p.id = tr.principal_id ${clause}
+      WHERE ohc.depth = 1
+      GROUP BY e.employee_number, p.name, e.designation, e.grade_name
+      ORDER BY "completedHours" DESC, p.name ASC;
+    `;
+    queryParams = params;
+  } else {
+    // Specific supervisor or drilled-down employee view
+    sql = `
+      SELECT 
+        e.employee_number AS "employeeNumber",
+        p.name AS "fullName",
+        COALESCE(e.designation, 'Employee') AS "designation",
+        COALESCE(e.grade_name, 'General') AS "department",
+        COALESCE(SUM(tr.duration_hours), 0)::numeric(10, 2) AS "completedHours"
+      FROM org_hierarchy_closure ohc
+      INNER JOIN auth_principals p 
+        ON ohc.descendant_principal_id = p.id
+      INNER JOIN employees e 
+        ON p.id = e.principal_id
+      LEFT JOIN training_records tr 
+        ON p.id = tr.principal_id ${clause}
+      WHERE ohc.ancestor_principal_id = ANY($1::uuid[]) 
+        AND ohc.depth = 1
+      GROUP BY e.employee_number, p.name, e.designation, e.grade_name
+      ORDER BY "completedHours" DESC, p.name ASC;
+    `;
+    queryParams = [ancestorIds, ...params];
+  }
+
+  const res = await query(sql, queryParams);
 
   return res.rows.map((row) => {
     const completedHours = parseFloat(row.completedHours || "0");

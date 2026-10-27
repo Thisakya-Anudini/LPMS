@@ -163,8 +163,11 @@ export const getSubordinates = async (req, res) => {
       (req.isSelfView ? req.user.employeeNo : req.targetPrincipalId);
 
     const subordinates = await getImmediateSubordinates({
+      callerRole: req.user.role,
+      isLearningAdmin: Boolean(req.user?.isLearningAdmin),
       targetPrincipalId: req.targetPrincipalId,
       employeeNumber: targetEmpNo,
+      isSelfView: req.isSelfView,
       filters: {
         startDate: req.query.startDate,
         endDate: req.query.endDate,
@@ -294,6 +297,8 @@ export const exportHistory = async (req, res) => {
         designation: req.query.designation,
         search: req.query.search,
       },
+      sortBy: req.query.sortBy,
+      sortOrder: req.query.sortOrder,
     });
 
     const dateStamp = new Date().toISOString().slice(0, 10);
