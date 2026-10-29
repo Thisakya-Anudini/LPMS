@@ -5,6 +5,8 @@ import {
     SubordinateProgress,
     PaginatedHistoryResponse,
     TopTrainingProgram,
+    TalentTargetResponse,
+    TalentTargetSettingItem,
 } from "../types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -250,5 +252,42 @@ export const talentDashboardApi = {
         }
         const json = await res.json();
         return json.data || [];
+    },
+
+    /**
+   * Fetches active organizational target hours and historical/future settings
+   */
+    async getTargetSettings(token: string): Promise<TalentTargetResponse> {
+        const res = await fetch(`${API_BASE_URL}/talent-dashboard/settings/target`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+        if (!res.ok) {
+            throw new Error(`Failed to fetch target settings: ${res.statusText}`);
+        }
+        const json = await res.json();
+        return json.data;
+    },
+    /**
+     * Updates organizational target hours for a fiscal year (Super Admin only)
+     */
+    async updateTargetSettings(
+        token: string,
+        payload: { fiscalYear: number; targetHours: number; effectiveFrom?: string }
+    ): Promise<TalentTargetSettingItem> {
+        const res = await fetch(`${API_BASE_URL}/talent-dashboard/settings/target`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+            throw new Error(json.message || `Failed to update target settings`);
+        }
+        return json.data;
     },
 };
