@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   TalentDashboardScopeProvider,
   useTalentDashboardScope,
 } from "../../contexts/TalentDashboardScopeContext";
 import { useAuth } from "../../contexts/useAuth";
-import { Eye, RotateCcw } from "lucide-react";
+import { Eye, RotateCcw, Target } from "lucide-react";
 import { FilterBar } from "./FilterBar";
 import { KpiCardRow } from "./KpiCardRow";
 import { TargetGaugeRow } from "./TargetGaugeRow";
@@ -16,6 +16,7 @@ import { LearningHoursTrendChart } from "./LearningHoursTrendChart";
 import { ImmediateSubordinatesChart } from "./ImmediateSubordinatesChart";
 import { Top5ProgramsWidget } from "./Top5ProgramsWidget";
 import { TrainingHistoryTable } from "./TrainingHistoryTable";
+import { ConfigureTargetModal } from "./ConfigureTargetModal";
 
 function DrillDownBanner() {
   const { isSelfView, viewAsUser, resetToSelf } = useTalentDashboardScope();
@@ -58,6 +59,15 @@ function TalentDashboardContent() {
   const { drillDown, viewAsUser, refreshData, resetToSelf } = useTalentDashboardScope();
   const [isHierarchyCollapsed, setIsHierarchyCollapsed] = useState(false);
 
+  const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
+  const [token, setToken] = useState<string>("");
+
+  // Fetch token for modal
+  const { getAccessToken } = useAuth();
+  useEffect(() => {
+    getAccessToken().then((t) => t && setToken(t));
+  }, [getAccessToken]);
+
   // Super Admin & Learning Admin see the whole enterprise tree starting at the CEO ("020987").
   // In LPMS, Learning Admins have role === "EMPLOYEE" with isLearningAdmin === true.
   // Supervisors see only their own hierarchy starting from their employee number.
@@ -84,17 +94,38 @@ function TalentDashboardContent() {
     });
   };
 
+
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          Talent Development Dashboard
-        </h1>
-        <p className="text-sm text-slate-600">
-          Monitor training hours, analyze team competencies, and benchmark
-          against the 18.0-hour organizational target.
-        </p>
+      {/* Header with Super Admin Target Configuration */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Talent Development Dashboard
+          </h1>
+          <p className="text-sm text-slate-600">
+            Monitor training hours, analyze team competencies, and benchmark
+            against the annual organizational target.
+          </p>
+        </div>
+
+        {/* Super Admin Target Settings Action Button */}
+        {user?.role === "SUPER_ADMIN" && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsTargetModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-200 text-slate-700 shadow-xs hover:bg-slate-50 hover:border-slate-300 transition-colors"
+            >
+              <Target className="w-4 h-4 text-primary-600" />
+              <span>Configure Target</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary-50 text-primary-700 border border-primary-200">
+                Admin
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Drill-down indicator banner when inspecting a subordinate */}
@@ -113,11 +144,10 @@ function TalentDashboardContent() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Organization Hierarchy (Collapsible between 5 cols and 1 col) */}
         <div
-          className={`${
-            isHierarchyCollapsed
-              ? "lg:col-span-1 xl:col-span-1"
-              : "lg:col-span-5 xl:col-span-5"
-          } transition-all duration-300`}
+          className={`${isHierarchyCollapsed
+            ? "lg:col-span-1 xl:col-span-1"
+            : "lg:col-span-5 xl:col-span-5"
+            } transition-all duration-300`}
         >
           <EmployeeHierarchyPanel
             rootEmployeeNumber={hierarchyRootEmployeeNo}
@@ -131,11 +161,10 @@ function TalentDashboardContent() {
 
         {/* Right Column: Learning Hours Trend Chart + Immediate Subordinates + Top 5 Training Programs Widget */}
         <div
-          className={`${
-            isHierarchyCollapsed
-              ? "lg:col-span-11 xl:col-span-11"
-              : "lg:col-span-7 xl:col-span-7"
-          } transition-all duration-300 space-y-6`}
+          className={`${isHierarchyCollapsed
+            ? "lg:col-span-11 xl:col-span-11"
+            : "lg:col-span-7 xl:col-span-7"
+            } transition-all duration-300 space-y-6`}
         >
           <LearningHoursTrendChart />
           <ImmediateSubordinatesChart />
@@ -145,9 +174,20 @@ function TalentDashboardContent() {
 
       {/* Full-Width Bottom Section: Exportable Training History Table */}
       <TrainingHistoryTable />
+
+      {/* Super Admin Target Modal */}
+      {user?.role === "SUPER_ADMIN" && token && (
+        <ConfigureTargetModal
+          isOpen={isTargetModalOpen}
+          onClose={() => setIsTargetModalOpen(false)}
+          onTargetUpdated={refreshData}
+          token={token}
+        />
+      )}
     </div>
   );
 }
+
 
 export function TalentDashboardPage() {
   return (

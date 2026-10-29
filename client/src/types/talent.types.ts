@@ -53,6 +53,19 @@ export interface TrainingHistoryRecord {
   status: "COMPLETED" | "IN_PROGRESS" | "EXPIRED";
 }
 
+export interface TalentTargetSettingItem {
+  fiscalYear: number;
+  targetHours: number;
+  effectiveFrom: string;
+  updatedAt?: string;
+  isLocked?: boolean;
+}
+
+export interface TalentTargetResponse {
+  activeTarget: number;
+  settings: TalentTargetSettingItem[];
+}
+
 export interface PaginatedHistoryResponse {
   records: TrainingHistoryRecord[];
   total: number;

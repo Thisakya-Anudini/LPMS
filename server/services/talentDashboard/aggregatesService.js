@@ -1,6 +1,7 @@
 import { query } from "../../db.js";
 import { ROLES } from "../../constants/roles.js";
 import { syncHierarchyForUser } from "./hierarchyService.js";
+import { getTargetHoursForDateRange } from "./settingsService.js";
 
 /**
  * Helper to dynamically build parameterized filter clauses for training_records
@@ -171,12 +172,15 @@ export const getKpiMetrics = async ({
       ? Math.round((totalTrainingHours / totalStaff) * 10) / 10
       : 0;
 
+  // Resolve dynamic target for the active filter year
+  const targetHours = await getTargetHoursForDateRange(filters.startDate, filters.endDate);
+
   return {
     totalStaff,
     totalTrainingHours,
     averageTrainingHours,
     selfTrainingHours,
-    targetHours: 18.0,
+    targetHours,
   };
 };
 
@@ -444,9 +448,11 @@ export const getImmediateSubordinates = async ({
 
   const res = await query(sql, queryParams);
 
+  // Resolve dynamic target for the active filter year
+  const targetHours = await getTargetHoursForDateRange(filters.startDate, filters.endDate);
+
   return res.rows.map((row) => {
     const completedHours = parseFloat(row.completedHours || "0");
-    const targetHours = 18.0;
     const completionPercentage = Math.min(
       100,
       Math.round((completedHours / targetHours) * 100),
@@ -458,7 +464,7 @@ export const getImmediateSubordinates = async ({
       designation: row.designation,
       department: row.department,
       completedHours,
-      targetHours,
+      targetHours, // Dynamic benchmark
       completionPercentage,
     };
   });

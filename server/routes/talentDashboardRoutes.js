@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { protect } from "../middlewares/authMiddleware.js";
+import { protect, requireRole } from "../middlewares/authMiddleware.js";
+import { ROLES } from "../constants/roles.js";
 import { verifyTalentScope } from "../middlewares/scopeMiddleware.js";
 import {
     getKpis,
@@ -9,6 +10,8 @@ import {
     getHistory,
     exportHistory,
     getTopPrograms,
+    getTargetSettingsController,
+    updateTargetSettingsController,
 } from "../controllers/talentDashboardController.js";
 
 const router = Router();
@@ -36,5 +39,15 @@ router.get("/history", verifyTalentScope, getHistory);
 
 // GET /api/talent-dashboard/history/export
 router.get("/history/export", verifyTalentScope, exportHistory);
+
+// GET /api/talent-dashboard/settings/target (Read-only for all authenticated users)
+router.get("/settings/target", getTargetSettingsController);
+
+// PUT /api/talent-dashboard/settings/target (Gated strictly to SUPER_ADMIN)
+router.put(
+    "/settings/target",
+    requireRole([ROLES.SUPER_ADMIN]),
+    updateTargetSettingsController
+);
 
 export default router;
