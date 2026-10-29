@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   ChevronRight,
+  ChevronLeft,
   Target,
   Sparkles,
 } from "lucide-react";
@@ -30,6 +31,15 @@ export function ImmediateSubordinatesChart() {
   const [isUsingFallback, setIsUsingFallback] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortOption>("HOURS_DESC");
+
+  // Pagination for subordinates (max 10 per page)
+  const PAGE_SIZE = 10;
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reset to page 1 whenever search query or sorting changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortBy]);
 
   useEffect(() => {
     let isMounted = true;
@@ -129,6 +139,14 @@ export function ImmediateSubordinatesChart() {
 
     return list;
   }, [subordinates, searchQuery, sortBy]);
+
+  // Pagination calculations (max 10 items per page)
+  const totalSubordinates = filteredSubordinates.length;
+  const totalPages = Math.max(1, Math.ceil(totalSubordinates / PAGE_SIZE));
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const paginatedSubordinates = useMemo(() => {
+    return filteredSubordinates.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredSubordinates, startIndex]);
 
   // Aggregate stats
   const stats = useMemo(() => {
@@ -405,9 +423,9 @@ export function ImmediateSubordinatesChart() {
               </div>
             </div>
 
-            {/* Constrained Scroll Container: exactly 3 visible items (~320px max height) with smooth vertical scroll */}
+            {/* Constrained Scroll Container: exactly 3 visible items (~320px max height) */}
             <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1.5 focus:outline-none scrollbar-thin scrollbar-thumb-secondary-300 scrollbar-track-secondary-100">
-              {filteredSubordinates.map((sub) => {
+              {paginatedSubordinates.map((sub) => {
                 const completed = sub.completedHours || 0;
                 const hasMetTarget = completed >= TARGET_HOURS;
                 const percentOfMax = Math.min(100, (completed / maxBarValue) * 100);
@@ -523,6 +541,53 @@ export function ImmediateSubordinatesChart() {
                 );
               })}
             </div>
+
+            {/* Pagination Controls when subordinates exceed 10 */}
+            {totalSubordinates > PAGE_SIZE && (
+              <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t border-secondary-100 text-xs text-secondary-500">
+                <div>
+                  Showing{" "}
+                  <span className="font-semibold text-secondary-800">
+                    {startIndex + 1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-secondary-800">
+                    {Math.min(startIndex + PAGE_SIZE, totalSubordinates)}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-secondary-800">
+                    {totalSubordinates}
+                  </span>{" "}
+                  subordinates
+                </div>
+
+                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-secondary-200 bg-white text-secondary-700 hover:bg-secondary-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span>Previous</span>
+                  </button>
+
+                  <span className="px-2 font-medium text-secondary-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-secondary-200 bg-white text-secondary-700 hover:bg-secondary-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
