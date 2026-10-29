@@ -8,6 +8,11 @@ import {
   getPaginatedTrainingHistory,
   generateTrainingHistoryCsv,
 } from "../services/talentDashboard/historyService.js";
+import {
+  getAllTargetSettings,
+  upsertTargetSetting,
+  getTargetHoursForDateRange,
+} from "../services/talentDashboard/settingsService.js";
 import { query } from "../db.js";
 import { fetchAllDesignations } from "../utils/erpClient.js";
 import { sendError } from "../utils/http.js";
@@ -314,6 +319,59 @@ export const exportHistory = async (req, res) => {
       500,
       "HISTORY_EXPORT_FAILED",
       "Failed to export training history.",
+    );
+  }
+};
+
+/**
+ * GET /api/talent-dashboard/settings/target
+ * Fetches all fiscal year targets and the current active target.
+ */
+export const getTargetSettingsController = async (req, res) => {
+  try {
+    const list = await getAllTargetSettings();
+    const activeTarget = await getTargetHoursForDateRange();
+    return res.status(200).json({
+      success: true,
+      message: "Target settings retrieved successfully",
+      data: {
+        activeTarget,
+        settings: list,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getTargetSettingsController:", error);
+    return sendError(res, 500, "TARGET_FETCH_FAILED", "Failed to retrieve target settings.");
+  }
+};
+/**
+ * PUT /api/talent-dashboard/settings/target
+ * Updates organizational target hours (Super Admin only, future-effective only).
+ */
+export const updateTargetSettingsController = async (req, res) => {
+  try {
+    const { fiscalYear, targetHours, effectiveFrom } = req.body;
+    if (!fiscalYear || !targetHours) {
+      return sendError(res, 400, "INVALID_INPUT", "Fiscal year and target hours are required.");
+    }
+    const updated = await upsertTargetSetting({
+      fiscalYear,
+      targetHours,
+      effectiveFrom,
+      userId: req.user.id,
+    });
+    return res.status(200).json({
+      success: true,
+      message: `Target for fiscal year ${fiscalYear} successfully set to ${targetHours} hours.`,
+      data: updated,
+    });
+  } catch (error) {
+    console.error("Error in updateTargetSettingsController:", error);
+    return sendError(
+      res,
+      error.message.includes("closed and locked") ? 400 : 500,
+      "TARGET_UPDATE_FAILED",
+      error.message
     );
   }
 };
