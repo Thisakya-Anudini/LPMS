@@ -15,6 +15,11 @@ import {
   RotateCw,
   X,
   Filter,
+  User,
+  Users,
+  Briefcase,
+  Building2,
+  IdCard,
 } from "lucide-react";
 import { useTalentDashboardScope } from "../../contexts/TalentDashboardScopeContext";
 import { useAuth } from "../../contexts/useAuth";
@@ -40,7 +45,7 @@ type SortField =
 type SortOrder = "ASC" | "DESC";
 
 export function TrainingHistoryTable() {
-  const { filters, viewAsUser, refreshKey, resetFilters } =
+  const { filters, viewAsUser, refreshKey, resetFilters, resetToSelf } =
     useTalentDashboardScope();
   const { getAccessToken } = useAuth();
 
@@ -73,9 +78,13 @@ export function TrainingHistoryTable() {
     return () => clearTimeout(handler);
   }, [searchInput]);
 
-  // Reset to page 1 when global filters or drill-down changes
+  // Reset to page 1 and clear search input when global filters or drill-down changes
   useEffect(() => {
     setCurrentPage(1);
+    if (viewAsUser) {
+      setSearchInput("");
+      setActiveSearch("");
+    }
   }, [filters, viewAsUser]);
 
   // Fetch paginated history from API with fallback
@@ -97,7 +106,7 @@ export function TrainingHistoryTable() {
               {
                 ...filters,
                 viewAsId: viewAsUser?.principalId,
-                search: activeSearch,
+                search: viewAsUser ? "" : activeSearch,
               },
               currentPage,
               pageSize,
@@ -118,31 +127,61 @@ export function TrainingHistoryTable() {
 
         if (!isMounted) return;
 
+        // Individual learner filter: ensure only selected employee's records are shown without mixing in other team members
+        const isRecordForLearner = (r: TrainingHistoryRecord) => {
+          if (!viewAsUser) return true;
+          const targetEmpNo = (viewAsUser.employeeNumber || "").trim().toLowerCase();
+          const targetName = (viewAsUser.name || "").trim().toLowerCase();
+          const rEmpNo = (r.employeeNumber || "").trim().toLowerCase();
+          const rName = (r.fullName || "").trim().toLowerCase();
+          return (
+            (targetEmpNo && rEmpNo === targetEmpNo) ||
+            (targetName && rName === targetName)
+          );
+        };
+
         if (apiData !== null) {
-          setRecords(apiData.records);
-          setTotalRecords(apiData.total);
-          setTotalPages(apiData.totalPages || 1);
+          let recs = apiData.records;
+          let total = apiData.total;
+          let pages = apiData.totalPages || 1;
+
+          if (viewAsUser) {
+            recs = recs.filter(isRecordForLearner);
+            if (recs.length !== apiData.records.length) {
+              total = recs.length;
+              pages = Math.max(1, Math.ceil(total / pageSize));
+            }
+          }
+
+          setRecords(recs);
+          setTotalRecords(total);
+          setTotalPages(pages);
           setIsUsingFallback(false);
         } else {
           // Client-side pagination & filter fallback using mock
           const mock = trainingHistoryMock as PaginatedHistoryResponse;
           let filtered = [...mock.records];
 
-          if (activeSearch) {
-            const q = activeSearch.toLowerCase();
-            filtered = filtered.filter(
-              (r) =>
-                r.programName.toLowerCase().includes(q) ||
-                r.fullName.toLowerCase().includes(q) ||
-                r.employeeNumber.toLowerCase().includes(q) ||
-                r.designation.toLowerCase().includes(q)
-            );
-          }
+          if (viewAsUser) {
+            // Strictly filter to the selected employee only, without mixing other team members
+            filtered = filtered.filter(isRecordForLearner);
+          } else {
+            if (activeSearch) {
+              const q = activeSearch.toLowerCase();
+              filtered = filtered.filter(
+                (r) =>
+                  r.programName.toLowerCase().includes(q) ||
+                  r.fullName.toLowerCase().includes(q) ||
+                  r.employeeNumber.toLowerCase().includes(q) ||
+                  r.designation.toLowerCase().includes(q)
+              );
+            }
 
-          if (filters.trainingType && filters.trainingType !== "ALL") {
-            filtered = filtered.filter(
-              (r) => r.trainingType === filters.trainingType
-            );
+            if (filters.trainingType && filters.trainingType !== "ALL") {
+              filtered = filtered.filter(
+                (r) => r.trainingType === filters.trainingType
+              );
+            }
           }
 
           // Sort mock records
@@ -225,7 +264,7 @@ export function TrainingHistoryTable() {
         {
           ...filters,
           viewAsId: viewAsUser?.principalId,
-          search: activeSearch,
+          search: viewAsUser ? "" : activeSearch,
         },
         sortBy,
         sortOrder
@@ -233,7 +272,8 @@ export function TrainingHistoryTable() {
 
       // Create download trigger in browser
       const dateStamp = new Date().toISOString().slice(0, 10);
-      const filename = `talent_training_history_${dateStamp}.csv`;
+      const suffix = viewAsUser?.employeeNumber ? `_${viewAsUser.employeeNumber}` : "";
+      const filename = `talent_training_history${suffix}_${dateStamp}.csv`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -324,53 +364,121 @@ export function TrainingHistoryTable() {
       {/* Table Header Section */}
       <div className="border-b border-secondary-100 bg-gradient-to-r from-secondary-50/70 via-white to-secondary-50/40 px-6 py-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-secondary-900 tracking-tight">
-                  Training History & Completed Records
-                </h3>
-                <span className="inline-flex items-center rounded-full bg-secondary-100 px-2.5 py-0.5 text-xs font-semibold text-secondary-700">
-                  {totalRecords} {totalRecords === 1 ? "Record" : "Records"}
-                </span>
-                {isUsingFallback && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs text-amber-700">
-                    <Sparkles className="h-3 w-3" /> Demo Data
+          {viewAsUser ? (
+            /* Individual Learner Drill-Down Header */
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-700 border border-primary-200 shadow-sm">
+                <User className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 border border-primary-200 px-2.5 py-0.5 text-[11px] font-semibold text-primary-700">
+                    Individual Learner View
                   </span>
+                  <h3 className="text-lg font-bold text-secondary-900 tracking-tight">
+                    {viewAsUser.name}
+                  </h3>
+                  <span className="inline-flex items-center rounded-full bg-secondary-100 px-2.5 py-0.5 text-xs font-semibold text-secondary-700">
+                    {totalRecords} {totalRecords === 1 ? "Record" : "Records"}
+                  </span>
+                  {isUsingFallback && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs text-amber-700">
+                      <Sparkles className="h-3 w-3" /> Demo Data
+                    </span>
+                  )}
+                </div>
+
+                {/* Meta Row: Employee ID, Designation, Department */}
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-secondary-600">
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <IdCard className="h-3.5 w-3.5 text-secondary-400" />
+                    <span>Employee ID:</span>
+                    <span className="font-mono font-semibold text-secondary-900 bg-secondary-100 border border-secondary-200 px-1.5 py-0.5 rounded text-[11px]">
+                      {viewAsUser.employeeNumber}
+                    </span>
+                  </span>
+
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Briefcase className="h-3.5 w-3.5 text-secondary-400" />
+                    <span>Designation:</span>
+                    <span className="font-semibold text-secondary-800">
+                      {viewAsUser.designation || "Employee"}
+                    </span>
+                  </span>
+
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Building2 className="h-3.5 w-3.5 text-secondary-400" />
+                    <span>Department:</span>
+                    <span className="font-semibold text-secondary-800">
+                      {viewAsUser.department || "General"}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Team-Level View Header */
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-secondary-900 tracking-tight">
+                    Training History & Completed Records
+                  </h3>
+                  <span className="inline-flex items-center rounded-full bg-secondary-100 px-2.5 py-0.5 text-xs font-semibold text-secondary-700">
+                    {totalRecords} {totalRecords === 1 ? "Record" : "Records"}
+                  </span>
+                  {isUsingFallback && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs text-amber-700">
+                      <Sparkles className="h-3 w-3" /> Demo Data
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-secondary-500">
+                  Detailed training activities, participant completion hours, and
+                  delivery modes scoped to your organization
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Action Row: Conditional Controls */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* When in Individual Learner View: "View All Team Records" button is shown, search & filter options are HIDDEN */}
+            {viewAsUser ? (
+              <button
+                type="button"
+                onClick={resetToSelf}
+                className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-primary-300 bg-primary-50 px-3.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-xs transition-all cursor-pointer"
+                title="Return to the team-level view with all members' records"
+              >
+                <Users className="h-3.5 w-3.5 text-primary-600" />
+                <span>View All Team Records</span>
+              </button>
+            ) : (
+              /* When in Team View: Search Input is visible */
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-secondary-400" />
+                <input
+                  type="text"
+                  placeholder="Search program, name, ID..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="h-9 w-60 rounded-lg border border-secondary-200 bg-white pl-8 pr-7 text-xs text-secondary-800 placeholder-secondary-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 shadow-xs"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchInput("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-secondary-500">
-                Detailed training activities, participant completion hours, and
-                delivery modes scoped to your organization
-              </p>
-            </div>
-          </div>
-
-          {/* Action Row: Search Input and Export Button */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-secondary-400" />
-              <input
-                type="text"
-                placeholder="Search program, name, ID..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="h-9 w-60 rounded-lg border border-secondary-200 bg-white pl-8 pr-7 text-xs text-secondary-800 placeholder-secondary-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 shadow-xs"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => setSearchInput("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            )}
 
             {/* Export to CSV / Excel Button */}
             <button
@@ -570,11 +678,22 @@ export function TrainingHistoryTable() {
                       No Training Records Found
                     </h4>
                     <p className="mt-1 text-xs text-secondary-500">
-                      {activeSearch
+                      {viewAsUser
+                        ? `No training records were found for ${viewAsUser.name} (${viewAsUser.employeeNumber}).`
+                        : activeSearch
                         ? `No training records match "${activeSearch}". Try adjusting your search term or clearing filters.`
                         : "No training records were found matching the selected date range or category filters."}
                     </p>
-                    {(activeSearch || filters.trainingType !== "ALL" || filters.designation) && (
+                    {viewAsUser ? (
+                      <button
+                        type="button"
+                        onClick={resetToSelf}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 transition-colors cursor-pointer"
+                      >
+                        <Users className="h-3.5 w-3.5" />
+                        <span>View All Team Records</span>
+                      </button>
+                    ) : (activeSearch || filters.trainingType !== "ALL" || filters.designation) ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -587,7 +706,7 @@ export function TrainingHistoryTable() {
                         <Filter className="h-3 w-3" />
                         <span>Reset All Filters</span>
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </td>
               </tr>
