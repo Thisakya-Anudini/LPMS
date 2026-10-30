@@ -152,6 +152,7 @@ function TalentDashboardContent() {
               rootEmployeeNumber={hierarchyRootEmployeeNo}
               selectedEmployeeNumber={viewAsUser?.employeeNumber}
               onSelectSubordinate={handleSelectSubordinate}
+              onResetToSelf={resetToSelf}
               onRefresh={handleHierarchyRefresh}
               isCollapsed={isHierarchyCollapsed}
               onToggleCollapse={() => setIsHierarchyCollapsed((prev) => !prev)}

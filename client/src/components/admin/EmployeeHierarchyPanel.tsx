@@ -121,6 +121,7 @@ type EmployeeHierarchyPanelProps = {
   selectedEmployeeNumber?: string | null;
   onViewDetails?: (employee: SelectedHierarchyEmployee) => void;
   onSelectSubordinate?: (employee: SelectedHierarchyEmployee) => void;
+  onResetToSelf?: () => void;
   onRefresh?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -131,6 +132,7 @@ export function EmployeeHierarchyPanel({
   selectedEmployeeNumber,
   onViewDetails,
   onSelectSubordinate,
+  onResetToSelf,
   onRefresh,
   isCollapsed = false,
   onToggleCollapse,
@@ -473,14 +475,18 @@ export function EmployeeHierarchyPanel({
             type="button"
             variant={isSelected ? "primary" : "outline"}
             size="sm"
-            className="shrink-0"
+            className="shrink-0 transition-all cursor-pointer"
             onClick={() => {
-              if (onSelectSubordinate) {
+              if (isSelected) {
+                // If already active, clicking reverses/resets the state back to My View
+                onResetToSelf?.();
+              } else if (onSelectSubordinate) {
                 onSelectSubordinate(employee);
               } else {
                 onViewDetails?.(employee);
               }
             }}
+            title={isSelected ? "Click to reset back to My View" : `Drill down into ${employee.name}`}
           >
             {onSelectSubordinate
               ? isSelected
