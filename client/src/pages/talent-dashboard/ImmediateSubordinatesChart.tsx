@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   ChevronRight,
+  ChevronLeft,
   Target,
   Sparkles,
 } from "lucide-react";
@@ -30,6 +31,15 @@ export function ImmediateSubordinatesChart() {
   const [isUsingFallback, setIsUsingFallback] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortOption>("HOURS_DESC");
+
+  // Pagination for subordinates (max 10 per page)
+  const PAGE_SIZE = 10;
+  const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Reset to page 1 whenever search query or sorting changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortBy]);
 
   useEffect(() => {
     let isMounted = true;
@@ -130,6 +140,14 @@ export function ImmediateSubordinatesChart() {
     return list;
   }, [subordinates, searchQuery, sortBy]);
 
+  // Pagination calculations (max 10 items per page)
+  const totalSubordinates = filteredSubordinates.length;
+  const totalPages = Math.max(1, Math.ceil(totalSubordinates / PAGE_SIZE));
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const paginatedSubordinates = useMemo(() => {
+    return filteredSubordinates.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredSubordinates, startIndex]);
+
   // Aggregate stats
   const stats = useMemo(() => {
     const total = subordinates.length;
@@ -199,6 +217,12 @@ export function ImmediateSubordinatesChart() {
                 <span className="inline-flex items-center rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
                   Depth = 1
                 </span>
+                {/* Scroll Count Badge when more than 3 subordinates */}
+                {filteredSubordinates.length > 3 && (
+                  <span className="inline-flex items-center rounded-full bg-secondary-100 px-2 py-0.5 text-xs font-medium text-secondary-600">
+                    Showing 3 of {filteredSubordinates.length} (scroll for more)
+                  </span>
+                )}
                 {isUsingFallback && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs text-amber-700">
                     <Sparkles className="h-3 w-3" /> Demo Data
@@ -386,134 +410,184 @@ export function ImmediateSubordinatesChart() {
 
         {/* List of Subordinates with Horizontal Progress Bars */}
         {!isLoading && filteredSubordinates.length > 0 && (
-          <div className="space-y-4">
-            {/* Visual Guide Header with Target Reference Line */}
-            <div className="hidden sm:flex items-center justify-between text-[11px] font-semibold text-secondary-400 px-2 pb-1 border-b border-secondary-100">
+          <div>
+            {/* Visual Guide Header with Target Reference Line (Fixed above scroll container) */}
+            <div className="hidden sm:flex items-center justify-between text-[11px] font-semibold text-secondary-400 px-2 pb-2 mb-2 border-b border-secondary-100">
               <span>SUBORDINATE & ROLE</span>
               <div className="relative w-1/2 flex justify-between pr-8">
                 <span>0h</span>
                 <span className="text-primary-600 font-bold flex items-center gap-1">
-                  <Target className="h-3 w-3" /> 18.0h Target
+                  <Target className="h-3 w-3" /> {TARGET_HOURS.toFixed(1)}h Target
                 </span>
                 <span>{maxBarValue}h</span>
               </div>
             </div>
 
-            {filteredSubordinates.map((sub) => {
-              const completed = sub.completedHours || 0;
-              const hasMetTarget = completed >= TARGET_HOURS;
-              const percentOfMax = Math.min(100, (completed / maxBarValue) * 100);
-              const percentOfTarget = Math.round(
-                (completed / TARGET_HOURS) * 100
-              );
+            {/* Constrained Scroll Container: exactly 3 visible items (~320px max height) */}
+            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1.5 focus:outline-none scrollbar-thin scrollbar-thumb-secondary-300 scrollbar-track-secondary-100">
+              {paginatedSubordinates.map((sub) => {
+                const completed = sub.completedHours || 0;
+                const hasMetTarget = completed >= TARGET_HOURS;
+                const percentOfMax = Math.min(100, (completed / maxBarValue) * 100);
+                const percentOfTarget = Math.round(
+                  (completed / TARGET_HOURS) * 100
+                );
 
-              // Color gradient & status badges
-              let barColorClass =
-                "bg-gradient-to-r from-emerald-500 to-emerald-600";
-              let badgeColorClass =
-                "bg-emerald-50 text-emerald-700 border-emerald-200";
-              let statusLabel = `${percentOfTarget}% Target Met`;
+                // Color gradient & status badges
+                let barColorClass =
+                  "bg-gradient-to-r from-emerald-500 to-emerald-600";
+                let badgeColorClass =
+                  "bg-emerald-50 text-emerald-700 border-emerald-200";
+                let statusLabel = `${percentOfTarget}% Target Met`;
 
-              if (!hasMetTarget && completed >= 10) {
-                barColorClass = "bg-gradient-to-r from-indigo-500 to-indigo-600";
-                badgeColorClass =
-                  "bg-indigo-50 text-indigo-700 border-indigo-200";
-                statusLabel = `${completed.toFixed(1)} / 18h`;
-              } else if (!hasMetTarget) {
-                barColorClass = "bg-gradient-to-r from-amber-500 to-amber-600";
-                badgeColorClass =
-                  "bg-amber-50 text-amber-700 border-amber-200";
-                statusLabel = `${completed.toFixed(1)} / 18h`;
-              }
+                if (!hasMetTarget && completed >= 10) {
+                  barColorClass = "bg-gradient-to-r from-indigo-500 to-indigo-600";
+                  badgeColorClass =
+                    "bg-indigo-50 text-indigo-700 border-indigo-200";
+                  statusLabel = `${completed.toFixed(1)} / 18h`;
+                } else if (!hasMetTarget) {
+                  barColorClass = "bg-gradient-to-r from-amber-500 to-amber-600";
+                  badgeColorClass =
+                    "bg-amber-50 text-amber-700 border-amber-200";
+                  statusLabel = `${completed.toFixed(1)} / 18h`;
+                }
 
-              return (
-                <div
-                  key={sub.employeeNumber}
-                  className="group relative rounded-xl border border-secondary-200 bg-white p-3.5 transition-all duration-200 hover:border-primary-300 hover:shadow-sm"
-                >
-                  {/* Top line: Avatar, Name, Employee No, Designation & Stats Badge */}
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2.5">
-                    <div className="flex items-center gap-3">
-                      {/* Avatar initials */}
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-indigo-700 text-xs font-bold text-white shadow-sm">
-                        {getInitials(sub.fullName)}
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-secondary-900 truncate">
-                            {sub.fullName}
-                          </p>
-                          <span className="text-xs font-mono font-medium text-secondary-500 bg-secondary-100 px-1.5 py-0.5 rounded">
-                            {sub.employeeNumber}
-                          </span>
+                return (
+                  <div
+                    key={sub.employeeNumber}
+                    className="group relative rounded-xl border border-secondary-200 bg-white p-3.5 transition-all duration-200 hover:border-primary-300 hover:shadow-sm"
+                  >
+                    {/* Top line: Avatar, Name, Employee No, Designation & Stats Badge */}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2.5">
+                      <div className="flex items-center gap-3">
+                        {/* Avatar initials */}
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-indigo-700 text-xs font-bold text-white shadow-sm">
+                          {getInitials(sub.fullName)}
                         </div>
-                        <p className="text-xs text-secondary-500 truncate">
-                          {sub.designation}
-                          {sub.department && sub.department !== "General" ? (
-                            <>
-                              {" "}
-                              •{" "}
-                              <span className="text-secondary-600 font-medium">
-                                {sub.department}
-                              </span>
-                            </>
-                          ) : null}
-                        </p>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-secondary-900 truncate">
+                              {sub.fullName}
+                            </p>
+                            <span className="text-xs font-mono font-medium text-secondary-500 bg-secondary-100 px-1.5 py-0.5 rounded">
+                              {sub.employeeNumber}
+                            </span>
+                          </div>
+                          <p className="text-xs text-secondary-500 truncate">
+                            {sub.designation}
+                            {sub.department && sub.department !== "General" ? (
+                              <>
+                                {" "}
+                                •{" "}
+                                <span className="text-secondary-600 font-medium">
+                                  {sub.department}
+                                </span>
+                              </>
+                            ) : null}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Hours Badge & Action Button */}
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${badgeColorClass}`}
+                        >
+                          {hasMetTarget ? (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          ) : (
+                            <Clock className="h-3.5 w-3.5" />
+                          )}
+                          <span>{completed.toFixed(1)} hrs</span>
+                          <span className="text-[10px] font-normal opacity-80">
+                            ({statusLabel})
+                          </span>
+                        </span>
+
+                        {/* Drill down button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDrillDownToSubordinate(sub)}
+                          title={`Inspect ${sub.fullName}'s downward team & training records`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-secondary-200 bg-secondary-50 px-2.5 py-1 text-xs font-medium text-secondary-700 hover:border-primary-400 hover:bg-primary-50 hover:text-primary-700 transition-colors cursor-pointer"
+                        >
+                          <span>Drill Down</span>
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </div>
 
-                    {/* Hours Badge & Action Button */}
-                    <div className="flex items-center gap-2 self-start sm:self-auto">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-semibold ${badgeColorClass}`}
-                      >
-                        {hasMetTarget ? (
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                        ) : (
-                          <Clock className="h-3.5 w-3.5" />
-                        )}
-                        <span>{completed.toFixed(1)} hrs</span>
-                        <span className="text-[10px] font-normal opacity-80">
-                          ({statusLabel})
-                        </span>
-                      </span>
+                    {/* Horizontal Bar Visual with Target Line */}
+                    <div className="relative pt-1">
+                      {/* Track */}
+                      <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary-100">
+                        {/* Filled Progress Bar */}
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ease-out ${barColorClass}`}
+                          style={{ width: `${percentOfMax}%` }}
+                        />
+                      </div>
 
-                      {/* Drill down button */}
-                      <button
-                        type="button"
-                        onClick={() => handleDrillDownToSubordinate(sub)}
-                        title={`Inspect ${sub.fullName}'s downward team & training records`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-secondary-200 bg-secondary-50 px-2.5 py-1 text-xs font-medium text-secondary-700 hover:border-primary-400 hover:bg-primary-50 hover:text-primary-700 transition-colors cursor-pointer"
-                      >
-                        <span>Drill Down</span>
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Horizontal Bar Visual with Target Line */}
-                  <div className="relative pt-1">
-                    {/* Track */}
-                    <div className="relative h-3 w-full overflow-hidden rounded-full bg-secondary-100">
-                      {/* Filled Progress Bar */}
+                      {/* Fixed 18.0h Target Benchmark Marker */}
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ease-out ${barColorClass}`}
-                        style={{ width: `${percentOfMax}%` }}
-                      />
-                    </div>
-
-                    {/* Fixed 18.0h Target Benchmark Marker */}
-                    <div
-                      className="absolute top-0 bottom-0 pointer-events-none flex flex-col items-center"
-                      style={{ left: `${targetPercentagePosition}%` }}
-                    >
-                      <div className="w-0.5 h-full bg-primary-600/70" />
+                        className="absolute top-0 bottom-0 pointer-events-none flex flex-col items-center"
+                        style={{ left: `${targetPercentagePosition}%` }}
+                      >
+                        <div className="w-0.5 h-full bg-primary-600/70" />
+                      </div>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+
+            {/* Pagination Controls when subordinates exceed 10 */}
+            {totalSubordinates > PAGE_SIZE && (
+              <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t border-secondary-100 text-xs text-secondary-500">
+                <div>
+                  Showing{" "}
+                  <span className="font-semibold text-secondary-800">
+                    {startIndex + 1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-secondary-800">
+                    {Math.min(startIndex + PAGE_SIZE, totalSubordinates)}
+                  </span>{" "}
+                  of{" "}
+                  <span className="font-semibold text-secondary-800">
+                    {totalSubordinates}
+                  </span>{" "}
+                  subordinates
                 </div>
-              );
-            })}
+
+                <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-secondary-200 bg-white text-secondary-700 hover:bg-secondary-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span>Previous</span>
+                  </button>
+
+                  <span className="px-2 font-medium text-secondary-600">
+                    Page {currentPage} of {totalPages}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-secondary-200 bg-white text-secondary-700 hover:bg-secondary-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -527,10 +527,10 @@ export function EmployeeHierarchyPanel({
 
   return (
     <>
-      {/* 1. Compact Mini-Sidebar Rail when collapsed (hidden when expanded) */}
+      {/* 1. Compact Mini-Sidebar Rail when collapsed (also stretches full height) */}
       <div
         className={`${isCollapsed ? "flex" : "hidden"
-          } flex-col items-center justify-between rounded-3xl border border-slate-200 bg-white py-4 px-2 shadow-sm min-h-[520px] h-full xl:h-[calc(100vh-170px)] transition-all duration-300`}
+          } flex-col items-center justify-between rounded-3xl border border-slate-200 bg-white py-4 px-2 shadow-sm min-h-[520px] h-full transition-all duration-300`}
       >
         <div className="flex flex-col items-center gap-4 w-full">
           {/* Expand Button with PanelLeftOpen Icon */}
@@ -588,12 +588,12 @@ export function EmployeeHierarchyPanel({
         </button>
       </div>
 
-      {/* 2. Full Hierarchy Card when expanded (hidden with CSS when collapsed so DOM & scroll are never destroyed) */}
-      <div className={`${isCollapsed ? "hidden" : "flex"} h-full flex-col`}>
+      {/* 2. Full Hierarchy Card when expanded */}
+      <div className={`${isCollapsed ? "hidden" : "flex"} h-full min-h-0 flex-1 flex-col overflow-hidden`}>
         <Card
           title={<span className="text-xl">Employee Hierarchy</span>}
-          className="flex h-full min-h-[520px] flex-col xl:h-[calc(100vh-170px)] transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-xl"
-          bodyClassName="min-h-0 flex-1 overflow-y-auto hierarchy-scroll-container"
+          className="flex h-full min-h-0 flex-1 flex-col overflow-hidden transition-all duration-300 ease-out hover:border-slate-300 hover:shadow-xl"
+          bodyClassName="min-h-0 flex-1 overflow-y-auto hierarchy-scroll-container pr-1"
           action={
             <div className="flex items-center gap-2">
               {/* Active Drilled-Down Employee Pill (parallel to Refresh) */}

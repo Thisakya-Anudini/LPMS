@@ -137,26 +137,26 @@ function TalentDashboardContent() {
       {/* Top KPI Summary Metrics Row */}
       <KpiCardRow />
 
-      {/* Target vs. Achievement Semicircular Gauges (Full Width below KPIs) */}
-      <TargetGaugeRow />
-
-      {/* Main Interactive Grid: Hierarchy Rail (Left) + Learning Hours Trend Chart & Top 5 Programs (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Organization Hierarchy (Collapsible between 5 cols and 1 col) */}
+      {/* Main Interactive Grid: items-stretch */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Column: relative container on desktop so height is governed by the right side */}
         <div
           className={`${isHierarchyCollapsed
             ? "lg:col-span-1 xl:col-span-1"
             : "lg:col-span-5 xl:col-span-5"
-            } transition-all duration-300`}
+            } transition-all duration-300 relative min-h-[520px]`}
         >
-          <EmployeeHierarchyPanel
-            rootEmployeeNumber={hierarchyRootEmployeeNo}
-            selectedEmployeeNumber={viewAsUser?.employeeNumber}
-            onSelectSubordinate={handleSelectSubordinate}
-            onRefresh={handleHierarchyRefresh}
-            isCollapsed={isHierarchyCollapsed}
-            onToggleCollapse={() => setIsHierarchyCollapsed((prev) => !prev)}
-          />
+          {/* Absolute inset wrapper: locks height to right widgets and forces internal scroll */}
+          <div className="lg:absolute lg:inset-0 flex flex-col h-full">
+            <EmployeeHierarchyPanel
+              rootEmployeeNumber={hierarchyRootEmployeeNo}
+              selectedEmployeeNumber={viewAsUser?.employeeNumber}
+              onSelectSubordinate={handleSelectSubordinate}
+              onRefresh={handleHierarchyRefresh}
+              isCollapsed={isHierarchyCollapsed}
+              onToggleCollapse={() => setIsHierarchyCollapsed((prev) => !prev)}
+            />
+          </div>
         </div>
 
         {/* Right Column: Learning Hours Trend Chart + Immediate Subordinates + Top 5 Training Programs Widget */}
@@ -166,6 +166,8 @@ function TalentDashboardContent() {
             : "lg:col-span-7 xl:col-span-7"
             } transition-all duration-300 space-y-6`}
         >
+          {/* Target Gauges: First Staff Target, then Self Target below */}
+          <TargetGaugeRow layout="vertical" />
           <LearningHoursTrendChart />
           <ImmediateSubordinatesChart />
           <Top5ProgramsWidget />
