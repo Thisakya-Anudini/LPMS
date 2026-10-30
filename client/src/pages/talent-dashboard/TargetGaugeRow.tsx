@@ -219,11 +219,16 @@ export interface TargetGaugeRowProps {
   metrics?: TalentKpiMetrics | null;
   /** Optional loading state override */
   isLoading?: boolean;
+  /** Layout orientation: "horizontal" (2-col grid) or "vertical" (stacked 1-col) */
+  layout?: "horizontal" | "vertical";
+  className?: string;
 }
 
 export function TargetGaugeRow({
   metrics: externalMetrics,
   isLoading: externalIsLoading,
+  layout = "horizontal",
+  className = "",
 }: TargetGaugeRowProps) {
   const { filters, viewAsUser, refreshKey, refreshData } = useTalentDashboardScope();
   const { getAccessToken } = useAuth();
@@ -284,8 +289,12 @@ export function TargetGaugeRow({
 
   // Loading Skeleton State (Matches exact card dimensions to eliminate CLS)
   if (isLoading) {
+    const containerClass =
+      layout === "vertical"
+        ? "flex flex-col gap-6"
+        : "grid grid-cols-1 md:grid-cols-2 gap-6";
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className={`${containerClass} ${className}`}>
         {Array.from({ length: 2 }).map((_, idx) => (
           <div
             key={`gauge-skeleton-${idx}`}
@@ -360,11 +369,14 @@ export function TargetGaugeRow({
 
   const hasSubordinates = totalStaff > 0;
 
+  const containerClass =
+    layout === "vertical"
+      ? "flex flex-col gap-6"
+      : "grid grid-cols-1 md:grid-cols-2 gap-6";
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className={`${containerClass} ${className}`}>
       {/* 1. Staff Target vs. 18.0h Gauge */}
-      <div className="flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md">
-        {/* Card Header */}
+      <div className="flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md">        {/* Card Header */}
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -392,8 +404,8 @@ export function TargetGaugeRow({
               isStaffTargetMet
                 ? ["#10b981", "#059669"]
                 : avgStaffHours >= targetHours / 2
-                ? ["#0284c7", "#10b981"]
-                : ["#f59e0b", "#0284c7"]
+                  ? ["#0284c7", "#10b981"]
+                  : ["#f59e0b", "#0284c7"]
             }
             isAchieved={isStaffTargetMet && hasSubordinates}
             isDisabled={!hasSubordinates}
@@ -421,9 +433,8 @@ export function TargetGaugeRow({
               <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
                 <p className="text-[11px] font-medium text-slate-500">Benchmark Gap</p>
                 <p
-                  className={`text-sm font-bold mt-0.5 ${
-                    isStaffTargetMet ? "text-emerald-600" : "text-amber-600"
-                  }`}
+                  className={`text-sm font-bold mt-0.5 ${isStaffTargetMet ? "text-emerald-600" : "text-amber-600"
+                    }`}
                 >
                   {isStaffTargetMet ? `+${staffSurplus.toFixed(1)}h` : `-${staffRemaining.toFixed(1)}h`}
                 </p>
@@ -441,8 +452,7 @@ export function TargetGaugeRow({
       </div>
 
       {/* 2. Self Target vs. 18.0h Gauge */}
-      <div className="flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md">
-        {/* Card Header */}
+      <div className="flex flex-col justify-between rounded-3xl border border-slate-200/80 bg-white p-6 shadow-sm transition-all duration-200 hover:border-slate-300 hover:shadow-md">        {/* Card Header */}
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2">
@@ -470,8 +480,8 @@ export function TargetGaugeRow({
               isSelfTargetMet
                 ? ["#10b981", "#059669"]
                 : selfHours >= targetHours / 2
-                ? ["#8b5cf6", "#0ea5e9"]
-                : ["#f59e0b", "#8b5cf6"]
+                  ? ["#8b5cf6", "#0ea5e9"]
+                  : ["#f59e0b", "#8b5cf6"]
             }
             isAchieved={isSelfTargetMet}
           />
@@ -497,9 +507,8 @@ export function TargetGaugeRow({
             <div className="rounded-xl bg-slate-50 p-2.5 border border-slate-100">
               <p className="text-[11px] font-medium text-slate-500">Status</p>
               <p
-                className={`text-sm font-bold mt-0.5 ${
-                  isSelfTargetMet ? "text-emerald-600" : "text-amber-600"
-                }`}
+                className={`text-sm font-bold mt-0.5 ${isSelfTargetMet ? "text-emerald-600" : "text-amber-600"
+                  }`}
               >
                 {isSelfTargetMet ? `+${selfSurplus.toFixed(1)}h Surplus` : `${selfRemaining.toFixed(1)}h Left`}
               </p>
