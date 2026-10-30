@@ -395,88 +395,100 @@ export function TrainingHistoryTable() {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           {/* Table Head with Interactive Sort Column Headers */}
-          <thead className="bg-secondary-50/90 border-b border-secondary-200 text-secondary-600 font-semibold uppercase tracking-wider text-[11px]">
+          <thead className="bg-secondary-50/90 border-b border-secondary-200 text-secondary-700 font-semibold uppercase tracking-wider text-[11px]">
             <tr>
-              {/* Program Name */}
+              {/* 1. Employee ID */}
               <th
                 scope="col"
-                onClick={() => handleSort("programName")}
-                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                onClick={() => handleSort("employeeNumber")}
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Program Name</span>
-                  {renderSortIcon("programName")}
+                  <span className="font-semibold">Employee ID</span>
+                  {renderSortIcon("employeeNumber")}
                 </div>
               </th>
 
-              {/* Employee */}
+              {/* 2. Full Name */}
               <th
                 scope="col"
                 onClick={() => handleSort("fullName")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Employee / ID</span>
+                  <span className="font-semibold">Full Name</span>
                   {renderSortIcon("fullName")}
                 </div>
               </th>
 
-              {/* Designation */}
+              {/* 3. Designation */}
               <th
                 scope="col"
                 onClick={() => handleSort("designation")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group hidden md:table-cell"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Designation</span>
+                  <span className="font-semibold">Designation</span>
                   {renderSortIcon("designation")}
                 </div>
               </th>
 
-              {/* Training Type */}
+              {/* 4. Program Name */}
+              <th
+                scope="col"
+                onClick={() => handleSort("programName")}
+                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
+              >
+                <div className="flex items-center">
+                  <span className="font-semibold">Program Name</span>
+                  {renderSortIcon("programName")}
+                </div>
+              </th>
+
+              {/* 5. Training Type */}
               <th
                 scope="col"
                 onClick={() => handleSort("trainingType")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Type</span>
+                  <span className="font-semibold">Training Type</span>
                   {renderSortIcon("trainingType")}
                 </div>
               </th>
 
-              {/* Start Date */}
+              {/* 6. Dates */}
               <th
                 scope="col"
                 onClick={() => handleSort("startDate")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Dates</span>
+                  <span className="font-semibold">Dates</span>
                   {renderSortIcon("startDate")}
                 </div>
               </th>
 
-              {/* Duration Hours */}
+              {/* 7. Duration */}
               <th
                 scope="col"
                 onClick={() => handleSort("durationHours")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group text-right"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold text-right"
               >
                 <div className="flex items-center justify-end">
-                  <span>Hours</span>
+                  <span className="font-semibold">Duration</span>
                   {renderSortIcon("durationHours")}
                 </div>
               </th>
 
-              {/* Status */}
+              {/* 8. Status */}
               <th
                 scope="col"
                 onClick={() => handleSort("status")}
-                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group text-center"
+                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold text-center"
               >
                 <div className="flex items-center justify-center">
-                  <span>Status</span>
+                  <span className="font-semibold">Status</span>
                   {renderSortIcon("status")}
                 </div>
               </th>
@@ -489,27 +501,38 @@ export function TrainingHistoryTable() {
             {isLoading &&
               [...Array(pageSize > 10 ? 10 : pageSize)].map((_, i) => (
                 <tr key={i} className="animate-pulse">
+                  {/* 1. Employee ID */}
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                  </td>
+                  {/* 2. Full Name */}
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-4 w-32" />
+                  </td>
+                  {/* 3. Designation */}
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-4 w-28 mb-1" />
+                    <Skeleton className="h-3 w-16" />
+                  </td>
+                  {/* 4. Program Name */}
                   <td className="px-5 py-3.5">
                     <Skeleton className="h-4 w-48 mb-1" />
-                    <Skeleton className="h-3 w-28" />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Skeleton className="h-4 w-32 mb-1" />
                     <Skeleton className="h-3 w-20" />
                   </td>
-                  <td className="px-4 py-3.5 hidden md:table-cell">
-                    <Skeleton className="h-4 w-28" />
-                  </td>
+                  {/* 5. Training Type */}
                   <td className="px-4 py-3.5">
-                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-md" />
                   </td>
+                  {/* 6. Dates */}
                   <td className="px-4 py-3.5">
                     <Skeleton className="h-4 w-24 mb-1" />
-                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-3 w-16" />
                   </td>
+                  {/* 7. Duration */}
                   <td className="px-4 py-3.5 text-right">
                     <Skeleton className="h-4 w-12 ml-auto" />
                   </td>
+                  {/* 8. Status */}
                   <td className="px-5 py-3.5 text-center">
                     <Skeleton className="h-5 w-20 mx-auto rounded-full" />
                   </td>
@@ -519,7 +542,7 @@ export function TrainingHistoryTable() {
             {/* Error Message Row */}
             {!isLoading && error && records.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
+                <td colSpan={8} className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600 mb-2">
                       <AlertCircle className="h-6 w-6" />
@@ -538,7 +561,7 @@ export function TrainingHistoryTable() {
             {/* Empty Records State */}
             {!isLoading && !error && records.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
+                <td colSpan={8} className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-100 text-secondary-500 mb-3">
                       <FileText className="h-6 w-6" />
@@ -577,29 +600,23 @@ export function TrainingHistoryTable() {
                   key={record.id}
                   className="hover:bg-primary-50/30 transition-colors group"
                 >
-                  {/* Program Name */}
-                  <td className="px-5 py-3.5">
-                    <p className="font-semibold text-secondary-900 group-hover:text-primary-700 transition-colors">
-                      {record.programName}
-                    </p>
-                    <p className="text-[11px] text-secondary-500 font-mono">
-                      ID: {record.id.slice(0, 8)}...
-                    </p>
-                  </td>
-
-                  {/* Employee Name & Number */}
-                  <td className="px-4 py-3.5">
-                    <p className="font-medium text-secondary-900">
-                      {record.fullName}
-                    </p>
-                    <span className="inline-block font-mono text-[11px] text-secondary-500 bg-secondary-100 px-1.5 py-0.2 rounded mt-0.5">
+                  {/* 1. Employee ID */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <span className="inline-block font-mono text-xs font-semibold text-secondary-800 bg-secondary-100 border border-secondary-200/80 px-2 py-0.5 rounded-md">
                       {record.employeeNumber}
                     </span>
                   </td>
 
-                  {/* Designation */}
-                  <td className="px-4 py-3.5 hidden md:table-cell text-secondary-700">
-                    <p className="truncate max-w-[180px]">{record.designation}</p>
+                  {/* 2. Full Name */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <p className="font-semibold text-secondary-900 group-hover:text-primary-700 transition-colors">
+                      {record.fullName}
+                    </p>
+                  </td>
+
+                  {/* 3. Designation */}
+                  <td className="px-4 py-3.5 text-secondary-700">
+                    <p className="font-medium text-secondary-800 truncate max-w-[180px]">{record.designation}</p>
                     {record.department && record.department !== "General" && (
                       <p className="text-[11px] text-secondary-400">
                         {record.department}
@@ -607,10 +624,20 @@ export function TrainingHistoryTable() {
                     )}
                   </td>
 
-                  {/* Training Type Badge */}
-                  <td className="px-4 py-3.5">
+                  {/* 4. Program Name */}
+                  <td className="px-5 py-3.5 min-w-[200px]">
+                    <p className="font-medium text-secondary-900 group-hover:text-primary-700 transition-colors">
+                      {record.programName}
+                    </p>
+                    <p className="text-[11px] text-secondary-400 font-mono">
+                      ID: {record.id.slice(0, 8)}...
+                    </p>
+                  </td>
+
+                  {/* 5. Training Type */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
                     <span
-                      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${getTrainingTypeBadge(
+                      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${getTrainingTypeBadge(
                         record.trainingType
                       )}`}
                     >
@@ -618,29 +645,29 @@ export function TrainingHistoryTable() {
                     </span>
                   </td>
 
-                  {/* Dates */}
-                  <td className="px-4 py-3.5 text-secondary-700">
-                    <div className="flex items-center gap-1 font-mono text-[11px]">
-                      <Calendar className="h-3 w-3 text-secondary-400" />
+                  {/* 6. Dates */}
+                  <td className="px-4 py-3.5 whitespace-nowrap text-secondary-700">
+                    <div className="flex items-center gap-1.5 font-mono text-xs">
+                      <Calendar className="h-3.5 w-3.5 text-secondary-400 shrink-0" />
                       <span>{record.startDate}</span>
                     </div>
                     {record.endDate && record.endDate !== record.startDate && (
-                      <p className="font-mono text-[10px] text-secondary-400 pl-4">
+                      <p className="font-mono text-[10px] text-secondary-400 pl-5">
                         to {record.endDate}
                       </p>
                     )}
                   </td>
 
-                  {/* Duration Hours */}
-                  <td className="px-4 py-3.5 text-right font-mono font-bold text-secondary-900">
+                  {/* 7. Duration */}
+                  <td className="px-4 py-3.5 text-right whitespace-nowrap font-mono font-bold text-secondary-900">
                     <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-secondary-400" />
+                      <Clock className="h-3.5 w-3.5 text-secondary-400" />
                       {record.durationHours.toFixed(1)}h
                     </span>
                   </td>
 
-                  {/* Status */}
-                  <td className="px-5 py-3.5 text-center">
+                  {/* 8. Status */}
+                  <td className="px-5 py-3.5 text-center whitespace-nowrap">
                     <span
                       className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${getStatusBadge(
                         record.status
