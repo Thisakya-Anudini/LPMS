@@ -15,6 +15,11 @@ import {
   RotateCw,
   X,
   Filter,
+  User,
+  Users,
+  Briefcase,
+  Building2,
+  IdCard,
 } from "lucide-react";
 import { useTalentDashboardScope } from "../../contexts/TalentDashboardScopeContext";
 import { useAuth } from "../../contexts/useAuth";
@@ -40,7 +45,7 @@ type SortField =
 type SortOrder = "ASC" | "DESC";
 
 export function TrainingHistoryTable() {
-  const { filters, viewAsUser, refreshKey, resetFilters } =
+  const { filters, viewAsUser, refreshKey, resetFilters, resetToSelf } =
     useTalentDashboardScope();
   const { getAccessToken } = useAuth();
 
@@ -73,9 +78,13 @@ export function TrainingHistoryTable() {
     return () => clearTimeout(handler);
   }, [searchInput]);
 
-  // Reset to page 1 when global filters or drill-down changes
+  // Reset to page 1 and clear search input when global filters or drill-down changes
   useEffect(() => {
     setCurrentPage(1);
+    if (viewAsUser) {
+      setSearchInput("");
+      setActiveSearch("");
+    }
   }, [filters, viewAsUser]);
 
   // Fetch paginated history from API with fallback
@@ -97,7 +106,7 @@ export function TrainingHistoryTable() {
               {
                 ...filters,
                 viewAsId: viewAsUser?.principalId,
-                search: activeSearch,
+                search: viewAsUser ? "" : activeSearch,
               },
               currentPage,
               pageSize,
@@ -118,31 +127,61 @@ export function TrainingHistoryTable() {
 
         if (!isMounted) return;
 
+        // Individual learner filter: ensure only selected employee's records are shown without mixing in other team members
+        const isRecordForLearner = (r: TrainingHistoryRecord) => {
+          if (!viewAsUser) return true;
+          const targetEmpNo = (viewAsUser.employeeNumber || "").trim().toLowerCase();
+          const targetName = (viewAsUser.name || "").trim().toLowerCase();
+          const rEmpNo = (r.employeeNumber || "").trim().toLowerCase();
+          const rName = (r.fullName || "").trim().toLowerCase();
+          return (
+            (targetEmpNo && rEmpNo === targetEmpNo) ||
+            (targetName && rName === targetName)
+          );
+        };
+
         if (apiData !== null) {
-          setRecords(apiData.records);
-          setTotalRecords(apiData.total);
-          setTotalPages(apiData.totalPages || 1);
+          let recs = apiData.records;
+          let total = apiData.total;
+          let pages = apiData.totalPages || 1;
+
+          if (viewAsUser) {
+            recs = recs.filter(isRecordForLearner);
+            if (recs.length !== apiData.records.length) {
+              total = recs.length;
+              pages = Math.max(1, Math.ceil(total / pageSize));
+            }
+          }
+
+          setRecords(recs);
+          setTotalRecords(total);
+          setTotalPages(pages);
           setIsUsingFallback(false);
         } else {
           // Client-side pagination & filter fallback using mock
           const mock = trainingHistoryMock as PaginatedHistoryResponse;
           let filtered = [...mock.records];
 
-          if (activeSearch) {
-            const q = activeSearch.toLowerCase();
-            filtered = filtered.filter(
-              (r) =>
-                r.programName.toLowerCase().includes(q) ||
-                r.fullName.toLowerCase().includes(q) ||
-                r.employeeNumber.toLowerCase().includes(q) ||
-                r.designation.toLowerCase().includes(q)
-            );
-          }
+          if (viewAsUser) {
+            // Strictly filter to the selected employee only, without mixing other team members
+            filtered = filtered.filter(isRecordForLearner);
+          } else {
+            if (activeSearch) {
+              const q = activeSearch.toLowerCase();
+              filtered = filtered.filter(
+                (r) =>
+                  r.programName.toLowerCase().includes(q) ||
+                  r.fullName.toLowerCase().includes(q) ||
+                  r.employeeNumber.toLowerCase().includes(q) ||
+                  r.designation.toLowerCase().includes(q)
+              );
+            }
 
-          if (filters.trainingType && filters.trainingType !== "ALL") {
-            filtered = filtered.filter(
-              (r) => r.trainingType === filters.trainingType
-            );
+            if (filters.trainingType && filters.trainingType !== "ALL") {
+              filtered = filtered.filter(
+                (r) => r.trainingType === filters.trainingType
+              );
+            }
           }
 
           // Sort mock records
@@ -225,7 +264,7 @@ export function TrainingHistoryTable() {
         {
           ...filters,
           viewAsId: viewAsUser?.principalId,
-          search: activeSearch,
+          search: viewAsUser ? "" : activeSearch,
         },
         sortBy,
         sortOrder
@@ -233,7 +272,8 @@ export function TrainingHistoryTable() {
 
       // Create download trigger in browser
       const dateStamp = new Date().toISOString().slice(0, 10);
-      const filename = `talent_training_history_${dateStamp}.csv`;
+      const suffix = viewAsUser?.employeeNumber ? `_${viewAsUser.employeeNumber}` : "";
+      const filename = `talent_training_history${suffix}_${dateStamp}.csv`;
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -324,53 +364,121 @@ export function TrainingHistoryTable() {
       {/* Table Header Section */}
       <div className="border-b border-secondary-100 bg-gradient-to-r from-secondary-50/70 via-white to-secondary-50/40 px-6 py-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-semibold text-secondary-900 tracking-tight">
-                  Training History & Completed Records
-                </h3>
-                <span className="inline-flex items-center rounded-full bg-secondary-100 px-2.5 py-0.5 text-xs font-semibold text-secondary-700">
-                  {totalRecords} {totalRecords === 1 ? "Record" : "Records"}
-                </span>
-                {isUsingFallback && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs text-amber-700">
-                    <Sparkles className="h-3 w-3" /> Demo Data
+          {viewAsUser ? (
+            /* Individual Learner Drill-Down Header */
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-700 border border-primary-200 shadow-sm">
+                <User className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 border border-primary-200 px-2.5 py-0.5 text-[11px] font-semibold text-primary-700">
+                    Individual Learner View
                   </span>
+                  <h3 className="text-lg font-bold text-secondary-900 tracking-tight">
+                    {viewAsUser.name}
+                  </h3>
+                  <span className="inline-flex items-center rounded-full bg-secondary-100 px-2.5 py-0.5 text-xs font-semibold text-secondary-700">
+                    {totalRecords} {totalRecords === 1 ? "Record" : "Records"}
+                  </span>
+                  {isUsingFallback && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs text-amber-700">
+                      <Sparkles className="h-3 w-3" /> Demo Data
+                    </span>
+                  )}
+                </div>
+
+                {/* Meta Row: Employee ID, Designation, Department */}
+                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-secondary-600">
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <IdCard className="h-3.5 w-3.5 text-secondary-400" />
+                    <span>Employee ID:</span>
+                    <span className="font-mono font-semibold text-secondary-900 bg-secondary-100 border border-secondary-200 px-1.5 py-0.5 rounded text-[11px]">
+                      {viewAsUser.employeeNumber}
+                    </span>
+                  </span>
+
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Briefcase className="h-3.5 w-3.5 text-secondary-400" />
+                    <span>Designation:</span>
+                    <span className="font-semibold text-secondary-800">
+                      {viewAsUser.designation || "Employee"}
+                    </span>
+                  </span>
+
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <Building2 className="h-3.5 w-3.5 text-secondary-400" />
+                    <span>Department:</span>
+                    <span className="font-semibold text-secondary-800">
+                      {viewAsUser.department || "General"}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Team-Level View Header */
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600 border border-primary-100 shadow-sm">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-secondary-900 tracking-tight">
+                    Training History & Completed Records
+                  </h3>
+                  <span className="inline-flex items-center rounded-full bg-secondary-100 px-2.5 py-0.5 text-xs font-semibold text-secondary-700">
+                    {totalRecords} {totalRecords === 1 ? "Record" : "Records"}
+                  </span>
+                  {isUsingFallback && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs text-amber-700">
+                      <Sparkles className="h-3 w-3" /> Demo Data
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs text-secondary-500">
+                  Detailed training activities, participant completion hours, and
+                  delivery modes scoped to your organization
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Action Row: Conditional Controls */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* When in Individual Learner View: "View All Team Records" button is shown, search & filter options are HIDDEN */}
+            {viewAsUser ? (
+              <button
+                type="button"
+                onClick={resetToSelf}
+                className="inline-flex items-center gap-1.5 h-9 rounded-lg border border-primary-300 bg-primary-50 px-3.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 hover:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500/20 shadow-xs transition-all cursor-pointer"
+                title="Return to the team-level view with all members' records"
+              >
+                <Users className="h-3.5 w-3.5 text-primary-600" />
+                <span>View All Team Records</span>
+              </button>
+            ) : (
+              /* When in Team View: Search Input is visible */
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-secondary-400" />
+                <input
+                  type="text"
+                  placeholder="Search program, name, ID..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="h-9 w-60 rounded-lg border border-secondary-200 bg-white pl-8 pr-7 text-xs text-secondary-800 placeholder-secondary-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 shadow-xs"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchInput("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-secondary-500">
-                Detailed training activities, participant completion hours, and
-                delivery modes scoped to your organization
-              </p>
-            </div>
-          </div>
-
-          {/* Action Row: Search Input and Export Button */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-secondary-400" />
-              <input
-                type="text"
-                placeholder="Search program, name, ID..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="h-9 w-60 rounded-lg border border-secondary-200 bg-white pl-8 pr-7 text-xs text-secondary-800 placeholder-secondary-400 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 shadow-xs"
-              />
-              {searchInput && (
-                <button
-                  type="button"
-                  onClick={() => setSearchInput("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600 cursor-pointer"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
+            )}
 
             {/* Export to CSV / Excel Button */}
             <button
@@ -395,88 +503,100 @@ export function TrainingHistoryTable() {
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           {/* Table Head with Interactive Sort Column Headers */}
-          <thead className="bg-secondary-50/90 border-b border-secondary-200 text-secondary-600 font-semibold uppercase tracking-wider text-[11px]">
+          <thead className="bg-secondary-50/90 border-b border-secondary-200 text-secondary-700 font-semibold uppercase tracking-wider text-[11px]">
             <tr>
-              {/* Program Name */}
+              {/* 1. Employee ID */}
               <th
                 scope="col"
-                onClick={() => handleSort("programName")}
-                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                onClick={() => handleSort("employeeNumber")}
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Program Name</span>
-                  {renderSortIcon("programName")}
+                  <span className="font-semibold">Employee ID</span>
+                  {renderSortIcon("employeeNumber")}
                 </div>
               </th>
 
-              {/* Employee */}
+              {/* 2. Full Name */}
               <th
                 scope="col"
                 onClick={() => handleSort("fullName")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Employee / ID</span>
+                  <span className="font-semibold">Full Name</span>
                   {renderSortIcon("fullName")}
                 </div>
               </th>
 
-              {/* Designation */}
+              {/* 3. Designation */}
               <th
                 scope="col"
                 onClick={() => handleSort("designation")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group hidden md:table-cell"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Designation</span>
+                  <span className="font-semibold">Designation</span>
                   {renderSortIcon("designation")}
                 </div>
               </th>
 
-              {/* Training Type */}
+              {/* 4. Program Name */}
+              <th
+                scope="col"
+                onClick={() => handleSort("programName")}
+                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
+              >
+                <div className="flex items-center">
+                  <span className="font-semibold">Program Name</span>
+                  {renderSortIcon("programName")}
+                </div>
+              </th>
+
+              {/* 5. Training Type */}
               <th
                 scope="col"
                 onClick={() => handleSort("trainingType")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Type</span>
+                  <span className="font-semibold">Training Type</span>
                   {renderSortIcon("trainingType")}
                 </div>
               </th>
 
-              {/* Start Date */}
+              {/* 6. Dates */}
               <th
                 scope="col"
                 onClick={() => handleSort("startDate")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold"
               >
                 <div className="flex items-center">
-                  <span>Dates</span>
+                  <span className="font-semibold">Dates</span>
                   {renderSortIcon("startDate")}
                 </div>
               </th>
 
-              {/* Duration Hours */}
+              {/* 7. Duration */}
               <th
                 scope="col"
                 onClick={() => handleSort("durationHours")}
-                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group text-right"
+                className="px-4 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold text-right"
               >
                 <div className="flex items-center justify-end">
-                  <span>Hours</span>
+                  <span className="font-semibold">Duration</span>
                   {renderSortIcon("durationHours")}
                 </div>
               </th>
 
-              {/* Status */}
+              {/* 8. Status */}
               <th
                 scope="col"
                 onClick={() => handleSort("status")}
-                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group text-center"
+                className="px-5 py-3 cursor-pointer hover:bg-secondary-100/70 transition-colors select-none group font-semibold text-center"
               >
                 <div className="flex items-center justify-center">
-                  <span>Status</span>
+                  <span className="font-semibold">Status</span>
                   {renderSortIcon("status")}
                 </div>
               </th>
@@ -489,27 +609,38 @@ export function TrainingHistoryTable() {
             {isLoading &&
               [...Array(pageSize > 10 ? 10 : pageSize)].map((_, i) => (
                 <tr key={i} className="animate-pulse">
+                  {/* 1. Employee ID */}
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                  </td>
+                  {/* 2. Full Name */}
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-4 w-32" />
+                  </td>
+                  {/* 3. Designation */}
+                  <td className="px-4 py-3.5">
+                    <Skeleton className="h-4 w-28 mb-1" />
+                    <Skeleton className="h-3 w-16" />
+                  </td>
+                  {/* 4. Program Name */}
                   <td className="px-5 py-3.5">
                     <Skeleton className="h-4 w-48 mb-1" />
-                    <Skeleton className="h-3 w-28" />
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Skeleton className="h-4 w-32 mb-1" />
                     <Skeleton className="h-3 w-20" />
                   </td>
-                  <td className="px-4 py-3.5 hidden md:table-cell">
-                    <Skeleton className="h-4 w-28" />
-                  </td>
+                  {/* 5. Training Type */}
                   <td className="px-4 py-3.5">
-                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-md" />
                   </td>
+                  {/* 6. Dates */}
                   <td className="px-4 py-3.5">
                     <Skeleton className="h-4 w-24 mb-1" />
-                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-3 w-16" />
                   </td>
+                  {/* 7. Duration */}
                   <td className="px-4 py-3.5 text-right">
                     <Skeleton className="h-4 w-12 ml-auto" />
                   </td>
+                  {/* 8. Status */}
                   <td className="px-5 py-3.5 text-center">
                     <Skeleton className="h-5 w-20 mx-auto rounded-full" />
                   </td>
@@ -519,7 +650,7 @@ export function TrainingHistoryTable() {
             {/* Error Message Row */}
             {!isLoading && error && records.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
+                <td colSpan={8} className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600 mb-2">
                       <AlertCircle className="h-6 w-6" />
@@ -538,7 +669,7 @@ export function TrainingHistoryTable() {
             {/* Empty Records State */}
             {!isLoading && !error && records.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-12 text-center">
+                <td colSpan={8} className="px-6 py-12 text-center">
                   <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary-100 text-secondary-500 mb-3">
                       <FileText className="h-6 w-6" />
@@ -547,11 +678,22 @@ export function TrainingHistoryTable() {
                       No Training Records Found
                     </h4>
                     <p className="mt-1 text-xs text-secondary-500">
-                      {activeSearch
+                      {viewAsUser
+                        ? `No training records were found for ${viewAsUser.name} (${viewAsUser.employeeNumber}).`
+                        : activeSearch
                         ? `No training records match "${activeSearch}". Try adjusting your search term or clearing filters.`
                         : "No training records were found matching the selected date range or category filters."}
                     </p>
-                    {(activeSearch || filters.trainingType !== "ALL" || filters.designation) && (
+                    {viewAsUser ? (
+                      <button
+                        type="button"
+                        onClick={resetToSelf}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 transition-colors cursor-pointer"
+                      >
+                        <Users className="h-3.5 w-3.5" />
+                        <span>View All Team Records</span>
+                      </button>
+                    ) : (activeSearch || filters.trainingType !== "ALL" || filters.designation) ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -564,7 +706,7 @@ export function TrainingHistoryTable() {
                         <Filter className="h-3 w-3" />
                         <span>Reset All Filters</span>
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </td>
               </tr>
@@ -577,29 +719,23 @@ export function TrainingHistoryTable() {
                   key={record.id}
                   className="hover:bg-primary-50/30 transition-colors group"
                 >
-                  {/* Program Name */}
-                  <td className="px-5 py-3.5">
-                    <p className="font-semibold text-secondary-900 group-hover:text-primary-700 transition-colors">
-                      {record.programName}
-                    </p>
-                    <p className="text-[11px] text-secondary-500 font-mono">
-                      ID: {record.id.slice(0, 8)}...
-                    </p>
-                  </td>
-
-                  {/* Employee Name & Number */}
-                  <td className="px-4 py-3.5">
-                    <p className="font-medium text-secondary-900">
-                      {record.fullName}
-                    </p>
-                    <span className="inline-block font-mono text-[11px] text-secondary-500 bg-secondary-100 px-1.5 py-0.2 rounded mt-0.5">
+                  {/* 1. Employee ID */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <span className="inline-block font-mono text-xs font-semibold text-secondary-800 bg-secondary-100 border border-secondary-200/80 px-2 py-0.5 rounded-md">
                       {record.employeeNumber}
                     </span>
                   </td>
 
-                  {/* Designation */}
-                  <td className="px-4 py-3.5 hidden md:table-cell text-secondary-700">
-                    <p className="truncate max-w-[180px]">{record.designation}</p>
+                  {/* 2. Full Name */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
+                    <p className="font-semibold text-secondary-900 group-hover:text-primary-700 transition-colors">
+                      {record.fullName}
+                    </p>
+                  </td>
+
+                  {/* 3. Designation */}
+                  <td className="px-4 py-3.5 text-secondary-700">
+                    <p className="font-medium text-secondary-800 truncate max-w-[180px]">{record.designation}</p>
                     {record.department && record.department !== "General" && (
                       <p className="text-[11px] text-secondary-400">
                         {record.department}
@@ -607,10 +743,20 @@ export function TrainingHistoryTable() {
                     )}
                   </td>
 
-                  {/* Training Type Badge */}
-                  <td className="px-4 py-3.5">
+                  {/* 4. Program Name */}
+                  <td className="px-5 py-3.5 min-w-[200px]">
+                    <p className="font-medium text-secondary-900 group-hover:text-primary-700 transition-colors">
+                      {record.programName}
+                    </p>
+                    <p className="text-[11px] text-secondary-400 font-mono">
+                      ID: {record.id.slice(0, 8)}...
+                    </p>
+                  </td>
+
+                  {/* 5. Training Type */}
+                  <td className="px-4 py-3.5 whitespace-nowrap">
                     <span
-                      className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${getTrainingTypeBadge(
+                      className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-[11px] font-semibold tracking-wide ${getTrainingTypeBadge(
                         record.trainingType
                       )}`}
                     >
@@ -618,29 +764,29 @@ export function TrainingHistoryTable() {
                     </span>
                   </td>
 
-                  {/* Dates */}
-                  <td className="px-4 py-3.5 text-secondary-700">
-                    <div className="flex items-center gap-1 font-mono text-[11px]">
-                      <Calendar className="h-3 w-3 text-secondary-400" />
+                  {/* 6. Dates */}
+                  <td className="px-4 py-3.5 whitespace-nowrap text-secondary-700">
+                    <div className="flex items-center gap-1.5 font-mono text-xs">
+                      <Calendar className="h-3.5 w-3.5 text-secondary-400 shrink-0" />
                       <span>{record.startDate}</span>
                     </div>
                     {record.endDate && record.endDate !== record.startDate && (
-                      <p className="font-mono text-[10px] text-secondary-400 pl-4">
+                      <p className="font-mono text-[10px] text-secondary-400 pl-5">
                         to {record.endDate}
                       </p>
                     )}
                   </td>
 
-                  {/* Duration Hours */}
-                  <td className="px-4 py-3.5 text-right font-mono font-bold text-secondary-900">
+                  {/* 7. Duration */}
+                  <td className="px-4 py-3.5 text-right whitespace-nowrap font-mono font-bold text-secondary-900">
                     <span className="inline-flex items-center gap-1">
-                      <Clock className="h-3 w-3 text-secondary-400" />
+                      <Clock className="h-3.5 w-3.5 text-secondary-400" />
                       {record.durationHours.toFixed(1)}h
                     </span>
                   </td>
 
-                  {/* Status */}
-                  <td className="px-5 py-3.5 text-center">
+                  {/* 8. Status */}
+                  <td className="px-5 py-3.5 text-center whitespace-nowrap">
                     <span
                       className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${getStatusBadge(
                         record.status
